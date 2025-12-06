@@ -17,17 +17,31 @@ export function useChat() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      // First fetch messages
+      const { data: messagesData, error } = await supabase
         .from('messages')
-        .select(`
-          *,
-          sender:sender_id(id, name, avatar_url),
-          receiver:receiver_id(id, name, avatar_url)
-        `)
+        .select('*')
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Get unique user IDs
+      const userIds = [...new Set(messagesData?.flatMap(m => [m.sender_id, m.receiver_id]) || [])];
+      
+      // Fetch profiles for those users
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, avatar_url')
+        .in('id', userIds);
+
+      const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+      const data = messagesData?.map(m => ({
+        ...m,
+        sender: profilesMap.get(m.sender_id) || { id: m.sender_id, name: 'Unknown', avatar_url: null },
+        receiver: profilesMap.get(m.receiver_id) || { id: m.receiver_id, name: 'Unknown', avatar_url: null }
+      })) || [];
 
       // Group messages by conversation
       const convMap = new Map<string, ChatConversation>();
@@ -70,16 +84,28 @@ export function useChat() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Fetch messages
+      const { data: messagesData, error } = await supabase
         .from('messages')
-        .select(`
-          *,
-          sender:sender_id(id, name, avatar_url)
-        `)
+        .select('*')
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
+
+      // Get sender profiles
+      const senderIds = [...new Set(messagesData?.map(m => m.sender_id) || [])];
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, avatar_url')
+        .in('id', senderIds);
+
+      const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+      const data = messagesData?.map(m => ({
+        ...m,
+        sender: profilesMap.get(m.sender_id) || { id: m.sender_id, name: 'Unknown', avatar_url: null }
+      })) || [];
 
       setMessages(data as Message[]);
       setCurrentChatUser(otherUserId);
