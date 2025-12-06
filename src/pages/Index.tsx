@@ -15,6 +15,7 @@ import Public from '@/pages/Public';
 import Private from '@/pages/Private';
 import Saved from '@/pages/Saved';
 import Create from '@/pages/Create';
+import CreativityHub from '@/pages/CreativityHub';
 import NotFound from '@/pages/NotFound';
 
 export default function Index() {
@@ -38,6 +39,7 @@ export default function Index() {
               <Route path="/private" element={<Private />} />
               <Route path="/saved" element={<Saved />} />
               <Route path="/create" element={<Create />} />
+              <Route path="/creativity" element={<CreativityHub />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>

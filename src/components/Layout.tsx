@@ -17,7 +17,8 @@ interface LayoutProps {
 const menuItems = [
   { title: 'Home', url: '/', icon: Home, emoji: '🏠' },
   { title: 'Education', url: '/education', icon: GraduationCap, emoji: '📚' },
-  { title: 'Communication', url: '/communication', icon: MessageCircle, emoji: '💬' },
+  { title: 'Messages', url: '/chat', icon: MessageCircle, emoji: '💬' },
+  { title: 'Creativity', url: '/creativity', icon: Crown, emoji: '🎨' },
   { title: 'Music & Adventure', url: '/music-adventure', icon: Music, emoji: '🎵' },
   { title: 'Marketplace', url: '/marketplace', icon: Store, emoji: '🛒' },
   { title: 'Settings', url: '/settings', icon: Settings, emoji: '⚙️' },
