@@ -16,17 +16,29 @@ export function useNotifications() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First fetch notifications
+      const { data: notificationsData, error } = await supabase
         .from('notifications')
-        .select(`
-          *,
-          from_user:from_user_id(id, name, avatar_url)
-        `)
+        .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) throw error;
+
+      // Then fetch profile info for from_user_id
+      const fromUserIds = [...new Set(notificationsData?.map(n => n.from_user_id) || [])];
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, avatar_url')
+        .in('id', fromUserIds);
+
+      const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+      const data = notificationsData?.map(n => ({
+        ...n,
+        from_user: profilesMap.get(n.from_user_id) || { id: n.from_user_id, name: 'Unknown', avatar_url: null }
+      })) || [];
 
       setNotifications(data as Notification[]);
       setUnreadCount(data.filter(n => !n.is_read).length);
