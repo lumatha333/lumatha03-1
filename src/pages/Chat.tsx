@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Send, ArrowLeft, MoreVertical, Search, Plus, CheckCheck } from 'lucide-react';
+import { Send, ArrowLeft, Search, Plus, CheckCheck, Image, Video, FileText, Mic, Phone, X, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -11,6 +11,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 export default function Chat() {
   const { userId } = useParams();
@@ -21,7 +24,11 @@ export default function Chat() {
   const [showUserSearch, setShowUserSearch] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -43,10 +50,59 @@ export default function Chat() {
     return () => clearTimeout(timer);
   }, [userSearchQuery, user]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video' | 'doc') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('File too large. Max 20MB');
+      return;
+    }
+    setMediaFile(file);
+    if (type !== 'doc') {
+      setMediaPreview(URL.createObjectURL(file));
+    } else {
+      setMediaPreview(null);
+    }
+  };
+
+  const clearMedia = () => {
+    if (mediaPreview) URL.revokeObjectURL(mediaPreview);
+    setMediaFile(null);
+    setMediaPreview(null);
+  };
+
   const handleSend = async () => {
-    if (!newMessage.trim() || !currentChatUser) return;
-    await sendMessage(currentChatUser, newMessage);
-    setNewMessage('');
+    if ((!newMessage.trim() && !mediaFile) || !currentChatUser) return;
+    
+    setUploading(true);
+    try {
+      let mediaUrl = null;
+      let mediaType = null;
+
+      if (mediaFile) {
+        const fileExt = mediaFile.name.split('.').pop();
+        const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('chat-media')
+          .upload(fileName, mediaFile, { cacheControl: '31536000', contentType: mediaFile.type });
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
+        mediaUrl = publicUrl;
+        mediaType = mediaFile.type.startsWith('image') ? 'image' : 
+                    mediaFile.type.startsWith('video') ? 'video' : 'document';
+      }
+
+      await sendMessage(currentChatUser, newMessage || (mediaFile ? `📎 ${mediaFile.name}` : ''), mediaUrl, mediaType);
+      setNewMessage('');
+      clearMedia();
+    } catch (error) {
+      toast.error('Failed to send message');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -63,6 +119,12 @@ export default function Chat() {
     !searchQuery || conv.user_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const getMediaType = (url: string, type?: string) => {
+    if (type === 'image' || url?.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return 'image';
+    if (type === 'video' || url?.match(/\.(mp4|webm|mov)$/i)) return 'video';
+    return 'document';
+  };
+
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background -mx-4 sm:mx-0">
       {/* Conversations Sidebar */}
@@ -70,7 +132,7 @@ export default function Chat() {
         "w-full sm:w-80 md:w-96 border-r border-border/50 flex flex-col shrink-0",
         currentChatUser ? 'hidden sm:flex' : ''
       )}>
-        <div className="p-3 sm:p-4 border-b border-border/50 space-y-3">
+        <div className="p-3 border-b border-border/50 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
@@ -78,7 +140,7 @@ export default function Chat() {
               </div>
               <div>
                 <h2 className="text-base font-bold">Messages</h2>
-                <p className="text-[10px] text-muted-foreground">Secure messaging</p>
+                <p className="text-[10px] text-muted-foreground">Send photos, videos, files</p>
               </div>
             </div>
             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setShowUserSearch(true)}>
@@ -160,8 +222,16 @@ export default function Chat() {
                 </Avatar>
                 <div className="min-w-0">
                   <h3 className="font-medium text-sm truncate">{selectedConversation?.user_name}</h3>
-                  <p className="text-[10px] text-muted-foreground">Online</p>
+                  <p className="text-[10px] text-green-500">Online</p>
                 </div>
+              </div>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.info('Voice call coming soon')}>
+                  <Phone className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.info('Video call coming soon')}>
+                  <Video className="w-4 h-4" />
+                </Button>
               </div>
             </div>
 
@@ -176,11 +246,14 @@ export default function Chat() {
                     <span className="text-3xl">👋</span>
                   </div>
                   <p className="text-sm text-muted-foreground">Start the conversation!</p>
+                  <p className="text-xs text-muted-foreground mt-1">Send photos, videos, or files</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {messages.map((message) => {
                     const isOwn = message.sender_id === user?.id;
+                    const mediaType = getMediaType(message.media_url || '', message.media_type || undefined);
+                    
                     return (
                       <div key={message.id} className={cn("flex", isOwn ? 'justify-end' : 'justify-start')}>
                         <div className={cn(
@@ -188,9 +261,25 @@ export default function Chat() {
                           isOwn ? "bg-gradient-to-r from-primary to-primary/90 text-primary-foreground" : "bg-muted"
                         )}>
                           {message.media_url && (
-                            <img src={message.media_url} alt="Media" className="rounded-lg mb-2 max-w-full" />
+                            <div className="mb-2">
+                              {mediaType === 'image' && (
+                                <img src={message.media_url} alt="Shared" className="rounded-lg max-w-full max-h-64 object-cover" />
+                              )}
+                              {mediaType === 'video' && (
+                                <video src={message.media_url} controls className="rounded-lg max-w-full max-h-64" />
+                              )}
+                              {mediaType === 'document' && (
+                                <a href={message.media_url} target="_blank" rel="noopener noreferrer" 
+                                   className="flex items-center gap-2 p-2 rounded-lg bg-background/20 hover:bg-background/30">
+                                  <FileText className="w-5 h-5" />
+                                  <span className="text-xs underline">Download File</span>
+                                </a>
+                              )}
+                            </div>
                           )}
-                          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          {message.content && !message.content.startsWith('📎') && (
+                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          )}
                           <div className={cn(
                             "flex items-center gap-1 mt-1 text-[10px]",
                             isOwn ? 'text-primary-foreground/70 justify-end' : 'text-muted-foreground'
@@ -207,16 +296,66 @@ export default function Chat() {
               )}
             </ScrollArea>
 
+            {/* Media Preview */}
+            {mediaFile && (
+              <div className="px-3 py-2 border-t border-border/50 bg-muted/50">
+                <div className="flex items-center gap-3">
+                  {mediaPreview ? (
+                    <img src={mediaPreview} alt="Preview" className="w-16 h-16 rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
+                      <FileText className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{mediaFile.name}</p>
+                    <p className="text-xs text-muted-foreground">{(mediaFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                  </div>
+                  <Button size="icon" variant="ghost" onClick={clearMedia} className="shrink-0">
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="p-3 border-t border-border/50 bg-card/50 shrink-0">
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-end">
+                <div className="flex gap-1">
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, 'image')} />
+                  <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file'; input.accept = 'image/*';
+                    input.onchange = (e) => handleFileSelect(e as any, 'image');
+                    input.click();
+                  }}>
+                    <Image className="w-4 h-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file'; input.accept = 'video/*';
+                    input.onchange = (e) => handleFileSelect(e as any, 'video');
+                    input.click();
+                  }}>
+                    <Video className="w-4 h-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file'; input.accept = '.pdf,.doc,.docx,.txt,.zip';
+                    input.onchange = (e) => handleFileSelect(e as any, 'doc');
+                    input.click();
+                  }}>
+                    <Paperclip className="w-4 h-4" />
+                  </Button>
+                </div>
                 <Input
                   placeholder="Type a message..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyDown={handleKeyPress}
                   className="flex-1 bg-muted/50"
+                  disabled={uploading}
                 />
-                <Button size="icon" onClick={handleSend} disabled={!newMessage.trim()} className="shrink-0">
+                <Button size="icon" onClick={handleSend} disabled={(!newMessage.trim() && !mediaFile) || uploading} className="shrink-0">
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
@@ -228,7 +367,9 @@ export default function Chat() {
               <span className="text-4xl">💬</span>
             </div>
             <h3 className="text-lg font-semibold mb-1">Your Messages</h3>
-            <p className="text-sm text-muted-foreground mb-4">Select a conversation or start a new one</p>
+            <p className="text-sm text-muted-foreground text-center mb-4 max-w-xs">
+              Send photos, videos, voice messages & documents
+            </p>
             <Button onClick={() => setShowUserSearch(true)}>New Message</Button>
           </div>
         )}
@@ -255,9 +396,6 @@ export default function Chat() {
                   </button>
                 ))}
               </div>
-            )}
-            {userSearchQuery && searchResults.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No users found</p>
             )}
           </div>
         </DialogContent>
