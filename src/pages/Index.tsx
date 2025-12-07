@@ -1,10 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { SplashScreen } from '@/components/SplashScreen';
 import { AuthProvider } from '@/contexts/AuthContext';
 import Home from '@/pages/Home';
 import Education from '@/pages/Education';
-import Communication from '@/pages/Communication';
+import Music from '@/pages/Music';
 import MusicAdventure from '@/pages/MusicAdventure';
 import Marketplace from '@/pages/Marketplace';
 import Settings from '@/pages/Settings';
@@ -29,7 +29,7 @@ export default function Index() {
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<Home />} />
               <Route path="/education" element={<Education />} />
-              <Route path="/communication" element={<Communication />} />
+              <Route path="/music" element={<Music />} />
               <Route path="/music-adventure" element={<MusicAdventure />} />
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/settings" element={<Settings />} />

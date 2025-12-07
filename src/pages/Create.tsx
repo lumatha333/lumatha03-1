@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { Sparkles, Eye, Trash2, Upload, X, Image, Film, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Sparkles, Trash2, Image, Film, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const CATEGORIES = [
   { value: 'general', label: '📝 General' },
@@ -18,11 +19,13 @@ const CATEGORIES = [
   { value: 'global', label: '🌍 Global' },
   { value: 'education', label: '📚 Education' },
   { value: 'music', label: '🎵 Music' },
-  { value: 'adventure', label: '🧭 Adventure' },
 ];
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILES = 10;
+
 export default function Create() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
@@ -33,6 +36,7 @@ export default function Create() {
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     const draft = localStorage.getItem('coc_draft');
@@ -42,9 +46,7 @@ export default function Create() {
         setContent(parsed.content || '');
         setTitle(parsed.title || '');
         setCategory(parsed.category || 'general');
-      } catch {
-        setContent(draft);
-      }
+      } catch { setContent(draft); }
     }
   }, []);
 
@@ -56,90 +58,65 @@ export default function Create() {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    // Limit to 10 files
-    const newFiles = [...mediaFiles, ...files].slice(0, 10);
-    setMediaFiles(newFiles);
+    // Filter valid files
+    const validFiles = files.filter(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`${file.name} too large. Max 50MB`);
+        return false;
+      }
+      return true;
+    });
 
-    // Generate preview URLs
+    const newFiles = [...mediaFiles, ...validFiles].slice(0, MAX_FILES);
+    setMediaFiles(newFiles);
+    
     const newPreviews = newFiles.map(file => URL.createObjectURL(file));
     setPreviewUrls(newPreviews);
     setCurrentPreviewIndex(0);
   };
 
   const removeFile = (index: number) => {
-    const newFiles = mediaFiles.filter((_, i) => i !== index);
-    const newPreviews = previewUrls.filter((_, i) => i !== index);
-    
-    // Revoke old URL
     URL.revokeObjectURL(previewUrls[index]);
-    
-    setMediaFiles(newFiles);
-    setPreviewUrls(newPreviews);
-    setCurrentPreviewIndex(Math.min(currentPreviewIndex, newPreviews.length - 1));
+    setMediaFiles(mediaFiles.filter((_, i) => i !== index));
+    setPreviewUrls(previewUrls.filter((_, i) => i !== index));
+    setCurrentPreviewIndex(Math.min(currentPreviewIndex, previewUrls.length - 2));
   };
 
   const handleClear = () => {
-    setContent('');
-    setTitle('');
-    setCategory('general');
     previewUrls.forEach(url => URL.revokeObjectURL(url));
-    setMediaFiles([]);
-    setPreviewUrls([]);
-    setCurrentPreviewIndex(0);
+    setContent(''); setTitle(''); setCategory('general');
+    setMediaFiles([]); setPreviewUrls([]); setCurrentPreviewIndex(0);
     localStorage.removeItem('coc_draft');
-    toast.success('Form cleared');
   };
 
   const handleSave = async () => {
-    if (!content.trim() || !title.trim()) {
-      toast.error('Please add a title and content');
-      return;
-    }
-
-    if (!user) {
-      toast.error('Please login to create posts');
-      return;
-    }
+    if (!content.trim() || !title.trim()) return toast.error('Add title and content');
+    if (!user) return toast.error('Please login');
 
     setLoading(true);
+    setUploadProgress(0);
+    
     try {
       const uploadedUrls: string[] = [];
       const uploadedTypes: string[] = [];
 
-      // Upload all media files in parallel
       if (mediaFiles.length > 0) {
-        const uploadPromises = mediaFiles.map(async (file, index) => {
+        for (let i = 0; i < mediaFiles.length; i++) {
+          const file = mediaFiles[i];
           const fileExt = file.name.split('.').pop();
-          const fileName = `${user.id}/${Date.now()}_${index}.${fileExt}`;
+          const fileName = `${user.id}/${Date.now()}_${i}.${fileExt}`;
           
-          const { error: uploadError } = await supabase.storage
-            .from('documents')
-            .upload(fileName, file, {
-              cacheControl: '31536000',
-              upsert: false,
-              contentType: file.type
-            });
+          await supabase.storage.from('documents').upload(fileName, file, {
+            cacheControl: '31536000', contentType: file.type
+          });
 
-          if (uploadError) throw uploadError;
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('documents')
-            .getPublicUrl(fileName);
-          
-          return {
-            url: publicUrl,
-            type: file.type.startsWith('video') ? 'video' : 'image'
-          };
-        });
-
-        const results = await Promise.all(uploadPromises);
-        results.forEach(r => {
-          uploadedUrls.push(r.url);
-          uploadedTypes.push(r.type);
-        });
+          const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(fileName);
+          uploadedUrls.push(publicUrl);
+          uploadedTypes.push(file.type.startsWith('video') ? 'video' : 'image');
+          setUploadProgress(((i + 1) / mediaFiles.length) * 100);
+        }
       }
 
-      // Create post with multiple media support
       const { error } = await supabase.from('posts').insert({
         user_id: user.id,
         title: title.trim(),
@@ -148,237 +125,153 @@ export default function Create() {
         file_type: uploadedTypes[0] || null,
         media_urls: uploadedUrls,
         media_types: uploadedTypes,
-        category: category,
-        visibility: visibility
+        category,
+        visibility
       });
 
       if (error) throw error;
 
-      toast.success('Post created successfully!');
+      toast.success('Post created!');
       handleClear();
       navigate(visibility === 'public' ? '/public' : '/private');
-    } catch (error: any) {
-      console.error('Error creating post:', error);
+    } catch (error) {
       toast.error('Failed to create post');
     } finally {
       setLoading(false);
+      setUploadProgress(0);
     }
   };
 
   const isVideo = (file: File) => file.type.startsWith('video');
+  const totalSize = mediaFiles.reduce((acc, f) => acc + f.size, 0);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Sparkles className="w-10 h-10 text-primary animate-pulse" />
-        <h1 className="text-3xl md:text-4xl font-black gradient-text">Create Post</h1>
+    <div className="space-y-4 pb-20 max-w-2xl mx-auto">
+      <div className="flex items-center gap-2">
+        <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-primary animate-pulse" />
+        <h1 className="text-xl sm:text-2xl font-bold gradient-text">Create Post</h1>
       </div>
 
-      <Card className="glass-card border-border shadow-lg">
-        <CardHeader className="border-b border-border/50 bg-gradient-to-r from-primary/5 to-transparent">
-          <CardTitle className="flex items-center gap-2 text-xl md:text-2xl">
-            <Sparkles className="w-6 h-6 text-primary" />
-            New Post
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-6">
-          {/* Visibility */}
-          <div className="space-y-3">
-            <Label className="text-base font-semibold flex items-center gap-2">
-              <span className="text-primary">👁️</span> Visibility
-            </Label>
-            <RadioGroup value={visibility} onValueChange={(v) => setVisibility(v as any)}>
-              <div className="flex gap-4 flex-wrap">
-                <div className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:border-primary/50 transition-colors cursor-pointer">
-                  <RadioGroupItem value="public" id="public" />
-                  <Label htmlFor="public" className="cursor-pointer font-medium">🌐 Public</Label>
-                </div>
-                <div className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:border-primary/50 transition-colors cursor-pointer">
-                  <RadioGroupItem value="private" id="private" />
-                  <Label htmlFor="private" className="cursor-pointer font-medium">🔒 Private</Label>
-                </div>
-              </div>
-            </RadioGroup>
-          </div>
-
-          {/* Category */}
-          <div className="space-y-3">
-            <Label className="text-base font-semibold flex items-center gap-2">
-              <span className="text-primary">📂</span> Category
-            </Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="glass-card border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="glass-card border-border">
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <Card className="glass-card">
+        <CardContent className="p-4 space-y-4">
+          {/* Visibility & Category */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Visibility</Label>
+              <RadioGroup value={visibility} onValueChange={(v) => setVisibility(v as any)} className="flex gap-2 mt-1">
+                <label className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs cursor-pointer flex-1 justify-center ${visibility === 'public' ? 'border-primary bg-primary/10' : 'border-border'}`}>
+                  <RadioGroupItem value="public" className="sr-only" />🌐 Public
+                </label>
+                <label className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs cursor-pointer flex-1 justify-center ${visibility === 'private' ? 'border-primary bg-primary/10' : 'border-border'}`}>
+                  <RadioGroupItem value="private" className="sr-only" />🔒 Private
+                </label>
+              </RadioGroup>
+            </div>
+            <div>
+              <Label className="text-xs">Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger className="glass-card h-9 mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((cat) => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Title */}
-          <div className="space-y-3">
-            <Label htmlFor="title" className="text-base font-semibold flex items-center gap-2">
-              <span className="text-primary">📝</span> Title
-            </Label>
-            <Input
-              id="title"
-              placeholder="Give your post a title..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="glass-card border-border hover:border-primary/50 focus:border-primary transition-colors"
-            />
+          <div>
+            <Label className="text-xs">Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Give your post a title..." className="glass-card mt-1" />
           </div>
 
           {/* Content */}
-          <div className="space-y-3">
-            <Label htmlFor="content" className="text-base font-semibold flex items-center gap-2">
-              <span className="text-primary">✍️</span> Content
-            </Label>
-            <Textarea
-              id="content"
-              placeholder="Share your thoughts..."
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="min-h-[150px] glass-card border-border hover:border-primary/50 focus:border-primary transition-colors"
-            />
+          <div>
+            <Label className="text-xs">Content</Label>
+            <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Share your thoughts..." 
+              className="min-h-[100px] glass-card mt-1" />
           </div>
 
-          {/* Media Upload - Multiple Files */}
-          <div className="space-y-3">
-            <Label className="text-base font-semibold flex items-center gap-2">
-              <Upload className="w-4 h-4 text-primary" /> Upload Photos/Videos (Max 10)
-            </Label>
-            <div className="flex gap-2 flex-wrap">
-              <label className="flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors bg-background/50">
-                <Image className="w-5 h-5 text-primary" />
-                <span className="text-sm">Photos</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
+          {/* Media Upload */}
+          <div>
+            <Label className="text-xs">Media (Max {MAX_FILES} files, 50MB each)</Label>
+            <div className="flex gap-2 mt-1">
+              <label className="flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-border hover:border-primary/50 cursor-pointer">
+                <Image className="w-4 h-4 text-primary" /><span className="text-xs">Photos</span>
+                <input type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
               </label>
-              <label className="flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors bg-background/50">
-                <Film className="w-5 h-5 text-primary" />
-                <span className="text-sm">Videos</span>
-                <input
-                  type="file"
-                  accept="video/*"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
+              <label className="flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-border hover:border-primary/50 cursor-pointer">
+                <Film className="w-4 h-4 text-primary" /><span className="text-xs">Videos</span>
+                <input type="file" accept="video/*" multiple onChange={handleFileSelect} className="hidden" />
               </label>
             </div>
-            
             {mediaFiles.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {mediaFiles.length} file(s) selected ({(mediaFiles.reduce((acc, f) => acc + f.size, 0) / (1024 * 1024)).toFixed(2)} MB total)
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {mediaFiles.length} file(s) • {(totalSize / (1024 * 1024)).toFixed(1)} MB
               </p>
             )}
           </div>
 
           {/* Preview Gallery */}
           {previewUrls.length > 0 && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Preview</Label>
-              
-              {/* Main Preview */}
-              <div className="relative rounded-lg overflow-hidden border-2 border-primary/30 shadow-lg bg-black/5">
+            <div className="space-y-2">
+              <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-black/5">
                 {isVideo(mediaFiles[currentPreviewIndex]) ? (
-                  <video 
-                    src={previewUrls[currentPreviewIndex]} 
-                    className="w-full max-h-[400px] object-contain"
-                    controls
-                  />
+                  <video src={previewUrls[currentPreviewIndex]} className="w-full max-h-64 object-contain" controls />
                 ) : (
-                  <img 
-                    src={previewUrls[currentPreviewIndex]} 
-                    alt="Preview" 
-                    className="w-full max-h-[400px] object-contain"
-                  />
+                  <img src={previewUrls[currentPreviewIndex]} alt="Preview" className="w-full max-h-64 object-contain" />
                 )}
                 
-                {/* Navigation */}
                 {previewUrls.length > 1 && (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full"
-                      onClick={() => setCurrentPreviewIndex((prev) => (prev - 1 + previewUrls.length) % previewUrls.length)}
-                    >
-                      <ChevronLeft className="w-5 h-5" />
+                    <Button size="icon" variant="ghost" className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7 bg-background/80"
+                      onClick={() => setCurrentPreviewIndex((prev) => (prev - 1 + previewUrls.length) % previewUrls.length)}>
+                      <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full"
-                      onClick={() => setCurrentPreviewIndex((prev) => (prev + 1) % previewUrls.length)}
-                    >
-                      <ChevronRight className="w-5 h-5" />
+                    <Button size="icon" variant="ghost" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 bg-background/80"
+                      onClick={() => setCurrentPreviewIndex((prev) => (prev + 1) % previewUrls.length)}>
+                      <ChevronRight className="w-4 h-4" />
                     </Button>
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-sm bg-black/60 text-white px-2 py-1 rounded-full">
-                      {currentPreviewIndex + 1} / {previewUrls.length}
+                    <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded-full">
+                      {currentPreviewIndex + 1}/{previewUrls.length}
                     </div>
                   </>
                 )}
               </div>
               
-              {/* Thumbnails */}
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {previewUrls.map((url, index) => (
-                  <div 
-                    key={index} 
-                    className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${
-                      index === currentPreviewIndex ? 'border-primary ring-2 ring-primary/30' : 'border-border'
-                    }`}
-                    onClick={() => setCurrentPreviewIndex(index)}
-                  >
-                    {isVideo(mediaFiles[index]) ? (
-                      <div className="w-full h-full bg-black/80 flex items-center justify-center">
-                        <Film className="w-6 h-6 text-white" />
-                      </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                {previewUrls.map((url, i) => (
+                  <div key={i} className={`relative shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 cursor-pointer ${i === currentPreviewIndex ? 'border-primary' : 'border-border'}`}
+                    onClick={() => setCurrentPreviewIndex(i)}>
+                    {isVideo(mediaFiles[i]) ? (
+                      <div className="w-full h-full bg-black/80 flex items-center justify-center"><Film className="w-4 h-4 text-white" /></div>
                     ) : (
                       <img src={url} alt="" className="w-full h-full object-cover" />
                     )}
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full"
-                      onClick={(e) => { e.stopPropagation(); removeFile(index); }}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
+                    <button className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-white flex items-center justify-center"
+                      onClick={(e) => { e.stopPropagation(); removeFile(i); }}>
+                      <X className="w-2.5 h-2.5" />
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
+          {/* Upload Progress */}
+          {loading && uploadProgress > 0 && (
+            <div className="space-y-1">
+              <Progress value={uploadProgress} className="h-2" />
+              <p className="text-[10px] text-muted-foreground text-center">Uploading... {Math.round(uploadProgress)}%</p>
+            </div>
+          )}
+
           {/* Actions */}
-          <div className="flex gap-3 flex-wrap pt-4 border-t border-border/50">
-            <Button 
-              onClick={handleSave} 
-              disabled={loading} 
-              className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg"
-            >
-              <Sparkles className="w-4 h-4" />
-              {loading ? 'Creating...' : 'Create Post'}
+          <div className="flex gap-3 pt-2">
+            <Button onClick={handleSave} disabled={loading} className="flex-1 gap-2">
+              <Sparkles className="w-4 h-4" />{loading ? 'Creating...' : 'Create'}
             </Button>
-            <Button 
-              onClick={handleClear} 
-              variant="destructive" 
-              className="gap-2 ml-auto" 
-              disabled={loading}
-            >
-              <Trash2 className="w-4 h-4" />
-              Clear
+            <Button onClick={handleClear} variant="outline" disabled={loading} className="gap-2">
+              <Trash2 className="w-4 h-4" />Clear
             </Button>
           </div>
         </CardContent>
