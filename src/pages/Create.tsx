@@ -106,11 +106,13 @@ export default function Create() {
           const fileExt = file.name.split('.').pop();
           const fileName = `${user.id}/${Date.now()}_${i}.${fileExt}`;
           
-          await supabase.storage.from('documents').upload(fileName, file, {
+          const { error: uploadError } = await supabase.storage.from('posts-media').upload(fileName, file, {
             cacheControl: '31536000', contentType: file.type
           });
 
-          const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(fileName);
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage.from('posts-media').getPublicUrl(fileName);
           uploadedUrls.push(publicUrl);
           uploadedTypes.push(file.type.startsWith('video') ? 'video' : 'image');
           setUploadProgress(((i + 1) / mediaFiles.length) * 100);
