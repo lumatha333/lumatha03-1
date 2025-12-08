@@ -1,4 +1,4 @@
-import { Home, Crown, Users, Lock, Plus } from 'lucide-react';
+import { Shuffle, Users, Lock, User, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
@@ -8,11 +8,11 @@ interface BottomNavigationProps {
 }
 
 const tabs = [
-  { id: 'dashboard', icon: Crown, label: 'Home', color: 'from-primary to-secondary' },
-  { id: 'global', icon: Home, label: 'Feed', color: 'from-blue-500 to-cyan-500' },
+  { id: 'all', icon: Shuffle, label: 'Feed', color: 'from-primary to-secondary' },
+  { id: 'friends', icon: Users, label: 'Following', color: 'from-green-500 to-emerald-500' },
   { id: 'create', icon: Plus, label: 'Create', color: 'from-pink-500 to-rose-500', isAction: true },
-  { id: 'friends', icon: Users, label: 'Friends', color: 'from-green-500 to-emerald-500' },
   { id: 'private', icon: Lock, label: 'Private', color: 'from-violet-500 to-purple-500' },
+  { id: 'profile', icon: User, label: 'Profile', color: 'from-pink-500 to-rose-500' },
 ];
 
 export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
