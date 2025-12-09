@@ -15,19 +15,19 @@ interface LayoutProps {
 }
 
 const menuItems = [
-  { title: 'Home', url: '/', icon: Home, emoji: '🏠' },
-  { title: 'Education', url: '/education', icon: GraduationCap, emoji: '📚' },
-  { title: 'Messages', url: '/chat', icon: MessageCircle, emoji: '💬' },
-  { title: 'Creativity', url: '/creativity', icon: Crown, emoji: '🎨' },
-  { title: 'Music & Adventure', url: '/music-adventure', icon: Music, emoji: '🎵' },
-  { title: 'Marketplace', url: '/marketplace', icon: Store, emoji: '🛒' },
-  { title: 'Settings', url: '/settings', icon: Settings, emoji: '⚙️' },
+  { title: 'Home', url: '/', icon: Home, emoji: '🏠', desc: 'Social + Explore' },
+  { title: 'Education', url: '/education', icon: GraduationCap, emoji: '📚', desc: 'Notes, Docs, Study Hub' },
+  { title: 'Messages', url: '/chat', icon: MessageCircle, emoji: '💬', desc: 'Chat + VC + Groups' },
+  { title: 'Creativity', url: '/creativity', icon: Crown, emoji: '🎨', desc: 'Quotes/Ideas/Moods' },
+  { title: 'Music & Adventure', url: '/music-adventure', icon: Music, emoji: '🎵', desc: 'Songs + Trips + Maps' },
+  { title: 'Marketplace', url: '/marketplace', icon: Store, emoji: '🛒', desc: 'Buy/Sell/Local Business' },
+  { title: 'Settings', url: '/settings', icon: Settings, emoji: '⚙️', desc: 'Controls + Privacy' },
 ];
 
 function LayoutContent({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { setOpen, isMobile } = useSidebar();
+  const { setOpen, isMobile, open } = useSidebar();
   const { user } = useAuth();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('coc_theme');
@@ -39,11 +39,12 @@ function LayoutContent({ children }: LayoutProps) {
     setIsAuthPage(location.pathname === '/auth');
   }, [location]);
 
+  // Auto-collapse sidebar on mobile when navigating
   useEffect(() => {
-    if (isMobile) {
+    if (isMobile && open) {
       setOpen(false);
     }
-  }, [location.pathname, isMobile, setOpen]);
+  }, [location.pathname, isMobile]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -88,6 +89,14 @@ function LayoutContent({ children }: LayoutProps) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleMenuClick = (url: string) => {
+    navigate(url);
+    // Auto-close sidebar on mobile after selection
+    if (isMobile) {
+      setOpen(false);
+    }
+  };
+
   if (isAuthPage) {
     return <>{children}</>;
   }
@@ -109,11 +118,18 @@ function LayoutContent({ children }: LayoutProps) {
               <SidebarMenu>
                 {menuItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                      <Link to={item.url} className="flex items-center gap-3">
+                    <SidebarMenuButton 
+                      isActive={isActive(item.url)}
+                      onClick={() => handleMenuClick(item.url)}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 w-full">
                         <span className="text-lg">{item.emoji}</span>
-                        <span className="font-medium">{item.title}</span>
-                      </Link>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium block">{item.title}</span>
+                          <span className="text-[10px] text-muted-foreground block truncate">{item.desc}</span>
+                        </div>
+                      </div>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}

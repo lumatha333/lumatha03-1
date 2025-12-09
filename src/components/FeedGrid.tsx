@@ -5,16 +5,21 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LazyImage } from '@/components/LazyImage';
-import { Heart, MessageCircle, Share2, Star, Play, MoreVertical, X, ChevronLeft, ChevronRight, Copy, Edit, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Star, Play, MoreVertical, X, ChevronLeft, ChevronRight, Copy, Trash2, Send } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 type Post = Database['public']['Tables']['posts']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
+type Comment = Database['public']['Tables']['comments']['Row'];
 type PostWithProfile = Post & { profiles?: Profile };
+type CommentWithProfile = Comment & { profiles?: Profile };
 
 interface FeedGridProps {
   posts: PostWithProfile[];
@@ -44,6 +49,12 @@ export function FeedGrid({
   const navigate = useNavigate();
   const [selectedPost, setSelectedPost] = useState<PostWithProfile | null>(null);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+  const [showComments, setShowComments] = useState<string | null>(null);
+  const [comments, setComments] = useState<CommentWithProfile[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [userCommentCounts, setUserCommentCounts] = useState<Record<string, number>>({});
 
   // Filter posts by view mode
   const filteredPosts = posts.filter(post => {
@@ -77,6 +88,84 @@ export function FeedGrid({
     const urls = post.media_urls?.length ? post.media_urls : (post.file_url ? [post.file_url] : []);
     const types = post.media_types?.length ? post.media_types : (post.file_type ? [post.file_type] : []);
     return { urls, types, hasMedia: urls.length > 0, hasMultiple: urls.length > 1 };
+  };
+
+  // Fetch comments for a post
+  const fetchComments = async (postId: string) => {
+    setLoadingComments(true);
+    try {
+      const { data: commentsData } = await supabase
+        .from('comments')
+        .select('*')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+      
+      if (commentsData && commentsData.length > 0) {
+        // Get unique user IDs and fetch their profiles
+        const userIds = [...new Set(commentsData.map(c => c.user_id))];
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', userIds);
+        
+        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+        
+        const commentsWithProfiles = commentsData.map(comment => ({
+          ...comment,
+          profiles: profilesMap.get(comment.user_id)
+        }));
+        
+        setComments(commentsWithProfiles);
+      } else {
+        setComments([]);
+      }
+      
+      // Count user's comments on this post
+      const userCount = (commentsData || []).filter(c => c.user_id === currentUserId).length;
+      setUserCommentCounts(prev => ({ ...prev, [postId]: userCount }));
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  // Add comment (max 2 per user per post)
+  const handleAddComment = async (postId: string) => {
+    if (!newComment.trim()) return;
+    
+    // Check if user already has 2 comments on this post
+    const { data: existingComments } = await supabase
+      .from('comments')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('user_id', currentUserId);
+    
+    if (existingComments && existingComments.length >= 2) {
+      toast.error('Maximum 2 comments per post allowed');
+      return;
+    }
+    
+    try {
+      await supabase.from('comments').insert({
+        post_id: postId,
+        user_id: currentUserId,
+        content: newComment.trim()
+      });
+      
+      setNewComment('');
+      fetchComments(postId);
+      setCommentCounts(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+      toast.success('Comment added');
+    } catch (error) {
+      toast.error('Failed to add comment');
+    }
+  };
+
+  // Open comments dialog
+  const openComments = (postId: string) => {
+    setShowComments(postId);
+    fetchComments(postId);
   };
 
   return (
@@ -191,8 +280,14 @@ export function FeedGrid({
                     <span className="text-[10px]">{likeCounts[post.id] || ''}</span>
                   </Button>
                   
-                  <Button variant="ghost" size="sm" className="h-7 px-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 px-2 gap-1"
+                    onClick={(e) => { e.stopPropagation(); openComments(post.id); }}
+                  >
                     <MessageCircle className="w-3.5 h-3.5" />
+                    <span className="text-[10px]">{commentCounts[post.id] || ''}</span>
                   </Button>
                   
                   <Button 
@@ -218,6 +313,64 @@ export function FeedGrid({
           );
         })}
       </div>
+
+      {/* Comments Dialog */}
+      <Dialog open={!!showComments} onOpenChange={() => setShowComments(null)}>
+        <DialogContent className="max-w-md glass-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">Comments</h3>
+            <Button variant="ghost" size="icon" onClick={() => setShowComments(null)}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+          
+          <ScrollArea className="max-h-64">
+            {loadingComments ? (
+              <p className="text-center text-muted-foreground py-4">Loading...</p>
+            ) : comments.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">No comments yet</p>
+            ) : (
+              <div className="space-y-3">
+                {comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-2">
+                    <Avatar className="w-7 h-7">
+                      <AvatarImage src={comment.profiles?.avatar_url || undefined} />
+                      <AvatarFallback className="bg-primary/20 text-[10px]">
+                        {comment.profiles?.name?.[0] || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 bg-muted/50 rounded-lg p-2">
+                      <p className="text-xs font-medium">{comment.profiles?.name || 'Anonymous'}</p>
+                      <p className="text-xs text-muted-foreground">{comment.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+          
+          {showComments && (userCommentCounts[showComments] || 0) < 2 && (
+            <div className="flex gap-2 mt-4">
+              <Input
+                placeholder="Write a comment..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className="flex-1"
+                onKeyPress={(e) => e.key === 'Enter' && showComments && handleAddComment(showComments)}
+              />
+              <Button size="icon" onClick={() => showComments && handleAddComment(showComments)}>
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+          
+          {showComments && (userCommentCounts[showComments] || 0) >= 2 && (
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              You've reached the maximum of 2 comments on this post
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Fullscreen Media Dialog */}
       <Dialog open={!!selectedPost} onOpenChange={() => setSelectedPost(null)}>

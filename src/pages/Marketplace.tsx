@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,41 +9,43 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { Store, ShoppingBag, Briefcase, Home, Search, Plus, MapPin, Phone, MessageCircle, Heart, TrendingUp, Star } from 'lucide-react';
+import { Store, ShoppingBag, Briefcase, Home, Search, Plus, MapPin, Phone, MessageCircle, Heart, TrendingUp, Star, User } from 'lucide-react';
 
 export default function Marketplace() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('buy-sell');
   const [searchQuery, setSearchQuery] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   const listings = [
-    { id: 1, title: 'iPhone 14 Pro', price: 'Rs. 180,000', location: 'Tulsipur', category: 'Electronics', image: '📱', seller: 'Ram B.', phone: '+977-9800000001', verified: true },
-    { id: 2, title: 'Honda Shine 125cc', price: 'Rs. 95,000', location: 'Dang', category: 'Vehicles', image: '🏍️', seller: 'Shyam K.', phone: '+977-9800000002', verified: true },
-    { id: 3, title: 'Laptop Dell XPS', price: 'Rs. 250,000', location: 'Urahari', category: 'Electronics', image: '💻', seller: 'Hari P.', phone: '+977-9800000003', verified: false },
-    { id: 4, title: 'Study Table', price: 'Rs. 8,500', location: 'Tulsipur', category: 'Furniture', image: '🪑', seller: 'Gita M.', phone: '+977-9800000004', verified: true },
-    { id: 5, title: 'DSLR Camera', price: 'Rs. 85,000', location: 'Dang', category: 'Electronics', image: '📷', seller: 'Amit S.', phone: '+977-9800000005', verified: true },
-    { id: 6, title: 'Mountain Bike', price: 'Rs. 35,000', location: 'Urahari', category: 'Sports', image: '🚴', seller: 'Sita R.', phone: '+977-9800000006', verified: false },
+    { id: 1, title: 'iPhone 14 Pro', price: 'Rs. 180,000', location: 'Tulsipur', category: 'Electronics', image: '📱', seller: 'Ram B.', sellerId: 'user1', phone: '+977-9800000001', verified: true, avatar: null },
+    { id: 2, title: 'Honda Shine 125cc', price: 'Rs. 95,000', location: 'Dang', category: 'Vehicles', image: '🏍️', seller: 'Shyam K.', sellerId: 'user2', phone: '+977-9800000002', verified: true, avatar: null },
+    { id: 3, title: 'Laptop Dell XPS', price: 'Rs. 250,000', location: 'Urahari', category: 'Electronics', image: '💻', seller: 'Hari P.', sellerId: 'user3', phone: '+977-9800000003', verified: false, avatar: null },
+    { id: 4, title: 'Study Table', price: 'Rs. 8,500', location: 'Tulsipur', category: 'Furniture', image: '🪑', seller: 'Gita M.', sellerId: 'user4', phone: '+977-9800000004', verified: true, avatar: null },
+    { id: 5, title: 'DSLR Camera', price: 'Rs. 85,000', location: 'Dang', category: 'Electronics', image: '📷', seller: 'Amit S.', sellerId: 'user5', phone: '+977-9800000005', verified: true, avatar: null },
+    { id: 6, title: 'Mountain Bike', price: 'Rs. 35,000', location: 'Urahari', category: 'Sports', image: '🚴', seller: 'Sita R.', sellerId: 'user6', phone: '+977-9800000006', verified: false, avatar: null },
   ];
 
   const jobs = [
-    { id: 1, title: 'Web Developer', company: 'Tech Solutions', location: 'Tulsipur', type: 'Full-time', salary: 'Rs. 50,000/mo', contact: '+977-9800000010' },
-    { id: 2, title: 'Graphic Designer', company: 'Creative Studio', location: 'Dang', type: 'Part-time', salary: 'Rs. 25,000/mo', contact: '+977-9800000011' },
-    { id: 3, title: 'Teacher (Math)', company: 'ABC School', location: 'Urahari', type: 'Full-time', salary: 'Rs. 30,000/mo', contact: '+977-9800000012' },
+    { id: 1, title: 'Web Developer', company: 'Tech Solutions', location: 'Tulsipur', type: 'Full-time', salary: 'Rs. 50,000/mo', contact: '+977-9800000010', poster: 'Tech Solutions HR', posterId: 'company1' },
+    { id: 2, title: 'Graphic Designer', company: 'Creative Studio', location: 'Dang', type: 'Part-time', salary: 'Rs. 25,000/mo', contact: '+977-9800000011', poster: 'Creative Studio', posterId: 'company2' },
+    { id: 3, title: 'Teacher (Math)', company: 'ABC School', location: 'Urahari', type: 'Full-time', salary: 'Rs. 30,000/mo', contact: '+977-9800000012', poster: 'ABC School Admin', posterId: 'company3' },
   ];
 
   const rentals = [
-    { id: 1, title: '2BHK Apartment', price: 'Rs. 15,000/mo', location: 'Tulsipur', type: 'Apartment', image: '🏠', contact: '+977-9800000020' },
-    { id: 2, title: 'Shop Space', price: 'Rs. 25,000/mo', location: 'Dang', type: 'Commercial', image: '🏪', contact: '+977-9800000021' },
-    { id: 3, title: 'Single Room', price: 'Rs. 5,000/mo', location: 'Urahari', type: 'Room', image: '🛏️', contact: '+977-9800000022' },
+    { id: 1, title: '2BHK Apartment', price: 'Rs. 15,000/mo', location: 'Tulsipur', type: 'Apartment', image: '🏠', contact: '+977-9800000020', owner: 'Property Owner', ownerId: 'owner1' },
+    { id: 2, title: 'Shop Space', price: 'Rs. 25,000/mo', location: 'Dang', type: 'Commercial', image: '🏪', contact: '+977-9800000021', owner: 'Shop Owner', ownerId: 'owner2' },
+    { id: 3, title: 'Single Room', price: 'Rs. 5,000/mo', location: 'Urahari', type: 'Room', image: '🛏️', contact: '+977-9800000022', owner: 'Room Provider', ownerId: 'owner3' },
   ];
 
   const businesses = [
-    { id: 1, name: 'Himalayan Restaurant', category: 'Food', rating: 4.5, location: 'Tulsipur', image: '🍽️', phone: '+977-9800000030' },
-    { id: 2, name: 'Tech Repair Shop', category: 'Services', rating: 4.8, location: 'Dang', image: '🔧', phone: '+977-9800000031' },
-    { id: 3, name: 'Fashion Store', category: 'Clothing', rating: 4.2, location: 'Urahari', image: '👗', phone: '+977-9800000032' },
-    { id: 4, name: 'Fitness Gym', category: 'Health', rating: 4.6, location: 'Tulsipur', image: '💪', phone: '+977-9800000033' },
+    { id: 1, name: 'Himalayan Restaurant', category: 'Food', rating: 4.5, location: 'Tulsipur', image: '🍽️', phone: '+977-9800000030', owner: 'Restaurant Owner', ownerId: 'biz1' },
+    { id: 2, name: 'Tech Repair Shop', category: 'Services', rating: 4.8, location: 'Dang', image: '🔧', phone: '+977-9800000031', owner: 'Tech Expert', ownerId: 'biz2' },
+    { id: 3, name: 'Fashion Store', category: 'Clothing', rating: 4.2, location: 'Urahari', image: '👗', phone: '+977-9800000032', owner: 'Fashion Expert', ownerId: 'biz3' },
+    { id: 4, name: 'Fitness Gym', category: 'Health', rating: 4.6, location: 'Tulsipur', image: '💪', phone: '+977-9800000033', owner: 'Gym Trainer', ownerId: 'biz4' },
   ];
 
   const categories = ['All', 'Electronics', 'Vehicles', 'Furniture', 'Sports', 'Clothing'];
@@ -120,16 +123,31 @@ export default function Marketplace() {
             {filteredListings.map((item) => (
               <Card key={item.id} className="glass-card hover-lift">
                 <CardContent className="p-3">
+                  {/* Seller Profile */}
+                  <div 
+                    className="flex items-center gap-2 p-2 mb-2 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => navigate(`/profile/${item.sellerId}`)}
+                  >
+                    <Avatar className="w-7 h-7">
+                      <AvatarImage src={item.avatar || undefined} />
+                      <AvatarFallback className="bg-primary/20 text-[10px]">{item.seller[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate flex items-center gap-1">
+                        {item.seller}
+                        {item.verified && <Badge className="bg-green-500 text-[8px] h-4">✓</Badge>}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">View profile →</p>
+                    </div>
+                  </div>
+                  
                   <div className="flex gap-3">
                     <div className="text-3xl shrink-0">{item.image}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-medium text-sm truncate">{item.title}</h3>
-                        {item.verified && <Badge className="bg-green-500 text-[9px] shrink-0">✓</Badge>}
-                      </div>
+                      <h3 className="font-medium text-sm truncate">{item.title}</h3>
                       <p className="text-base font-bold text-primary">{item.price}</p>
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />{item.location} • {item.seller}
+                        <MapPin className="w-3 h-3" />{item.location}
                       </p>
                     </div>
                   </div>
@@ -152,6 +170,20 @@ export default function Marketplace() {
           {jobs.map((job) => (
             <Card key={job.id} className="glass-card hover-lift">
               <CardContent className="p-3">
+                {/* Job Poster */}
+                <div 
+                  className="flex items-center gap-2 p-2 mb-2 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => navigate(`/profile/${job.posterId}`)}
+                >
+                  <Avatar className="w-7 h-7">
+                    <AvatarFallback className="bg-primary/20 text-[10px]">{job.company[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{job.poster}</p>
+                    <p className="text-[10px] text-muted-foreground">View profile →</p>
+                  </div>
+                </div>
+                
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="font-medium text-sm">{job.title}</h3>
@@ -178,16 +210,29 @@ export default function Marketplace() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {rentals.map((rental) => (
               <Card key={rental.id} className="glass-card hover-lift">
-                <CardContent className="p-3 text-center">
-                  <div className="text-3xl mb-2">{rental.image}</div>
-                  <h3 className="font-medium text-xs truncate">{rental.title}</h3>
-                  <p className="text-sm font-bold text-primary">{rental.price}</p>
-                  <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
-                    <MapPin className="w-2.5 h-2.5" />{rental.location}
-                  </p>
-                  <Button size="sm" className="w-full mt-2 h-7 text-xs" onClick={() => handleContact(rental.contact, rental.title)}>
-                    <Phone className="w-3 h-3 mr-1" />Contact
-                  </Button>
+                <CardContent className="p-3">
+                  {/* Owner Profile */}
+                  <div 
+                    className="flex items-center gap-2 p-1.5 mb-2 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => navigate(`/profile/${rental.ownerId}`)}
+                  >
+                    <Avatar className="w-6 h-6">
+                      <AvatarFallback className="bg-primary/20 text-[9px]">{rental.owner[0]}</AvatarFallback>
+                    </Avatar>
+                    <p className="text-[10px] font-medium truncate flex-1">{rental.owner}</p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="text-3xl mb-2">{rental.image}</div>
+                    <h3 className="font-medium text-xs truncate">{rental.title}</h3>
+                    <p className="text-sm font-bold text-primary">{rental.price}</p>
+                    <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
+                      <MapPin className="w-2.5 h-2.5" />{rental.location}
+                    </p>
+                    <Button size="sm" className="w-full mt-2 h-7 text-xs" onClick={() => handleContact(rental.contact, rental.title)}>
+                      <Phone className="w-3 h-3 mr-1" />Contact
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -198,6 +243,20 @@ export default function Marketplace() {
           {businesses.map((biz) => (
             <Card key={biz.id} className="glass-card hover-lift">
               <CardContent className="p-3">
+                {/* Business Owner */}
+                <div 
+                  className="flex items-center gap-2 p-2 mb-2 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => navigate(`/profile/${biz.ownerId}`)}
+                >
+                  <Avatar className="w-7 h-7">
+                    <AvatarFallback className="bg-primary/20 text-[10px]">{biz.owner[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{biz.owner}</p>
+                    <p className="text-[10px] text-muted-foreground">View profile →</p>
+                  </div>
+                </div>
+                
                 <div className="flex items-center gap-3">
                   <div className="text-3xl shrink-0">{biz.image}</div>
                   <div className="flex-1 min-w-0">
