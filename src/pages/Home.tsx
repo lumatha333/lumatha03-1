@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Globe, Users, Lock, User, Image, Video, Shuffle, MapPin, Plus, Sparkles } from 'lucide-react';
+import { Globe, Users, Lock, User, Image, Video, Shuffle, MapPin, Plus, Sparkles, FileText } from 'lucide-react';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { FeedGrid } from '@/components/FeedGrid';
 import { ProfileShortcuts } from '@/components/ProfileShortcuts';
@@ -17,14 +17,15 @@ type Post = Database['public']['Tables']['posts']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type PostWithProfile = Post & { profiles?: Profile };
 
-// Main feed tabs
+// Main feed tabs - simplified structure
 const mainTabs = [
   { id: 'all', label: 'All', icon: Shuffle, color: 'from-primary to-secondary' },
   { id: 'regional', label: 'Regional', icon: MapPin, color: 'from-orange-500 to-red-500' },
   { id: 'global', label: 'Global', icon: Globe, color: 'from-blue-500 to-cyan-500' },
-  { id: 'friends', label: 'Following', icon: Users, color: 'from-green-500 to-emerald-500' },
-  { id: 'private', label: 'Private', icon: Lock, color: 'from-violet-500 to-purple-500' },
-  { id: 'profile', label: 'Profile', icon: User, color: 'from-pink-500 to-rose-500' },
+  { id: 'following', label: 'Following', icon: Users, color: 'from-green-500 to-emerald-500' },
+  { id: 'create', label: 'Create', icon: Plus, color: 'from-violet-500 to-purple-500' },
+  { id: 'private', label: 'Private', icon: Lock, color: 'from-pink-500 to-rose-500' },
+  { id: 'profile', label: 'Profile', icon: User, color: 'from-indigo-500 to-blue-500' },
 ];
 
 // Content type subtabs
@@ -32,11 +33,12 @@ const contentTabs = [
   { id: 'mixed', label: 'Mixed', icon: Shuffle },
   { id: 'photos', label: 'Photos', icon: Image },
   { id: 'videos', label: 'Videos', icon: Video },
+  { id: 'documents', label: 'Docs', icon: FileText },
 ];
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('all');
-  const [contentType, setContentType] = useState<'mixed' | 'photos' | 'videos'>('mixed');
+  const [contentType, setContentType] = useState<'mixed' | 'photos' | 'videos' | 'documents'>('mixed');
   const [posts, setPosts] = useState<PostWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
@@ -46,11 +48,17 @@ export default function Home() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Redirect to create page if Create tab is selected
+    if (activeTab === 'create') {
+      navigate('/create');
+      setActiveTab('all');
+      return;
+    }
     if (user) fetchPosts();
   }, [activeTab, user, profile]);
 
   const fetchPosts = async () => {
-    if (!user) return;
+    if (!user || activeTab === 'create') return;
     setLoading(true);
 
     try {
@@ -61,14 +69,13 @@ export default function Home() {
       // Filter based on active tab
       switch (activeTab) {
         case 'all':
-          // Mixed feed - shuffle by random seed (different each time)
+          // All public posts - mixed feed
           query = query.eq('visibility', 'public');
           break;
         case 'regional':
-          // Filter by user's country/region
+          // Filter by user's country/region - only public posts
           query = query.eq('visibility', 'public');
           if (profile?.country) {
-            // Get posts from users in same country
             const { data: regionalUsers } = await supabase
               .from('profiles')
               .select('id')
@@ -80,16 +87,29 @@ export default function Home() {
           }
           break;
         case 'global':
+          // All public posts worldwide
           query = query.eq('visibility', 'public');
           break;
-        case 'friends':
+        case 'following':
+          // Only following users' posts - public posts only
           const { data: following } = await supabase
             .from('follows')
             .select('following_id')
             .eq('follower_id', user.id);
+          
+          // Also get accepted friends
+          const { data: friendReqs } = await supabase
+            .from('friend_requests')
+            .select('sender_id, receiver_id')
+            .eq('status', 'accepted')
+            .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+          
           const followingIds = following?.map(f => f.following_id) || [];
-          if (followingIds.length > 0) {
-            query = query.eq('visibility', 'public').in('user_id', followingIds);
+          const friendIds = friendReqs?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || [];
+          const allIds = [...new Set([...followingIds, ...friendIds])];
+          
+          if (allIds.length > 0) {
+            query = query.eq('visibility', 'public').in('user_id', allIds);
           } else {
             setPosts([]);
             setLoading(false);
@@ -97,18 +117,15 @@ export default function Home() {
           }
           break;
         case 'private':
+          // Only user's private posts - no regional/global/all mixed in
           query = query.eq('user_id', user.id).eq('visibility', 'private');
           break;
         default:
           query = query.eq('visibility', 'public');
       }
 
-      // For 'all' tab, order randomly; otherwise by date
-      if (activeTab === 'all') {
-        query = query.limit(50);
-      } else {
-        query = query.order('created_at', { ascending: false }).limit(30);
-      }
+      // Order by date, limit results
+      query = query.order('created_at', { ascending: false }).limit(50);
 
       const { data: postsData } = await query;
       
@@ -166,16 +183,25 @@ export default function Home() {
 
   const toggleLike = async (postId: string) => {
     if (!user) return;
+    
+    // Check if user already liked this post
     const isLiked = likedPosts.has(postId);
     
     if (isLiked) {
+      // Unlike - remove the like
       await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', user.id);
       setLikedPosts(prev => { const next = new Set(prev); next.delete(postId); return next; });
       setLikeCounts(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 1) - 1) }));
     } else {
-      await supabase.from('likes').insert({ post_id: postId, user_id: user.id });
-      setLikedPosts(prev => new Set(prev).add(postId));
-      setLikeCounts(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+      // Like - only one like per user per post
+      const { error } = await supabase.from('likes').insert({ post_id: postId, user_id: user.id });
+      if (!error) {
+        setLikedPosts(prev => new Set(prev).add(postId));
+        setLikeCounts(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+      } else {
+        // Already liked (constraint violation)
+        toast.error('You already liked this post');
+      }
     }
   };
 
@@ -248,8 +274,32 @@ export default function Home() {
         })}
       </div>
 
-      {/* Content Type Tabs (for non-profile tabs) */}
-      {activeTab !== 'profile' && activeTab !== 'private' && (
+      {/* Content Type Tabs - show for feed tabs only */}
+      {(activeTab === 'all' || activeTab === 'regional' || activeTab === 'global' || activeTab === 'following') && (
+        <div className="flex gap-1 bg-muted/30 p-1 rounded-lg w-fit">
+          {contentTabs.map((tab) => {
+            const isActive = contentType === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setContentType(tab.id as typeof contentType)}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
+                  isActive 
+                    ? "bg-background text-foreground shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <tab.icon className="w-3 h-3" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Private tab content type filters */}
+      {activeTab === 'private' && (
         <div className="flex gap-1 bg-muted/30 p-1 rounded-lg w-fit">
           {contentTabs.map((tab) => {
             const isActive = contentType === tab.id;
@@ -284,12 +334,12 @@ export default function Home() {
       ) : posts.length === 0 ? (
         <Card className="glass-card border-border">
           <CardContent className="py-12 text-center space-y-4">
-            {activeTab === 'friends' ? (
+            {activeTab === 'following' ? (
               <>
                 <Users className="w-16 h-16 mx-auto text-muted-foreground/50" />
                 <h3 className="text-xl font-semibold">No Posts from Following</h3>
                 <p className="text-muted-foreground max-w-sm mx-auto">
-                  Follow people to see their posts here!
+                  Follow people or add friends to see their posts here!
                 </p>
                 <Button onClick={() => setActiveTab('global')} className="gap-2">
                   <Globe className="w-4 h-4" /> Explore Global Feed
@@ -327,7 +377,7 @@ export default function Home() {
           onToggleLike={toggleLike}
           onDelete={deletePost}
           onShare={shareToFeed}
-          viewMode={contentType}
+          viewMode={contentType === 'documents' ? 'mixed' : contentType}
         />
       )}
 

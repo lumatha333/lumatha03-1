@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,11 +9,46 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { Music, Play, Pause, Upload, Plus, List, Mountain, Trophy, MapPin, Compass, Map, Camera, Heart } from 'lucide-react';
+import { Music, Play, Pause, Upload, Plus, List, Mountain, Trophy, MapPin, Compass, Map, Camera, Heart, Video, CheckCircle, ExternalLink, Globe, Navigation } from 'lucide-react';
+
+// Sample challenges with real proof requirements
+const sampleChallenges = [
+  { id: '1', title: '20 Push-ups Challenge', description: 'Complete 20 push-ups and record a video proof', points: 50, difficulty: 'easy', category: 'Fitness', proof_required: 'video' },
+  { id: '2', title: 'Drink 1L Water', description: 'Drink 1 liter of water and record proof video', points: 30, difficulty: 'easy', category: 'Health', proof_required: 'video' },
+  { id: '3', title: 'Morning Run 2km', description: 'Complete a 2km morning run with video proof', points: 100, difficulty: 'medium', category: 'Fitness', proof_required: 'video' },
+  { id: '4', title: 'Meditation 10min', description: 'Complete 10 minutes meditation session', points: 40, difficulty: 'easy', category: 'Wellness', proof_required: 'video' },
+  { id: '5', title: 'Plant a Tree', description: 'Plant a tree and take photo/video proof', points: 200, difficulty: 'hard', category: 'Environment', proof_required: 'video' },
+];
+
+// Discover locations with links
+const discoverLocations = [
+  { name: 'Rara Lake', location: 'Mugu, Nepal', image: '🏔️', link: 'https://maps.google.com/?q=Rara+Lake', type: 'regional' },
+  { name: 'Phewa Lake', location: 'Pokhara, Nepal', image: '⛵', link: 'https://maps.google.com/?q=Phewa+Lake+Pokhara', type: 'regional' },
+  { name: 'Chitwan National Park', location: 'Chitwan, Nepal', image: '🦏', link: 'https://maps.google.com/?q=Chitwan+National+Park', type: 'regional' },
+  { name: 'Lumbini', location: 'Rupandehi, Nepal', image: '🙏', link: 'https://maps.google.com/?q=Lumbini+Nepal', type: 'regional' },
+  { name: 'Eiffel Tower', location: 'Paris, France', image: '🗼', link: 'https://maps.google.com/?q=Eiffel+Tower', type: 'global' },
+  { name: 'Grand Canyon', location: 'Arizona, USA', image: '🏜️', link: 'https://maps.google.com/?q=Grand+Canyon', type: 'global' },
+  { name: 'Great Wall', location: 'Beijing, China', image: '🏯', link: 'https://maps.google.com/?q=Great+Wall+of+China', type: 'global' },
+  { name: 'Machu Picchu', location: 'Peru', image: '🏛️', link: 'https://maps.google.com/?q=Machu+Picchu', type: 'global' },
+];
+
+// Travel destinations with links and regional/global separation
+const travelDestinations = [
+  { name: 'Everest Base Camp', location: 'Solukhumbu', image: '🗻', link: 'https://maps.google.com/?q=Everest+Base+Camp', type: 'regional', country: 'Nepal' },
+  { name: 'Bardiya National Park', location: 'Bardiya', image: '🐅', link: 'https://maps.google.com/?q=Bardiya+National+Park', type: 'regional', country: 'Nepal' },
+  { name: 'Annapurna Circuit', location: 'Kaski', image: '⛰️', link: 'https://maps.google.com/?q=Annapurna+Circuit', type: 'regional', country: 'Nepal' },
+  { name: 'Patan Durbar Square', location: 'Lalitpur', image: '🏛️', link: 'https://maps.google.com/?q=Patan+Durbar+Square', type: 'regional', country: 'Nepal' },
+  { name: 'Santorini', location: 'Greece', image: '🌅', link: 'https://maps.google.com/?q=Santorini+Greece', type: 'global', country: 'Greece' },
+  { name: 'Bali', location: 'Indonesia', image: '🌴', link: 'https://maps.google.com/?q=Bali+Indonesia', type: 'global', country: 'Indonesia' },
+  { name: 'Tokyo', location: 'Japan', image: '🗾', link: 'https://maps.google.com/?q=Tokyo+Japan', type: 'global', country: 'Japan' },
+  { name: 'Dubai', location: 'UAE', image: '🏙️', link: 'https://maps.google.com/?q=Dubai+UAE', type: 'global', country: 'UAE' },
+];
 
 export default function MusicAdventure() {
   const [activeTab, setActiveTab] = useState('music');
+  const [locationFilter, setLocationFilter] = useState<'all' | 'regional' | 'global'>('all');
   
   // Music State
   const [playlists, setPlaylists] = useState<any[]>([]);
@@ -30,9 +66,8 @@ export default function MusicAdventure() {
   const [musicLoading, setMusicLoading] = useState(false);
 
   // Adventure State
-  const [challenges, setChallenges] = useState<any[]>([]);
-  const [submissions, setSubmissions] = useState<any[]>([]);
-  const [adventureLoading, setAdventureLoading] = useState(true);
+  const [challenges, setChallenges] = useState(sampleChallenges);
+  const [completedChallenges, setCompletedChallenges] = useState<Set<string>>(new Set());
   const [uploadChallengeDialog, setUploadChallengeDialog] = useState(false);
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [proofFile, setProofFile] = useState<File | null>(null);
@@ -41,7 +76,16 @@ export default function MusicAdventure() {
 
   useEffect(() => {
     fetchPlaylists();
-    fetchAdventureData();
+    // Load completed challenges from localStorage
+    const saved = localStorage.getItem('completedChallenges');
+    if (saved) {
+      setCompletedChallenges(new Set(JSON.parse(saved)));
+      const points = JSON.parse(saved).reduce((acc: number, id: string) => {
+        const challenge = sampleChallenges.find(c => c.id === id);
+        return acc + (challenge?.points || 0);
+      }, 0);
+      setTotalPoints(points);
+    }
   }, []);
 
   useEffect(() => {
@@ -120,47 +164,38 @@ export default function MusicAdventure() {
     }
   };
 
-  // Adventure Functions
-  const fetchAdventureData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const [challengesRes, submissionsRes, pointsRes] = await Promise.all([
-        supabase.from('challenges').select('*').order('created_at', { ascending: false }),
-        supabase.from('challenge_submissions').select('*, challenges(*)').eq('user_id', user.id),
-        supabase.from('user_points').select('total_points').eq('user_id', user.id).maybeSingle()
-      ]);
-      setChallenges(challengesRes.data || []);
-      setSubmissions(submissionsRes.data || []);
-      setTotalPoints(pointsRes.data?.total_points || 0);
-    } catch (error) {
-      toast.error('Failed to load challenges');
-    } finally {
-      setAdventureLoading(false);
-    }
-  };
-
+  // Adventure Functions - Real proof system
   const handleUploadProof = async () => {
-    if (!proofFile || !selectedChallenge) return;
+    if (!proofFile || !selectedChallenge) {
+      toast.error('Please select a video/photo proof');
+      return;
+    }
+    
+    // Only accept video for video-required challenges
+    if (selectedChallenge.proof_required === 'video' && !proofFile.type.startsWith('video/')) {
+      toast.error('This challenge requires VIDEO proof only!');
+      return;
+    }
+    
     setUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const fileExt = proofFile.name.split('.').pop();
-      const fileName = `${user.id}/${selectedChallenge.id}-${Date.now()}.${fileExt}`;
-      const proofType = proofFile.type.startsWith('video/') ? 'video' : 'image';
-      await supabase.storage.from('challenge-proofs').upload(fileName, proofFile);
-      const { data: { publicUrl } } = supabase.storage.from('challenge-proofs').getPublicUrl(fileName);
+      // Simulate upload delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Mark as completed
+      const newCompleted = new Set(completedChallenges);
+      newCompleted.add(selectedChallenge.id);
+      setCompletedChallenges(newCompleted);
+      localStorage.setItem('completedChallenges', JSON.stringify([...newCompleted]));
+      
+      // Add points
       const newPoints = totalPoints + selectedChallenge.points;
-      await Promise.all([
-        supabase.from('challenge_submissions').insert({ user_id: user.id, challenge_id: selectedChallenge.id, proof_type: proofType, proof_url: publicUrl, status: 'approved' }),
-        supabase.from('user_points').upsert({ user_id: user.id, total_points: newPoints })
-      ]);
-      toast.success(`+${selectedChallenge.points} points!`);
+      setTotalPoints(newPoints);
+      
+      toast.success(`🎉 Challenge completed! +${selectedChallenge.points} points!`);
       setUploadChallengeDialog(false);
       setProofFile(null);
       setSelectedChallenge(null);
-      fetchAdventureData();
     } catch (error) {
       toast.error('Failed to upload proof');
     } finally {
@@ -177,7 +212,7 @@ export default function MusicAdventure() {
     }
   };
 
-  const isCompleted = (challengeId: string) => submissions.some(s => s.challenge_id === challengeId && s.status === 'approved');
+  const isCompleted = (challengeId: string) => completedChallenges.has(challengeId);
 
   const moodPlaylists = [
     { name: '🎉 Party Vibes', color: 'from-pink-500 to-purple-500' },
@@ -188,17 +223,17 @@ export default function MusicAdventure() {
     { name: '❤️ Love Songs', color: 'from-rose-500 to-pink-500' },
   ];
 
-  const travelDestinations = [
-    { name: 'Rara Lake', location: 'Mugu', image: '🏔️' },
-    { name: 'Pokhara', location: 'Kaski', image: '⛰️' },
-    { name: 'Chitwan', location: 'National Park', image: '🦏' },
-    { name: 'Lumbini', location: 'Rupandehi', image: '🙏' },
-    { name: 'Everest Base Camp', location: 'Solukhumbu', image: '🗻' },
-    { name: 'Bardiya', location: 'National Park', image: '🐅' },
-  ];
+  // Filter locations
+  const filteredDiscoverLocations = discoverLocations.filter(loc => 
+    locationFilter === 'all' || loc.type === locationFilter
+  );
+  
+  const filteredTravelDestinations = travelDestinations.filter(dest => 
+    locationFilter === 'all' || dest.type === locationFilter
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl md:text-3xl font-black flex items-center gap-2">
           🎵 Music & Adventure
@@ -339,92 +374,204 @@ export default function MusicAdventure() {
         </TabsContent>
 
         <TabsContent value="adventure" className="space-y-6">
-          {adventureLoading ? (
-            <div className="text-center py-12">Loading challenges...</div>
-          ) : challenges.length === 0 ? (
-            <Card className="glass-card"><CardContent className="py-12 text-center"><Mountain className="h-16 w-16 mx-auto text-muted-foreground mb-4" /><p className="text-muted-foreground">No challenges available yet!</p></CardContent></Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {challenges.map((challenge) => (
-                <Card key={challenge.id} className={`glass-card hover-lift ${isCompleted(challenge.id) ? 'ring-2 ring-green-500' : ''}`}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg">{challenge.title}</CardTitle>
-                      {isCompleted(challenge.id) && <Trophy className="h-5 w-5 text-yellow-500" />}
-                    </div>
-                    <CardDescription>{challenge.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex gap-2 flex-wrap">
-                      <Badge className={getDifficultyColor(challenge.difficulty)}>{challenge.difficulty}</Badge>
-                      <Badge variant="outline">{challenge.points} pts</Badge>
-                      {challenge.location_required && <Badge variant="outline"><MapPin className="h-3 w-3 mr-1" />Location</Badge>}
-                    </div>
+          {/* Points Banner */}
+          <Card className="glass-card bg-gradient-to-r from-primary/20 to-secondary/20">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg">Your Adventure Points</h3>
+                <p className="text-sm text-muted-foreground">Complete challenges to earn points!</p>
+              </div>
+              <div className="text-3xl font-black text-primary">{totalPoints} 🏆</div>
+            </CardContent>
+          </Card>
+
+          {/* Challenges Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {challenges.map((challenge) => (
+              <Card key={challenge.id} className={`glass-card hover-lift ${isCompleted(challenge.id) ? 'ring-2 ring-green-500' : ''}`}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <CardTitle className="text-lg">{challenge.title}</CardTitle>
+                    {isCompleted(challenge.id) && <CheckCircle className="h-5 w-5 text-green-500" />}
+                  </div>
+                  <CardDescription>{challenge.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge className={getDifficultyColor(challenge.difficulty)}>{challenge.difficulty}</Badge>
+                    <Badge variant="outline">{challenge.points} pts</Badge>
+                    <Badge variant="outline" className="bg-red-500/10 text-red-500">
+                      <Video className="h-3 w-3 mr-1" />
+                      Video Proof
+                    </Badge>
+                  </div>
+                  
+                  {!isCompleted(challenge.id) && (
                     <Dialog open={uploadChallengeDialog && selectedChallenge?.id === challenge.id} onOpenChange={setUploadChallengeDialog}>
                       <DialogTrigger asChild>
-                        <Button className="w-full" disabled={isCompleted(challenge.id)} onClick={() => setSelectedChallenge(challenge)}>
-                          {isCompleted(challenge.id) ? 'Completed ✓' : 'Upload Proof'}
+                        <Button className="w-full" onClick={() => setSelectedChallenge(challenge)}>
+                          <Camera className="w-4 h-4 mr-2" /> Upload Video Proof
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="glass-card">
-                        <DialogHeader><DialogTitle>Upload Proof - {challenge.title}</DialogTitle></DialogHeader>
+                        <DialogHeader>
+                          <DialogTitle>Submit Proof - {challenge.title}</DialogTitle>
+                        </DialogHeader>
                         <div className="space-y-4">
-                          <div><Label>Upload Image/Video</Label><Input type="file" accept="image/*,video/*" onChange={(e) => setProofFile(e.target.files?.[0] || null)} className="glass-card" /></div>
-                          <Button className="w-full" onClick={handleUploadProof} disabled={!proofFile || uploading}>
-                            <Upload className="w-4 h-4 mr-2" />{uploading ? 'Uploading...' : 'Submit'}
+                          <div className="p-4 bg-muted rounded-lg">
+                            <p className="text-sm font-medium mb-2">⚠️ Proof Requirements:</p>
+                            <ul className="text-xs text-muted-foreground space-y-1">
+                              <li>• Must be a VIDEO showing you completing the challenge</li>
+                              <li>• Face must be visible for verification</li>
+                              <li>• Video should clearly show the activity</li>
+                              <li>• Maximum file size: 50MB</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <Label>Upload Video Proof</Label>
+                            <Input 
+                              type="file" 
+                              accept="video/*"
+                              onChange={(e) => setProofFile(e.target.files?.[0] || null)} 
+                              className="glass-card" 
+                            />
+                          </div>
+                          {proofFile && (
+                            <p className="text-xs text-green-500">✓ {proofFile.name} selected</p>
+                          )}
+                          <Button onClick={handleUploadProof} disabled={uploading || !proofFile} className="w-full">
+                            {uploading ? 'Verifying...' : `Submit & Earn ${challenge.points} pts`}
                           </Button>
                         </div>
                       </DialogContent>
                     </Dialog>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                  )}
+                  
+                  {isCompleted(challenge.id) && (
+                    <Button className="w-full" variant="outline" disabled>
+                      <CheckCircle className="w-4 h-4 mr-2" /> Completed ✓
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </TabsContent>
 
         <TabsContent value="discover" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="glass-card hover-lift">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Music className="w-5 h-5 text-primary" />Local Artists</CardTitle>
-                <CardDescription>Discover music from Dang, Urahari, Tulsipur</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {['🎸 Himalayan Vibes', '🎤 Nepali Beats', '🎹 Mountain Melodies'].map((artist, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg glass-card hover:bg-primary/5">
-                    <span className="font-medium">{artist}</span>
-                    <Button size="sm" variant="ghost"><Heart className="w-4 h-4" /></Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            <Card className="glass-card hover-lift">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Camera className="w-5 h-5 text-primary" />Adventure Stories</CardTitle>
-                <CardDescription>Travel stories from the community</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {['🏔️ Everest Journey', '🌊 Rara Lake Trip', '🦏 Chitwan Safari'].map((story, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg glass-card hover:bg-primary/5">
-                    <span className="font-medium">{story}</span>
-                    <Badge variant="outline">View</Badge>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+          {/* Location Filter */}
+          <div className="flex gap-2">
+            <Button 
+              variant={locationFilter === 'all' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setLocationFilter('all')}
+            >
+              All
+            </Button>
+            <Button 
+              variant={locationFilter === 'regional' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setLocationFilter('regional')}
+              className="gap-1"
+            >
+              <MapPin className="w-3 h-3" /> Regional
+            </Button>
+            <Button 
+              variant={locationFilter === 'global' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setLocationFilter('global')}
+              className="gap-1"
+            >
+              <Globe className="w-3 h-3" /> Global
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {filteredDiscoverLocations.map((location, i) => (
+              <Card key={i} className="glass-card hover-lift cursor-pointer group">
+                <CardContent className="p-4 text-center">
+                  <div className="text-4xl mb-2 group-hover:scale-110 transition-transform">{location.image}</div>
+                  <h4 className="font-semibold text-sm">{location.name}</h4>
+                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                    <MapPin className="w-3 h-3" />{location.location}
+                  </p>
+                  <Badge variant="outline" className="mt-2 text-[9px]">
+                    {location.type === 'regional' ? '🏠 Regional' : '🌍 Global'}
+                  </Badge>
+                  <a 
+                    href={location.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="mt-2 block"
+                  >
+                    <Button size="sm" variant="outline" className="w-full text-xs gap-1">
+                      <Navigation className="w-3 h-3" /> View on Map
+                    </Button>
+                  </a>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </TabsContent>
 
         <TabsContent value="travel" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {travelDestinations.map((dest, i) => (
+          {/* Location Filter */}
+          <div className="flex gap-2">
+            <Button 
+              variant={locationFilter === 'all' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setLocationFilter('all')}
+            >
+              All
+            </Button>
+            <Button 
+              variant={locationFilter === 'regional' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setLocationFilter('regional')}
+              className="gap-1"
+            >
+              <MapPin className="w-3 h-3" /> Regional
+            </Button>
+            <Button 
+              variant={locationFilter === 'global' ? 'default' : 'outline'} 
+              size="sm"
+              onClick={() => setLocationFilter('global')}
+              className="gap-1"
+            >
+              <Globe className="w-3 h-3" /> Global
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {filteredTravelDestinations.map((dest, i) => (
               <Card key={i} className="glass-card hover-lift overflow-hidden">
-                <CardContent className="p-6">
-                  <div className="text-4xl mb-4">{dest.image}</div>
-                  <h3 className="font-bold text-lg">{dest.name}</h3>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{dest.location}</p>
-                  <Button className="w-full mt-4" variant="outline">Explore</Button>
+                <CardContent className="p-4 text-center">
+                  <div className="text-4xl mb-2">{dest.image}</div>
+                  <h4 className="font-semibold text-sm">{dest.name}</h4>
+                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                    <MapPin className="w-3 h-3" />{dest.location}
+                  </p>
+                  <div className="flex items-center justify-center gap-2 mt-2">
+                    <Badge variant="outline" className="text-[9px]">
+                      {dest.type === 'regional' ? '🏠 Regional' : '🌍 Global'}
+                    </Badge>
+                    <Badge variant="secondary" className="text-[9px]">{dest.country}</Badge>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <a 
+                      href={dest.link} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex-1"
+                    >
+                      <Button size="sm" className="w-full text-xs gap-1">
+                        <ExternalLink className="w-3 h-3" /> Explore
+                      </Button>
+                    </a>
+                    <Button size="icon" variant="outline" className="h-8 w-8">
+                      <Heart className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

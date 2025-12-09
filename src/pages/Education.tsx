@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,20 +11,24 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { BookOpen, Upload, Search, Download, Trash2, Lock, Globe, FileText, CheckSquare, Plus, StickyNote } from 'lucide-react';
+import { BookOpen, Upload, Search, Download, Trash2, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, User } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 
 type Document = Database['public']['Tables']['documents']['Row'];
 type Todo = Database['public']['Tables']['todos']['Row'];
 type Note = Database['public']['Tables']['notes']['Row'];
+type Profile = Database['public']['Tables']['profiles']['Row'];
+
+type DocumentWithProfile = Document & { profiles?: Profile };
 
 export default function Education() {
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('documents');
   
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<DocumentWithProfile[]>([]);
   const [docSearch, setDocSearch] = useState('');
   const [docLoading, setDocLoading] = useState(true);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -55,10 +60,33 @@ export default function Education() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from('documents').select('*')
+      
+      // Fetch documents with profile information
+      const { data } = await supabase
+        .from('documents')
+        .select('*')
         .or(`user_id.eq.${user.id},visibility.eq.public`)
         .order('created_at', { ascending: false });
-      setDocuments(data || []);
+      
+      if (data) {
+        // Get unique user IDs
+        const userIds = [...new Set(data.map(d => d.user_id))];
+        
+        // Fetch profiles
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', userIds);
+        
+        const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
+        
+        const docsWithProfiles = data.map(doc => ({
+          ...doc,
+          profiles: profilesMap.get(doc.user_id)
+        }));
+        
+        setDocuments(docsWithProfiles);
+      }
     } finally {
       setDocLoading(false);
     }
@@ -250,6 +278,7 @@ export default function Education() {
                         </div>
                         <div className="min-w-0">
                           <h3 className="font-medium text-sm truncate">{doc.title}</h3>
+                          {doc.description && <p className="text-xs text-muted-foreground line-clamp-2">{doc.description}</p>}
                           <p className="text-[10px] text-muted-foreground">{new Date(doc.created_at).toLocaleDateString()}</p>
                         </div>
                         <div className="flex gap-2">
@@ -275,8 +304,29 @@ export default function Education() {
                   {filteredPublicDocs.map((doc) => (
                     <Card key={doc.id} className="glass-card hover-lift">
                       <CardContent className="p-3 space-y-2">
-                        <div className="flex items-center gap-2"><BookOpen className="w-5 h-5 text-primary" /><Badge className="text-[10px]"><Globe className="w-2.5 h-2.5 mr-0.5" />Public</Badge></div>
+                        {/* User Profile Section */}
+                        <div 
+                          className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => navigate(`/profile/${doc.user_id}`)}
+                        >
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage src={doc.profiles?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-primary/20 text-xs">
+                              {doc.profiles?.name?.[0] || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{doc.profiles?.name || 'Anonymous'}</p>
+                            <p className="text-[10px] text-muted-foreground">View profile →</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="w-5 h-5 text-primary" />
+                          <Badge className="text-[10px]"><Globe className="w-2.5 h-2.5 mr-0.5" />Public</Badge>
+                        </div>
                         <h3 className="font-medium text-sm truncate">{doc.title}</h3>
+                        {doc.description && <p className="text-xs text-muted-foreground line-clamp-2">{doc.description}</p>}
                         <div className="flex gap-2">
                           <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => handleDownload(doc.file_url, doc.file_name)}><Download className="w-3 h-3 mr-1" />Download</Button>
                           <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" asChild><a href={doc.file_url} target="_blank" rel="noopener noreferrer"><BookOpen className="w-3 h-3 mr-1" />Open</a></Button>
@@ -322,24 +372,25 @@ export default function Education() {
                 <Card key={note.id} className="glass-card hover-lift">
                   <CardContent className="p-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-medium text-sm truncate flex-1">{note.title}</h3>
-                      <div className="flex gap-1 shrink-0">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>
-                          <StickyNote className="w-3.5 h-3.5" />
+                      <div className="flex items-center gap-2">
+                        <StickyNote className="w-4 h-4 text-yellow-500" />
+                        <Badge variant={note.visibility === 'public' ? 'default' : 'secondary'} className="text-[10px]">
+                          {note.visibility === 'public' ? <Globe className="w-2.5 h-2.5 mr-0.5" /> : <Lock className="w-2.5 h-2.5 mr-0.5" />}
+                          {note.visibility}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>
+                          <FileText className="w-3 h-3" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteNote(note.id)}>
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => deleteNote(note.id)}>
+                          <Trash2 className="w-3 h-3 text-destructive" />
                         </Button>
                       </div>
                     </div>
-                    {note.content && <p className="text-xs text-muted-foreground line-clamp-2">{note.content}</p>}
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className="text-[10px]">
-                        {note.visibility === 'public' ? <Globe className="w-2.5 h-2.5 mr-0.5" /> : <Lock className="w-2.5 h-2.5 mr-0.5" />}
-                        {note.visibility}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground">{new Date(note.created_at || '').toLocaleDateString()}</span>
-                    </div>
+                    <h3 className="font-medium text-sm">{note.title}</h3>
+                    {note.content && <p className="text-xs text-muted-foreground line-clamp-3">{note.content}</p>}
+                    <p className="text-[10px] text-muted-foreground">{new Date(note.created_at || '').toLocaleDateString()}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -350,8 +401,9 @@ export default function Education() {
         {/* Todos Tab */}
         <TabsContent value="todos" className="space-y-3 mt-4">
           <div className="flex gap-2">
-            <Input placeholder="Add a task..." value={newTodo} onChange={(e) => setNewTodo(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()} className="glass-card flex-1" />
-            <Button onClick={handleAddTodo} disabled={todoLoading} size="icon"><Plus className="w-4 h-4" /></Button>
+            <Input placeholder="Add new task..." value={newTodo} onChange={(e) => setNewTodo(e.target.value)} className="glass-card flex-1"
+              onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()} />
+            <Button onClick={handleAddTodo} disabled={todoLoading}><Plus className="w-4 h-4" /></Button>
           </div>
 
           {todos.length === 0 ? (
@@ -359,12 +411,14 @@ export default function Education() {
           ) : (
             <div className="space-y-2">
               {todos.map((todo) => (
-                <Card key={todo.id} className="glass-card">
+                <Card key={todo.id} className={`glass-card ${todo.completed ? 'opacity-60' : ''}`}>
                   <CardContent className="p-3 flex items-center gap-3">
-                    <Checkbox checked={todo.completed || false} onCheckedChange={() => toggleTodo(todo.id, todo.completed || false)} />
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => toggleTodo(todo.id, todo.completed || false)}>
+                      <CheckSquare className={`w-4 h-4 ${todo.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
+                    </Button>
                     <span className={`flex-1 text-sm ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>{todo.text}</span>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => deleteTodo(todo.id)}>
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => deleteTodo(todo.id)}>
+                      <Trash2 className="w-3 h-3 text-destructive" />
                     </Button>
                   </CardContent>
                 </Card>
