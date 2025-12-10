@@ -101,7 +101,6 @@ export function FeedGrid({
         .order('created_at', { ascending: true });
       
       if (commentsData && commentsData.length > 0) {
-        // Get unique user IDs and fetch their profiles
         const userIds = [...new Set(commentsData.map(c => c.user_id))];
         const { data: profilesData } = await supabase
           .from('profiles')
@@ -120,7 +119,6 @@ export function FeedGrid({
         setComments([]);
       }
       
-      // Count user's comments on this post
       const userCount = (commentsData || []).filter(c => c.user_id === currentUserId).length;
       setUserCommentCounts(prev => ({ ...prev, [postId]: userCount }));
     } catch (error) {
@@ -134,7 +132,6 @@ export function FeedGrid({
   const handleAddComment = async (postId: string) => {
     if (!newComment.trim()) return;
     
-    // Check if user already has 2 comments on this post
     const { data: existingComments } = await supabase
       .from('comments')
       .select('id')
@@ -162,7 +159,6 @@ export function FeedGrid({
     }
   };
 
-  // Open comments dialog
   const openComments = (postId: string) => {
     setShowComments(postId);
     fetchComments(postId);
@@ -170,9 +166,9 @@ export function FeedGrid({
 
   return (
     <>
-      {/* Masonry Grid */}
-      <div className="columns-2 md:columns-3 lg:columns-4 gap-3 space-y-3">
-        {filteredPosts.map((post) => {
+      {/* Single column on mobile, multi-column on larger screens */}
+      <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:gap-3">
+        {filteredPosts.map((post, index) => {
           const { urls, types, hasMedia, hasMultiple } = getMediaInfo(post);
           const currentUrl = urls[0] || '/placeholder.svg';
           const isVideo = types[0]?.includes('video');
@@ -183,7 +179,8 @@ export function FeedGrid({
           return (
             <Card 
               key={post.id} 
-              className="break-inside-avoid mb-3 overflow-hidden glass-card border-border group cursor-pointer hover:shadow-lg transition-all"
+              className="overflow-hidden glass-card border-border group cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-[1.02] animate-fade-in"
+              style={{ animationDelay: `${index * 50}ms` }}
             >
               {/* Media */}
               {hasMedia && (
@@ -194,9 +191,9 @@ export function FeedGrid({
                   {isVideo ? (
                     <div className="relative aspect-video bg-black">
                       <video src={currentUrl} className="w-full h-full object-cover" preload="metadata" muted />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
-                          <Play className="w-5 h-5 text-primary ml-1" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-all duration-300 group-hover:bg-black/40">
+                        <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center transform transition-transform duration-300 group-hover:scale-110">
+                          <Play className="w-6 h-6 text-primary ml-1" />
                         </div>
                       </div>
                     </div>
@@ -204,7 +201,7 @@ export function FeedGrid({
                     <LazyImage
                       src={currentUrl}
                       alt={post.title}
-                      className="w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="w-full object-cover transition-transform duration-500 group-hover:scale-110"
                       aspectRatio="auto"
                     />
                   )}
@@ -212,7 +209,7 @@ export function FeedGrid({
                   {/* Overlay badges */}
                   <div className="absolute top-2 right-2 flex gap-1">
                     {hasMultiple && (
-                      <Badge variant="secondary" className="bg-black/60 text-white text-[10px] px-1.5">
+                      <Badge variant="secondary" className="bg-black/60 text-white text-[10px] px-1.5 animate-pulse">
                         +{urls.length - 1}
                       </Badge>
                     )}
@@ -225,26 +222,26 @@ export function FeedGrid({
                 {/* User */}
                 <div className="flex items-center gap-2">
                   <Avatar 
-                    className="w-7 h-7 cursor-pointer"
+                    className="w-8 h-8 cursor-pointer ring-2 ring-transparent transition-all duration-300 hover:ring-primary"
                     onClick={() => navigate(`/profile/${post.user_id}`)}
                   >
                     <AvatarImage src={post.profiles?.avatar_url || undefined} />
-                    <AvatarFallback className="bg-primary/20 text-[10px]">
+                    <AvatarFallback className="bg-primary/20 text-xs">
                       {post.profiles?.name?.[0] || 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{post.profiles?.name || 'Anonymous'}</p>
+                    <p className="text-sm font-medium truncate">{post.profiles?.name || 'Anonymous'}</p>
                   </div>
                   
                   {isOwner && onDelete && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                          <MoreVertical className="w-3 h-3" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <MoreVertical className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="glass-card">
+                      <DropdownMenuContent align="end" className="glass-card animate-scale-in">
                         <DropdownMenuItem onClick={() => {
                           navigator.clipboard.writeText(`${post.title}\n${post.content}`);
                           toast.success("Copied!");
@@ -265,47 +262,53 @@ export function FeedGrid({
                 )}
                 
                 {post.content && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-3">{post.content}</p>
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 pt-1">
+                <div className="flex items-center gap-1 pt-2 border-t border-border/50">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); onToggleLike(post.id); }}
-                    className={cn("h-7 px-2 gap-1", isLiked && "text-red-500")}
+                    className={cn(
+                      "h-8 px-3 gap-1.5 transition-all duration-300",
+                      isLiked && "text-red-500 scale-110"
+                    )}
                   >
-                    <Heart className={cn("w-3.5 h-3.5", isLiked && "fill-current")} />
-                    <span className="text-[10px]">{likeCounts[post.id] || ''}</span>
+                    <Heart className={cn("w-4 h-4 transition-transform", isLiked && "fill-current animate-bounce")} />
+                    <span className="text-xs">{likeCounts[post.id] || ''}</span>
                   </Button>
                   
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-7 px-2 gap-1"
+                    className="h-8 px-3 gap-1.5 transition-all duration-300 hover:text-primary"
                     onClick={(e) => { e.stopPropagation(); openComments(post.id); }}
                   >
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    <span className="text-[10px]">{commentCounts[post.id] || ''}</span>
+                    <MessageCircle className="w-4 h-4" />
+                    <span className="text-xs">{commentCounts[post.id] || ''}</span>
                   </Button>
                   
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-7 px-2"
+                    className="h-8 px-3 transition-all duration-300 hover:text-primary"
                     onClick={(e) => { e.stopPropagation(); handleShare(post); }}
                   >
-                    <Share2 className="w-3.5 h-3.5" />
+                    <Share2 className="w-4 h-4" />
                   </Button>
                   
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); onToggleSave(post.id); }}
-                    className={cn("h-7 px-2 ml-auto", isSaved && "text-primary")}
+                    className={cn(
+                      "h-8 px-3 ml-auto transition-all duration-300",
+                      isSaved && "text-primary scale-110"
+                    )}
                   >
-                    <Star className={cn("w-3.5 h-3.5", isSaved && "fill-current")} />
+                    <Star className={cn("w-4 h-4 transition-transform", isSaved && "fill-current animate-pulse")} />
                   </Button>
                 </div>
               </div>
@@ -316,7 +319,7 @@ export function FeedGrid({
 
       {/* Comments Dialog */}
       <Dialog open={!!showComments} onOpenChange={() => setShowComments(null)}>
-        <DialogContent className="max-w-md glass-card">
+        <DialogContent className="max-w-md glass-card animate-scale-in">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">Comments</h3>
             <Button variant="ghost" size="icon" onClick={() => setShowComments(null)}>
@@ -326,13 +329,17 @@ export function FeedGrid({
           
           <ScrollArea className="max-h-64">
             {loadingComments ? (
-              <p className="text-center text-muted-foreground py-4">Loading...</p>
+              <p className="text-center text-muted-foreground py-4 animate-pulse">Loading...</p>
             ) : comments.length === 0 ? (
               <p className="text-center text-muted-foreground py-4">No comments yet</p>
             ) : (
               <div className="space-y-3">
-                {comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-2">
+                {comments.map((comment, index) => (
+                  <div 
+                    key={comment.id} 
+                    className="flex gap-2 animate-fade-in"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
                     <Avatar className="w-7 h-7">
                       <AvatarImage src={comment.profiles?.avatar_url || undefined} />
                       <AvatarFallback className="bg-primary/20 text-[10px]">
@@ -358,7 +365,7 @@ export function FeedGrid({
                 className="flex-1"
                 onKeyPress={(e) => e.key === 'Enter' && showComments && handleAddComment(showComments)}
               />
-              <Button size="icon" onClick={() => showComments && handleAddComment(showComments)}>
+              <Button size="icon" onClick={() => showComments && handleAddComment(showComments)} className="transition-transform hover:scale-110">
                 <Send className="w-4 h-4" />
               </Button>
             </div>
@@ -374,11 +381,11 @@ export function FeedGrid({
 
       {/* Fullscreen Media Dialog */}
       <Dialog open={!!selectedPost} onOpenChange={() => setSelectedPost(null)}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none">
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none animate-scale-in">
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-4 right-4 z-50 text-white bg-black/50 hover:bg-black/70 rounded-full"
+            className="absolute top-4 right-4 z-50 text-white bg-black/50 hover:bg-black/70 rounded-full transition-transform hover:scale-110"
             onClick={() => setSelectedPost(null)}
           >
             <X className="w-6 h-6" />
@@ -394,7 +401,7 @@ export function FeedGrid({
                 {isVideo ? (
                   <video src={currentUrl} className="max-w-full max-h-[90vh] object-contain" controls autoPlay />
                 ) : (
-                  <img src={currentUrl} alt="" className="max-w-full max-h-[90vh] object-contain" />
+                  <img src={currentUrl} alt="" className="max-w-full max-h-[90vh] object-contain animate-fade-in" />
                 )}
                 
                 {urls.length > 1 && (
@@ -402,7 +409,7 @@ export function FeedGrid({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute left-4 bg-white/20 hover:bg-white/40 text-white rounded-full"
+                      className="absolute left-4 bg-white/20 hover:bg-white/40 text-white rounded-full transition-transform hover:scale-110"
                       onClick={() => setCurrentMediaIndex((prev) => (prev - 1 + urls.length) % urls.length)}
                     >
                       <ChevronLeft className="w-6 h-6" />
@@ -410,12 +417,12 @@ export function FeedGrid({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute right-4 bg-white/20 hover:bg-white/40 text-white rounded-full"
+                      className="absolute right-4 bg-white/20 hover:bg-white/40 text-white rounded-full transition-transform hover:scale-110"
                       onClick={() => setCurrentMediaIndex((prev) => (prev + 1) % urls.length)}
                     >
                       <ChevronRight className="w-6 h-6" />
                     </Button>
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
                       {currentMediaIndex + 1} / {urls.length}
                     </div>
                   </>
