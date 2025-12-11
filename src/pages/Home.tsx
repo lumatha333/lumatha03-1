@@ -241,23 +241,23 @@ export default function Home() {
   const showContentFilters = ['all', 'regional', 'global', 'following', 'private'].includes(activeTab);
 
   return (
-    <div className="pb-24 space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="min-h-[calc(100vh-4rem)] pb-20 flex flex-col">
+      {/* Header - Compact */}
+      <div className="flex items-center justify-between py-2 px-1">
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-bold">Feed</h1>
         </div>
         <Link to="/create">
-          <Button size="sm" className="gap-1.5 rounded-full">
-            <Plus className="w-4 h-4" />
+          <Button size="sm" className="gap-1.5 rounded-full h-8 px-3 text-xs">
+            <Plus className="w-3.5 h-3.5" />
             Create
           </Button>
         </Link>
       </div>
 
-      {/* Main Feed Tabs */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
+      {/* Main Feed Tabs - Scrollable */}
+      <div className="flex gap-1.5 overflow-x-auto py-2 px-1 scrollbar-hide">
         {mainTabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -265,14 +265,14 @@ export default function Home() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all shrink-0",
+                "flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all shrink-0",
                 isActive 
-                  ? "bg-gradient-to-r text-white shadow-md scale-105" 
+                  ? "bg-gradient-to-r text-white shadow-md" 
                   : "bg-card/60 text-muted-foreground hover:bg-card",
                 isActive && tab.color
               )}
             >
-              <tab.icon className="w-3.5 h-3.5" />
+              <tab.icon className="w-3 h-3" />
               <span>{tab.label}</span>
             </button>
           );
@@ -281,7 +281,7 @@ export default function Home() {
 
       {/* Content Type Tabs - only for feed tabs */}
       {showContentFilters && (
-        <div className="flex gap-1 bg-muted/30 p-1 rounded-lg w-fit">
+        <div className="flex gap-0.5 bg-muted/30 p-0.5 rounded-lg w-fit mx-1 mb-2">
           {contentTabs.map((tab) => {
             const isActive = contentType === tab.id;
             return (
@@ -289,13 +289,13 @@ export default function Home() {
                 key={tab.id}
                 onClick={() => setContentType(tab.id as typeof contentType)}
                 className={cn(
-                  "flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
                   isActive 
                     ? "bg-background text-foreground shadow-sm" 
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <tab.icon className="w-3.5 h-3.5" />
+                <tab.icon className="w-3 h-3" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -303,61 +303,63 @@ export default function Home() {
         </div>
       )}
 
-      {/* Content */}
-      {activeTab === 'profile' ? (
-        <ProfileShortcuts />
-      ) : loading ? (
-        <div className="space-y-4">
-          {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} className="h-64 w-full rounded-xl" />
-          ))}
-        </div>
-      ) : posts.length === 0 ? (
-        <Card className="glass-card border-border">
-          <CardContent className="py-12 text-center space-y-4">
-            {activeTab === 'following' ? (
-              <>
-                <Users className="w-16 h-16 mx-auto text-muted-foreground/50" />
-                <h3 className="text-xl font-semibold">No Posts from Following</h3>
-                <p className="text-muted-foreground max-w-sm mx-auto">
-                  Follow people or add friends to see their posts here!
-                </p>
-              </>
-            ) : activeTab === 'private' ? (
-              <>
-                <Lock className="w-16 h-16 mx-auto text-muted-foreground/50" />
-                <h3 className="text-xl font-semibold">No Private Posts</h3>
-                <p className="text-muted-foreground">Create a private post to keep it just for yourself.</p>
-                <Button onClick={() => navigate('/create')} className="gap-2">
-                  <Plus className="w-4 h-4" /> Create Private Post
-                </Button>
-              </>
-            ) : (
-              <>
-                <Globe className="w-16 h-16 mx-auto text-muted-foreground/50" />
-                <h3 className="text-xl font-semibold">No Posts Yet</h3>
-                <p className="text-muted-foreground">Be the first to share something!</p>
-                <Button onClick={() => navigate('/create')} className="gap-2">
-                  <Plus className="w-4 h-4" /> Create Post
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <FeedGrid
-          posts={posts}
-          savedPosts={savedPosts}
-          likedPosts={likedPosts}
-          likeCounts={likeCounts}
-          currentUserId={user.id}
-          onToggleSave={toggleSave}
-          onToggleLike={toggleLike}
-          onDelete={deletePost}
-          onShare={shareToFeed}
-          viewMode={contentType === 'documents' ? 'mixed' : contentType}
-        />
-      )}
+      {/* Content - Flex grow to fill space */}
+      <div className="flex-1 overflow-y-auto px-1">
+        {activeTab === 'profile' ? (
+          <ProfileShortcuts />
+        ) : loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <Skeleton key={i} className="h-48 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : posts.length === 0 ? (
+          <Card className="glass-card border-border">
+            <CardContent className="py-8 text-center space-y-3">
+              {activeTab === 'following' ? (
+                <>
+                  <Users className="w-12 h-12 mx-auto text-muted-foreground/50" />
+                  <h3 className="text-lg font-semibold">No Posts from Following</h3>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                    Follow people or add friends to see their posts here!
+                  </p>
+                </>
+              ) : activeTab === 'private' ? (
+                <>
+                  <Lock className="w-12 h-12 mx-auto text-muted-foreground/50" />
+                  <h3 className="text-lg font-semibold">No Private Posts</h3>
+                  <p className="text-sm text-muted-foreground">Create a private post to keep it just for yourself.</p>
+                  <Button onClick={() => navigate('/create')} size="sm" className="gap-1.5">
+                    <Plus className="w-3.5 h-3.5" /> Create Private Post
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Globe className="w-12 h-12 mx-auto text-muted-foreground/50" />
+                  <h3 className="text-lg font-semibold">No Posts Yet</h3>
+                  <p className="text-sm text-muted-foreground">Be the first to share something!</p>
+                  <Button onClick={() => navigate('/create')} size="sm" className="gap-1.5">
+                    <Plus className="w-3.5 h-3.5" /> Create Post
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <FeedGrid
+            posts={posts}
+            savedPosts={savedPosts}
+            likedPosts={likedPosts}
+            likeCounts={likeCounts}
+            currentUserId={user.id}
+            onToggleSave={toggleSave}
+            onToggleLike={toggleLike}
+            onDelete={deletePost}
+            onShare={shareToFeed}
+            viewMode={contentType === 'documents' ? 'mixed' : contentType}
+          />
+        )}
+      </div>
 
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
