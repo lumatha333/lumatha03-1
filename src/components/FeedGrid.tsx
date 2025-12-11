@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LazyImage } from '@/components/LazyImage';
-import { Heart, MessageCircle, Share2, Star, Play, MoreVertical, X, ChevronLeft, ChevronRight, Copy, Trash2, Send } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Star, Play, MoreVertical, X, ChevronLeft, ChevronRight, Copy, Trash2, Send, ThumbsUp } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -55,6 +55,8 @@ export function FeedGrid({
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [userCommentCounts, setUserCommentCounts] = useState<Record<string, number>>({});
+  const [commentLikes, setCommentLikes] = useState<Set<string>>(new Set());
+  const [replyTo, setReplyTo] = useState<string | null>(null);
 
   // Filter posts by view mode
   const filteredPosts = posts.filter(post => {
@@ -151,12 +153,25 @@ export function FeedGrid({
       });
       
       setNewComment('');
+      setReplyTo(null);
       fetchComments(postId);
       setCommentCounts(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
       toast.success('Comment added');
     } catch (error) {
       toast.error('Failed to add comment');
     }
+  };
+
+  const toggleCommentLike = (commentId: string) => {
+    setCommentLikes(prev => {
+      const next = new Set(prev);
+      if (next.has(commentId)) {
+        next.delete(commentId);
+      } else {
+        next.add(commentId);
+      }
+      return next;
+    });
   };
 
   const openComments = (postId: string) => {
@@ -166,8 +181,8 @@ export function FeedGrid({
 
   return (
     <>
-      {/* Single column on mobile, multi-column on larger screens */}
-      <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:gap-3">
+      {/* Single column on mobile for proper scrolling */}
+      <div className="flex flex-col gap-4">
         {filteredPosts.map((post, index) => {
           const { urls, types, hasMedia, hasMultiple } = getMediaInfo(post);
           const currentUrl = urls[0] || '/placeholder.svg';
@@ -179,18 +194,18 @@ export function FeedGrid({
           return (
             <Card 
               key={post.id} 
-              className="overflow-hidden glass-card border-border group cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-[1.02] animate-fade-in"
+              className="overflow-hidden glass-card border-border group cursor-pointer transition-all duration-300 hover:shadow-xl animate-fade-in w-full"
               style={{ animationDelay: `${index * 50}ms` }}
             >
-              {/* Media */}
+              {/* Media - Proper sizing */}
               {hasMedia && (
                 <div 
                   className="relative overflow-hidden"
                   onClick={() => { setSelectedPost(post); setCurrentMediaIndex(0); }}
                 >
                   {isVideo ? (
-                    <div className="relative aspect-video bg-black">
-                      <video src={currentUrl} className="w-full h-full object-cover" preload="metadata" muted />
+                    <div className="relative aspect-video bg-black max-h-96">
+                      <video src={currentUrl} className="w-full h-full object-contain" preload="metadata" muted />
                       <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-all duration-300 group-hover:bg-black/40">
                         <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center transform transition-transform duration-300 group-hover:scale-110">
                           <Play className="w-6 h-6 text-primary ml-1" />
@@ -198,12 +213,14 @@ export function FeedGrid({
                       </div>
                     </div>
                   ) : (
-                    <LazyImage
-                      src={currentUrl}
-                      alt={post.title}
-                      className="w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      aspectRatio="auto"
-                    />
+                    <div className="max-h-96 overflow-hidden">
+                      <LazyImage
+                        src={currentUrl}
+                        alt={post.title}
+                        className="w-full object-contain max-h-96 transition-transform duration-500 group-hover:scale-105"
+                        aspectRatio="auto"
+                      />
+                    </div>
                   )}
                   
                   {/* Overlay badges */}
@@ -218,26 +235,29 @@ export function FeedGrid({
               )}
 
               {/* Content */}
-              <div className="p-3 space-y-2">
+              <div className="p-4 space-y-3">
                 {/* User */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <Avatar 
-                    className="w-8 h-8 cursor-pointer ring-2 ring-transparent transition-all duration-300 hover:ring-primary"
+                    className="w-10 h-10 cursor-pointer ring-2 ring-transparent transition-all duration-300 hover:ring-primary"
                     onClick={() => navigate(`/profile/${post.user_id}`)}
                   >
                     <AvatarImage src={post.profiles?.avatar_url || undefined} />
-                    <AvatarFallback className="bg-primary/20 text-xs">
+                    <AvatarFallback className="bg-primary/20 text-sm">
                       {post.profiles?.name?.[0] || 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{post.profiles?.name || 'Anonymous'}</p>
+                    <p className="font-medium truncate">{post.profiles?.name || 'Anonymous'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {post.created_at && new Date(post.created_at).toLocaleDateString()}
+                    </p>
                   </div>
                   
                   {isOwner && onDelete && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -256,47 +276,47 @@ export function FeedGrid({
                   )}
                 </div>
 
-                {/* Title */}
-                {!hasMedia && (
-                  <h3 className="font-semibold text-sm line-clamp-2">{post.title}</h3>
-                )}
-                
-                {post.content && (
-                  <p className="text-xs text-muted-foreground line-clamp-3">{post.content}</p>
-                )}
+                {/* Title & Content */}
+                <div>
+                  <h3 className="font-semibold text-base">{post.title}</h3>
+                  {post.content && (
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-3">{post.content}</p>
+                  )}
+                </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1 pt-2 border-t border-border/50">
+                {/* Actions - Full width like Facebook */}
+                <div className="flex items-center justify-between pt-3 border-t border-border/50">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); onToggleLike(post.id); }}
                     className={cn(
-                      "h-8 px-3 gap-1.5 transition-all duration-300",
-                      isLiked && "text-red-500 scale-110"
+                      "flex-1 h-10 gap-2 transition-all duration-300",
+                      isLiked && "text-red-500"
                     )}
                   >
-                    <Heart className={cn("w-4 h-4 transition-transform", isLiked && "fill-current animate-bounce")} />
-                    <span className="text-xs">{likeCounts[post.id] || ''}</span>
+                    <Heart className={cn("w-5 h-5 transition-transform", isLiked && "fill-current animate-bounce")} />
+                    <span>{likeCounts[post.id] || ''}</span>
                   </Button>
                   
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-8 px-3 gap-1.5 transition-all duration-300 hover:text-primary"
+                    className="flex-1 h-10 gap-2 transition-all duration-300 hover:text-primary"
                     onClick={(e) => { e.stopPropagation(); openComments(post.id); }}
                   >
-                    <MessageCircle className="w-4 h-4" />
-                    <span className="text-xs">{commentCounts[post.id] || ''}</span>
+                    <MessageCircle className="w-5 h-5" />
+                    <span>{commentCounts[post.id] || ''}</span>
                   </Button>
                   
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-8 px-3 transition-all duration-300 hover:text-primary"
+                    className="flex-1 h-10 gap-2 transition-all duration-300 hover:text-primary"
                     onClick={(e) => { e.stopPropagation(); handleShare(post); }}
                   >
-                    <Share2 className="w-4 h-4" />
+                    <Share2 className="w-5 h-5" />
+                    <span>Share</span>
                   </Button>
                   
                   <Button
@@ -304,11 +324,12 @@ export function FeedGrid({
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); onToggleSave(post.id); }}
                     className={cn(
-                      "h-8 px-3 ml-auto transition-all duration-300",
-                      isSaved && "text-primary scale-110"
+                      "flex-1 h-10 gap-2 transition-all duration-300",
+                      isSaved && "text-primary"
                     )}
                   >
-                    <Star className={cn("w-4 h-4 transition-transform", isSaved && "fill-current animate-pulse")} />
+                    <Star className={cn("w-5 h-5 transition-transform", isSaved && "fill-current")} />
+                    <span>Save</span>
                   </Button>
                 </div>
               </div>
@@ -317,38 +338,76 @@ export function FeedGrid({
         })}
       </div>
 
-      {/* Comments Dialog */}
-      <Dialog open={!!showComments} onOpenChange={() => setShowComments(null)}>
-        <DialogContent className="max-w-md glass-card animate-scale-in">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold">Comments</h3>
+      {/* Comments Dialog - Full width like Facebook */}
+      <Dialog open={!!showComments} onOpenChange={() => { setShowComments(null); setReplyTo(null); }}>
+        <DialogContent className="max-w-lg w-[95vw] glass-card animate-scale-in max-h-[90vh] flex flex-col p-0">
+          <div className="flex items-center justify-between p-4 border-b border-border/50">
+            <h3 className="font-semibold text-lg">Comments</h3>
             <Button variant="ghost" size="icon" onClick={() => setShowComments(null)}>
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </Button>
           </div>
           
-          <ScrollArea className="max-h-64">
+          <ScrollArea className="flex-1 p-4">
             {loadingComments ? (
-              <p className="text-center text-muted-foreground py-4 animate-pulse">Loading...</p>
+              <p className="text-center text-muted-foreground py-8 animate-pulse">Loading...</p>
             ) : comments.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">No comments yet</p>
+              <p className="text-center text-muted-foreground py-8">No comments yet. Be the first!</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {comments.map((comment, index) => (
                   <div 
                     key={comment.id} 
-                    className="flex gap-2 animate-fade-in"
+                    className="animate-fade-in"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <Avatar className="w-7 h-7">
-                      <AvatarImage src={comment.profiles?.avatar_url || undefined} />
-                      <AvatarFallback className="bg-primary/20 text-[10px]">
-                        {comment.profiles?.name?.[0] || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 bg-muted/50 rounded-lg p-2">
-                      <p className="text-xs font-medium">{comment.profiles?.name || 'Anonymous'}</p>
-                      <p className="text-xs text-muted-foreground">{comment.content}</p>
+                    <div className="flex gap-3">
+                      <Avatar 
+                        className="w-10 h-10 cursor-pointer"
+                        onClick={() => navigate(`/profile/${comment.user_id}`)}
+                      >
+                        <AvatarImage src={comment.profiles?.avatar_url || undefined} />
+                        <AvatarFallback className="bg-primary/20 text-sm">
+                          {comment.profiles?.name?.[0] || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="bg-muted/50 rounded-2xl p-3">
+                          <p 
+                            className="text-sm font-medium cursor-pointer hover:underline"
+                            onClick={() => navigate(`/profile/${comment.user_id}`)}
+                          >
+                            {comment.profiles?.name || 'Anonymous'}
+                          </p>
+                          <p className="text-sm mt-1">{comment.content}</p>
+                        </div>
+                        {/* Comment actions */}
+                        <div className="flex items-center gap-4 mt-1 ml-3">
+                          <button 
+                            className={cn(
+                              "text-xs font-medium transition-colors",
+                              commentLikes.has(comment.id) ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                            )}
+                            onClick={() => toggleCommentLike(comment.id)}
+                          >
+                            Like
+                          </button>
+                          <button 
+                            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() => setReplyTo(comment.id)}
+                          >
+                            Reply
+                          </button>
+                          <span className="text-[10px] text-muted-foreground">
+                            {comment.created_at && new Date(comment.created_at).toLocaleDateString()}
+                          </span>
+                          {commentLikes.has(comment.id) && (
+                            <span className="text-xs flex items-center gap-1 text-primary">
+                              <ThumbsUp className="w-3 h-3" /> 1
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -356,26 +415,38 @@ export function FeedGrid({
             )}
           </ScrollArea>
           
-          {showComments && (userCommentCounts[showComments] || 0) < 2 && (
-            <div className="flex gap-2 mt-4">
-              <Input
-                placeholder="Write a comment..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                className="flex-1"
-                onKeyPress={(e) => e.key === 'Enter' && showComments && handleAddComment(showComments)}
-              />
-              <Button size="icon" onClick={() => showComments && handleAddComment(showComments)} className="transition-transform hover:scale-110">
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-          )}
-          
-          {showComments && (userCommentCounts[showComments] || 0) >= 2 && (
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              You've reached the maximum of 2 comments on this post
-            </p>
-          )}
+          {/* Comment input - Full width */}
+          <div className="p-4 border-t border-border/50">
+            {showComments && (userCommentCounts[showComments] || 0) >= 2 ? (
+              <p className="text-sm text-muted-foreground text-center py-2">
+                You've reached the maximum of 2 comments on this post
+              </p>
+            ) : (
+              <div className="flex gap-3 items-center">
+                <Avatar className="w-10 h-10 shrink-0">
+                  <AvatarFallback className="bg-primary/20">U</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 relative">
+                  <Input
+                    placeholder={replyTo ? "Write a reply..." : "Write a comment..."}
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    className="pr-12 rounded-full bg-muted/50 border-0"
+                    onKeyPress={(e) => e.key === 'Enter' && showComments && handleAddComment(showComments)}
+                  />
+                  <Button 
+                    size="icon" 
+                    variant="ghost"
+                    onClick={() => showComments && handleAddComment(showComments)} 
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 transition-transform hover:scale-110"
+                    disabled={!newComment.trim()}
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -399,9 +470,9 @@ export function FeedGrid({
             return (
               <div className="relative flex items-center justify-center min-h-[60vh]">
                 {isVideo ? (
-                  <video src={currentUrl} className="max-w-full max-h-[90vh] object-contain" controls autoPlay />
+                  <video src={currentUrl} className="max-w-full max-h-[85vh] object-contain" controls autoPlay />
                 ) : (
-                  <img src={currentUrl} alt="" className="max-w-full max-h-[90vh] object-contain animate-fade-in" />
+                  <img src={currentUrl} alt="" className="max-w-full max-h-[85vh] object-contain animate-fade-in" />
                 )}
                 
                 {urls.length > 1 && (
@@ -422,8 +493,17 @@ export function FeedGrid({
                     >
                       <ChevronRight className="w-6 h-6" />
                     </Button>
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
-                      {currentMediaIndex + 1} / {urls.length}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                      {urls.map((_, i) => (
+                        <button
+                          key={i}
+                          className={cn(
+                            "w-2 h-2 rounded-full transition-all",
+                            i === currentMediaIndex ? "bg-white scale-125" : "bg-white/50"
+                          )}
+                          onClick={() => setCurrentMediaIndex(i)}
+                        />
+                      ))}
                     </div>
                   </>
                 )}
