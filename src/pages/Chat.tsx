@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Send, ArrowLeft, Search, Plus, CheckCheck, Paperclip, X, MoreVertical, Archive, Ghost, Trash2, ShieldOff, Image, Video, Smile } from 'lucide-react';
+import { Send, ArrowLeft, Search, Plus, CheckCheck, Paperclip, X, MoreVertical, Archive, Ghost, Trash2, ShieldOff, Smile } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -110,7 +110,6 @@ export default function Chat() {
       .or(`and(sender_id.eq.${user.id},receiver_id.eq.${chatUserId}),and(sender_id.eq.${chatUserId},receiver_id.eq.${user.id})`);
     toast.success('Chat deleted');
     navigate('/chat');
-    window.location.reload();
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,6 +198,11 @@ export default function Chat() {
     navigate(`/chat/${targetUserId}`);
   };
 
+  // Navigate back to chat list (stay in messages section)
+  const handleBackToChats = () => {
+    navigate('/chat');
+  };
+
   const selectedConversation = conversations.find(c => c.user_id === currentChatUser);
   
   const filteredConversations = conversations.filter(conv => {
@@ -207,7 +211,7 @@ export default function Chat() {
     return matchesSearch && (showArchived ? isArchived : !isArchived);
   });
 
-  // Full screen chat when viewing a conversation on mobile
+  // Full screen chat when viewing a conversation
   if (currentChatUser) {
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col chat-protected animate-slide-in-right">
@@ -216,8 +220,8 @@ export default function Chat() {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-9 w-9 shrink-0 transition-transform hover:scale-110 active:scale-95" 
-            onClick={() => navigate('/chat')}
+            className="h-10 w-10 shrink-0 transition-transform hover:scale-110 active:scale-95" 
+            onClick={handleBackToChats}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -244,7 +248,7 @@ export default function Chat() {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 transition-transform hover:scale-110">
+              <Button variant="ghost" size="icon" className="h-10 w-10 transition-transform hover:scale-110">
                 <MoreVertical className="w-5 h-5" />
               </Button>
             </DropdownMenuTrigger>
@@ -301,7 +305,7 @@ export default function Chat() {
                     style={{ animationDelay: `${index * 30}ms` }}
                   >
                     <div className={cn(
-                      "max-w-[80%] rounded-2xl p-3 transition-all duration-300 hover:shadow-lg",
+                      "max-w-[75%] rounded-2xl p-3 transition-all duration-300 hover:shadow-lg",
                       isOwn 
                         ? "bg-primary text-primary-foreground rounded-br-md" 
                         : "bg-muted rounded-bl-md"
@@ -309,9 +313,17 @@ export default function Chat() {
                       {message.media_url && (
                         <div className="mb-2 overflow-hidden rounded-lg">
                           {message.media_type === 'image' ? (
-                            <img src={message.media_url} alt="" className="max-w-full rounded-lg transition-transform hover:scale-105" />
+                            <img 
+                              src={message.media_url} 
+                              alt="" 
+                              className="max-w-full max-h-64 rounded-lg object-contain transition-transform hover:scale-105" 
+                            />
                           ) : message.media_type === 'video' ? (
-                            <video src={message.media_url} className="max-w-full rounded-lg" controls />
+                            <video 
+                              src={message.media_url} 
+                              className="max-w-full max-h-64 rounded-lg" 
+                              controls 
+                            />
                           ) : (
                             <a href={message.media_url} target="_blank" rel="noopener noreferrer" className="text-xs underline">
                               📎 Attachment
@@ -436,89 +448,91 @@ export default function Chat() {
     );
   }
 
-  // Conversation list view
+  // Chat list view
   return (
-    <div className="min-h-[calc(100vh-8rem)] bg-background chat-protected animate-fade-in">
-      <div className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Messages</h1>
-          <div className="flex items-center gap-2">
-            <Button 
-              size="icon" 
-              variant={showArchived ? "secondary" : "ghost"} 
-              className="h-10 w-10 transition-all hover:scale-110" 
-              onClick={() => setShowArchived(!showArchived)}
-            >
-              <Archive className="w-5 h-5" />
-            </Button>
-            <Button 
-              size="icon" 
-              className="h-10 w-10 transition-all hover:scale-110" 
-              onClick={() => setShowUserSearch(true)}
-            >
-              <Plus className="w-5 h-5" />
-            </Button>
+    <div className="space-y-4 pb-20">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Messages</h1>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setShowArchived(!showArchived)}
+            className={cn("transition-all", showArchived && "bg-primary/20")}
+          >
+            <Archive className="w-4 h-4 mr-1" />
+            {showArchived ? 'Active' : 'Archive'}
+          </Button>
+          <Button size="sm" onClick={() => setShowUserSearch(true)} className="transition-transform hover:scale-105">
+            <Plus className="w-4 h-4 mr-1" />
+            New
+          </Button>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Search conversations..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 h-10 rounded-full bg-card/50"
+        />
+      </div>
+
+      {/* Conversations */}
+      <div className="space-y-2">
+        {loading ? (
+          <div className="text-center py-8 text-muted-foreground animate-pulse">Loading chats...</div>
+        ) : filteredConversations.length === 0 ? (
+          <div className="text-center py-12 space-y-3 animate-fade-in">
+            <p className="text-muted-foreground">
+              {showArchived ? 'No archived chats' : 'No conversations yet'}
+            </p>
+            {!showArchived && (
+              <Button onClick={() => setShowUserSearch(true)} className="transition-transform hover:scale-105">
+                Start a conversation
+              </Button>
+            )}
           </div>
-        </div>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search conversations..." 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)} 
-            className="pl-10 h-11 rounded-full bg-muted/50" 
-          />
-        </div>
-
-        {showArchived && (
-          <p className="text-sm text-muted-foreground text-center">📁 Archived Chats</p>
-        )}
-
-        <div className="space-y-2">
-          {filteredConversations.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground mb-2">{showArchived ? 'No archived chats' : 'No conversations yet'}</p>
-              {!showArchived && (
-                <Button variant="outline" onClick={() => setShowUserSearch(true)} className="transition-transform hover:scale-105">
-                  Start a chat
-                </Button>
+        ) : (
+          filteredConversations.map((conv, index) => (
+            <div
+              key={conv.user_id}
+              className="flex items-center gap-3 p-3 rounded-xl bg-card/50 hover:bg-card cursor-pointer transition-all duration-300 hover:shadow-md hover:translate-x-1 animate-fade-in"
+              style={{ animationDelay: `${index * 50}ms` }}
+              onClick={() => navigate(`/chat/${conv.user_id}`)}
+            >
+              <Avatar className="w-12 h-12 ring-2 ring-transparent transition-all hover:ring-primary">
+                <AvatarImage src={conv.user_avatar || undefined} />
+                <AvatarFallback className="bg-primary/20">{conv.user_name?.charAt(0)?.toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                  <h3 className="font-medium truncate">{conv.user_name}</h3>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {conv.last_message_time && formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: true })}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground truncate">{conv.last_message}</p>
+              </div>
+              {conv.unread_count > 0 && (
+                <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-medium animate-pulse">
+                  {conv.unread_count}
+                </div>
               )}
             </div>
-          ) : (
-            filteredConversations.map((conv, index) => (
-              <div
-                key={conv.user_id}
-                onClick={() => navigate(`/chat/${conv.user_id}`)}
-                className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/50 cursor-pointer transition-all duration-300 hover:bg-muted/50 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] animate-fade-in"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <Avatar className="w-12 h-12 ring-2 ring-transparent transition-all hover:ring-primary">
-                  <AvatarImage src={conv.user_avatar || undefined} />
-                  <AvatarFallback className="bg-primary/20">{conv.user_name?.charAt(0)?.toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold truncate">{conv.user_name}</p>
-                    {conv.unread_count > 0 && (
-                      <span className="h-6 min-w-6 px-2 rounded-full bg-primary text-xs font-bold text-primary-foreground flex items-center justify-center animate-bounce">
-                        {conv.unread_count}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground truncate">{conv.last_message}</p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+          ))
+        )}
       </div>
 
       {/* New Chat Dialog */}
       <Dialog open={showUserSearch} onOpenChange={setShowUserSearch}>
         <DialogContent className="glass-card animate-scale-in">
           <DialogHeader>
-            <DialogTitle>Start New Chat</DialogTitle>
+            <DialogTitle>New Message</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="relative">
@@ -532,18 +546,18 @@ export default function Chat() {
             </div>
             <ScrollArea className="max-h-64">
               <div className="space-y-2">
-                {searchResults.map((u, index) => (
+                {searchResults.map((user, index) => (
                   <div
-                    key={u.id}
-                    onClick={() => startNewChat(u.id)}
-                    className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-300 hover:bg-muted/50 hover:scale-[1.02] active:scale-[0.98] animate-fade-in"
+                    key={user.id}
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 cursor-pointer transition-all duration-300 hover:translate-x-1 animate-fade-in"
                     style={{ animationDelay: `${index * 50}ms` }}
+                    onClick={() => startNewChat(user.id)}
                   >
                     <Avatar className="w-10 h-10">
-                      <AvatarImage src={u.avatar_url || undefined} />
-                      <AvatarFallback className="bg-primary/20">{u.name?.[0]}</AvatarFallback>
+                      <AvatarImage src={user.avatar_url || undefined} />
+                      <AvatarFallback className="bg-primary/20">{user.name?.charAt(0)?.toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <p className="font-medium">{u.name}</p>
+                    <span className="font-medium">{user.name}</span>
                   </div>
                 ))}
                 {userSearchQuery && searchResults.length === 0 && (

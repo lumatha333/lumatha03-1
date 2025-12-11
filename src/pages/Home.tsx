@@ -17,18 +17,18 @@ type Post = Database['public']['Tables']['posts']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type PostWithProfile = Post & { profiles?: Profile };
 
-// Main feed tabs - simplified structure
+// Main feed tabs - properly separated
 const mainTabs = [
   { id: 'all', label: 'All', icon: Shuffle, color: 'from-primary to-secondary' },
   { id: 'regional', label: 'Regional', icon: MapPin, color: 'from-orange-500 to-red-500' },
   { id: 'global', label: 'Global', icon: Globe, color: 'from-blue-500 to-cyan-500' },
   { id: 'following', label: 'Following', icon: Users, color: 'from-green-500 to-emerald-500' },
-  { id: 'create', label: 'Create', icon: Plus, color: 'from-violet-500 to-purple-500' },
   { id: 'private', label: 'Private', icon: Lock, color: 'from-pink-500 to-rose-500' },
+  { id: 'create', label: 'Create', icon: Plus, color: 'from-violet-500 to-purple-500' },
   { id: 'profile', label: 'Profile', icon: User, color: 'from-indigo-500 to-blue-500' },
 ];
 
-// Content type subtabs
+// Content type subtabs - only for feed tabs
 const contentTabs = [
   { id: 'mixed', label: 'Mixed', icon: Shuffle },
   { id: 'photos', label: 'Photos', icon: Image },
@@ -58,7 +58,7 @@ export default function Home() {
   }, [activeTab, user, profile]);
 
   const fetchPosts = async () => {
-    if (!user || activeTab === 'create') return;
+    if (!user || activeTab === 'create' || activeTab === 'profile') return;
     setLoading(true);
 
     try {
@@ -66,14 +66,14 @@ export default function Home() {
         .from('posts')
         .select('*, profiles(*)');
 
-      // Filter based on active tab
+      // Filter based on active tab - PROPERLY SEPARATED
       switch (activeTab) {
         case 'all':
           // All public posts - mixed feed
           query = query.eq('visibility', 'public');
           break;
         case 'regional':
-          // Filter by user's country/region - only public posts
+          // Filter by user's country/region - only public posts from same region
           query = query.eq('visibility', 'public');
           if (profile?.country) {
             const { data: regionalUsers } = await supabase
@@ -87,11 +87,11 @@ export default function Home() {
           }
           break;
         case 'global':
-          // All public posts worldwide
+          // All public posts worldwide (same as all for now)
           query = query.eq('visibility', 'public');
           break;
         case 'following':
-          // Only following users' posts - public posts only
+          // ONLY following users' posts - NO suggestions, NO regional, NO global
           const { data: following } = await supabase
             .from('follows')
             .select('following_id')
@@ -109,15 +109,17 @@ export default function Home() {
           const allIds = [...new Set([...followingIds, ...friendIds])];
           
           if (allIds.length > 0) {
+            // ONLY show posts from following - public posts only
             query = query.eq('visibility', 'public').in('user_id', allIds);
           } else {
+            // No following - show empty state
             setPosts([]);
             setLoading(false);
             return;
           }
           break;
         case 'private':
-          // Only user's private posts - no regional/global/all mixed in
+          // ONLY user's own private posts - nothing else
           query = query.eq('user_id', user.id).eq('visibility', 'private');
           break;
         default:
@@ -228,12 +230,15 @@ export default function Home() {
     return (
       <div className="space-y-4 pb-20 px-1">
         <Skeleton className="h-12 w-full rounded-xl" />
-        <div className="columns-2 gap-3">
-          {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-48 w-full rounded-xl mb-3" />)}
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64 w-full rounded-xl" />)}
         </div>
       </div>
     );
   }
+
+  // Check which tabs should show content type filters
+  const showContentFilters = ['all', 'regional', 'global', 'following', 'private'].includes(activeTab);
 
   return (
     <div className="pb-24 space-y-3">
@@ -260,9 +265,9 @@ export default function Home() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all shrink-0",
+                "flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all shrink-0",
                 isActive 
-                  ? "bg-gradient-to-r text-white shadow-md" 
+                  ? "bg-gradient-to-r text-white shadow-md scale-105" 
                   : "bg-card/60 text-muted-foreground hover:bg-card",
                 isActive && tab.color
               )}
@@ -274,8 +279,8 @@ export default function Home() {
         })}
       </div>
 
-      {/* Content Type Tabs - show for feed tabs only */}
-      {(activeTab === 'all' || activeTab === 'regional' || activeTab === 'global' || activeTab === 'following') && (
+      {/* Content Type Tabs - only for feed tabs */}
+      {showContentFilters && (
         <div className="flex gap-1 bg-muted/30 p-1 rounded-lg w-fit">
           {contentTabs.map((tab) => {
             const isActive = contentType === tab.id;
@@ -284,37 +289,13 @@ export default function Home() {
                 key={tab.id}
                 onClick={() => setContentType(tab.id as typeof contentType)}
                 className={cn(
-                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
+                  "flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                   isActive 
                     ? "bg-background text-foreground shadow-sm" 
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <tab.icon className="w-3 h-3" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Private tab content type filters */}
-      {activeTab === 'private' && (
-        <div className="flex gap-1 bg-muted/30 p-1 rounded-lg w-fit">
-          {contentTabs.map((tab) => {
-            const isActive = contentType === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setContentType(tab.id as typeof contentType)}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
-                  isActive 
-                    ? "bg-background text-foreground shadow-sm" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <tab.icon className="w-3 h-3" />
+                <tab.icon className="w-3.5 h-3.5" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -326,9 +307,9 @@ export default function Home() {
       {activeTab === 'profile' ? (
         <ProfileShortcuts />
       ) : loading ? (
-        <div className="columns-2 gap-3">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <Skeleton key={i} className="h-48 w-full rounded-xl mb-3 break-inside-avoid" />
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map(i => (
+            <Skeleton key={i} className="h-64 w-full rounded-xl" />
           ))}
         </div>
       ) : posts.length === 0 ? (
@@ -341,9 +322,6 @@ export default function Home() {
                 <p className="text-muted-foreground max-w-sm mx-auto">
                   Follow people or add friends to see their posts here!
                 </p>
-                <Button onClick={() => setActiveTab('global')} className="gap-2">
-                  <Globe className="w-4 h-4" /> Explore Global Feed
-                </Button>
               </>
             ) : activeTab === 'private' ? (
               <>
