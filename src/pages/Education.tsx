@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { BookOpen, Upload, Search, Download, Trash2, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, User } from 'lucide-react';
+import { BookOpen, Upload, Search, Download, Trash2, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, User, Calendar, CalendarDays, CalendarRange, ExternalLink } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 
 type Document = Database['public']['Tables']['documents']['Row'];
@@ -22,6 +22,46 @@ type Note = Database['public']['Tables']['notes']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 type DocumentWithProfile = Document & { profiles?: Profile };
+
+// Default todos by category
+const DEFAULT_DAILY_TODOS = [
+  "Wake up and stay clean",
+  "Eat healthy food",
+  "Drink water",
+  "Move your body",
+  "Study or work",
+  "Help someone",
+  "Relax your mind",
+  "Sleep on time"
+];
+
+const DEFAULT_WEEKLY_TODOS = [
+  "Clean your room/home",
+  "Spend time with family",
+  "Learn something new",
+  "Play or enjoy a hobby",
+  "Go outside",
+  "Do a good deed",
+  "Reduce screen time",
+  "Plan next week"
+];
+
+const DEFAULT_MONTHLY_TODOS = [
+  "Think about your progress",
+  "Set small goals",
+  "Learn a new life skill",
+  "Remove unused things",
+  "Try something new",
+  "Check your health",
+  "Save money",
+  "Say thank you and feel grateful"
+];
+
+type TodoCategory = 'daily' | 'weekly' | 'monthly';
+
+interface CategorizedTodo extends Todo {
+  category?: TodoCategory;
+}
 
 export default function Education() {
   const { user: currentUser } = useAuth();
@@ -39,9 +79,10 @@ export default function Education() {
   const [uploading, setUploading] = useState(false);
   const [docTab, setDocTab] = useState<'my' | 'public'>('my');
 
-  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todos, setTodos] = useState<CategorizedTodo[]>([]);
   const [newTodo, setNewTodo] = useState('');
   const [todoLoading, setTodoLoading] = useState(false);
+  const [todoCategory, setTodoCategory] = useState<TodoCategory>('daily');
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
@@ -61,7 +102,6 @@ export default function Education() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
-      // Fetch documents with profile information
       const { data } = await supabase
         .from('documents')
         .select('*')
@@ -69,22 +109,10 @@ export default function Education() {
         .order('created_at', { ascending: false });
       
       if (data) {
-        // Get unique user IDs
         const userIds = [...new Set(data.map(d => d.user_id))];
-        
-        // Fetch profiles
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', userIds);
-        
+        const { data: profiles } = await supabase.from('profiles').select('*').in('id', userIds);
         const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
-        
-        const docsWithProfiles = data.map(doc => ({
-          ...doc,
-          profiles: profilesMap.get(doc.user_id)
-        }));
-        
+        const docsWithProfiles = data.map(doc => ({ ...doc, profiles: profilesMap.get(doc.user_id) }));
         setDocuments(docsWithProfiles);
       }
     } finally {
@@ -117,7 +145,7 @@ export default function Education() {
   const handleDeleteDoc = async (docId: string, fileUrl: string) => {
     try {
       const filePath = fileUrl.split('/documents/')[1];
-      await supabase.storage.from('documents').remove([filePath]);
+      if (filePath) await supabase.storage.from('documents').remove([filePath]);
       await supabase.from('documents').delete().eq('id', docId);
       toast.success('Deleted');
       fetchDocuments();
@@ -125,20 +153,53 @@ export default function Education() {
   };
 
   const handleDownload = async (fileUrl: string, fileName: string) => {
-    const response = await fetch(fileUrl);
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = fileName;
-    document.body.appendChild(a); a.click();
-    window.URL.revokeObjectURL(url); document.body.removeChild(a);
+    try {
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click();
+      window.URL.revokeObjectURL(url); document.body.removeChild(a);
+      toast.success('Downloading...');
+    } catch {
+      toast.error('Download failed');
+    }
+  };
+
+  const handleOpenInBrowser = (fileUrl: string) => {
+    window.open(fileUrl, '_blank');
   };
 
   const fetchTodos = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('todos').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-    setTodos(data || []);
+    const { data } = await supabase.from('todos').select('*').eq('user_id', user.id).order('created_at', { ascending: true });
+    
+    // Parse category from text if stored
+    const todosWithCategory = (data || []).map(todo => {
+      let category: TodoCategory = 'daily';
+      if (todo.text.startsWith('[weekly]')) category = 'weekly';
+      else if (todo.text.startsWith('[monthly]')) category = 'monthly';
+      return { ...todo, category };
+    });
+    
+    setTodos(todosWithCategory);
+    
+    // Initialize default todos if empty
+    if (!data || data.length === 0) {
+      initializeDefaultTodos(user.id);
+    }
+  };
+
+  const initializeDefaultTodos = async (userId: string) => {
+    const allDefaults = [
+      ...DEFAULT_DAILY_TODOS.map(text => ({ user_id: userId, text: `[daily]${text}`, completed: false, visibility: 'private' as const })),
+      ...DEFAULT_WEEKLY_TODOS.map(text => ({ user_id: userId, text: `[weekly]${text}`, completed: false, visibility: 'private' as const })),
+      ...DEFAULT_MONTHLY_TODOS.map(text => ({ user_id: userId, text: `[monthly]${text}`, completed: false, visibility: 'private' as const })),
+    ];
+    await supabase.from('todos').insert(allDefaults);
+    fetchTodos();
   };
 
   const handleAddTodo = async () => {
@@ -147,19 +208,20 @@ export default function Education() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      await supabase.from('todos').insert({ user_id: user.id, text: newTodo, completed: false, visibility: 'private' });
+      await supabase.from('todos').insert({ user_id: user.id, text: `[${todoCategory}]${newTodo}`, completed: false, visibility: 'private' });
       setNewTodo(''); fetchTodos();
     } finally { setTodoLoading(false); }
   };
 
   const toggleTodo = async (id: string, completed: boolean) => {
     await supabase.from('todos').update({ completed: !completed }).eq('id', id);
-    fetchTodos();
+    setTodos(todos.map(t => t.id === id ? { ...t, completed: !completed } : t));
   };
 
   const deleteTodo = async (id: string) => {
     await supabase.from('todos').delete().eq('id', id);
-    fetchTodos();
+    setTodos(todos.filter(t => t.id !== id));
+    toast.success('Task deleted');
   };
 
   const fetchNotes = async () => {
@@ -195,98 +257,80 @@ export default function Education() {
   const filteredMyDocs = myDocuments.filter(doc => doc.title?.toLowerCase().includes(docSearch.toLowerCase()));
   const filteredPublicDocs = publicDocuments.filter(doc => doc.title?.toLowerCase().includes(docSearch.toLowerCase()));
 
-  return (
-    <div className="space-y-4 pb-20">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-          📚 Education
-        </h1>
-        <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-2 btn-cosmic w-full sm:w-auto">
-              <Upload className="w-4 h-4" />Upload
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="glass-card max-w-md mx-4">
-            <DialogHeader><DialogTitle>Upload Document</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label className="text-xs">File</Label><Input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="glass-card text-sm" /></div>
-              <div><Label className="text-xs">Title</Label><Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} className="glass-card" /></div>
-              <div><Label className="text-xs">Description</Label><Textarea value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} className="glass-card" rows={2} /></div>
-              <RadioGroup value={visibility} onValueChange={(val) => setVisibility(val as 'private' | 'public')} className="flex gap-4">
-                <div className="flex items-center gap-2"><RadioGroupItem value="private" id="private" /><Label htmlFor="private" className="flex items-center gap-1 text-xs cursor-pointer"><Lock className="w-3 h-3" />Private</Label></div>
-                <div className="flex items-center gap-2"><RadioGroupItem value="public" id="public" /><Label htmlFor="public" className="flex items-center gap-1 text-xs cursor-pointer"><Globe className="w-3 h-3" />Public</Label></div>
-              </RadioGroup>
-              <Button onClick={handleUpload} disabled={uploading} className="w-full">{uploading ? 'Uploading...' : 'Upload'}</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+  // Filter todos by category
+  const dailyTodos = todos.filter(t => t.category === 'daily' || t.text.startsWith('[daily]'));
+  const weeklyTodos = todos.filter(t => t.category === 'weekly' || t.text.startsWith('[weekly]'));
+  const monthlyTodos = todos.filter(t => t.category === 'monthly' || t.text.startsWith('[monthly]'));
 
+  const getTodoDisplayText = (text: string) => {
+    return text.replace(/^\[(daily|weekly|monthly)\]/, '');
+  };
+
+  return (
+    <div className="space-y-3 pb-20">
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-1">
-          <TabsTrigger value="documents" className="gap-1 text-xs sm:text-sm py-2">
-            <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Documents</span>
-            <span className="sm:hidden">Docs</span>
+        <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
+          <TabsTrigger value="documents" className="gap-1 text-[11px] sm:text-xs py-1.5">
+            <FileText className="w-3 h-3" />
+            <span className="hidden xs:inline">Docs</span>
           </TabsTrigger>
-          <TabsTrigger value="notes" className="gap-1 text-xs sm:text-sm py-2">
-            <StickyNote className="w-3 h-3 sm:w-4 sm:h-4" />
+          <TabsTrigger value="notes" className="gap-1 text-[11px] sm:text-xs py-1.5">
+            <StickyNote className="w-3 h-3" />
             Notes
           </TabsTrigger>
-          <TabsTrigger value="todos" className="gap-1 text-xs sm:text-sm py-2">
-            <CheckSquare className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">To-Do</span>
-            <span className="sm:hidden">Tasks</span>
+          <TabsTrigger value="todos" className="gap-1 text-[11px] sm:text-xs py-1.5">
+            <CheckSquare className="w-3 h-3" />
+            Tasks
           </TabsTrigger>
         </TabsList>
 
         {/* Documents Tab */}
-        <TabsContent value="documents" className="space-y-3 mt-4">
+        <TabsContent value="documents" className="space-y-2 mt-3">
+          {/* Search Bar - Highlighted */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search..." value={docSearch} onChange={(e) => setDocSearch(e.target.value)} className="pl-9 glass-card" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary" />
+            <Input 
+              placeholder="Search documents..." 
+              value={docSearch} 
+              onChange={(e) => setDocSearch(e.target.value)} 
+              className="pl-8 h-8 text-xs border-primary/30 focus:border-primary bg-primary/5"
+            />
           </div>
 
           <Tabs value={docTab} onValueChange={(val) => setDocTab(val as 'my' | 'public')}>
-            <TabsList className="glass-card w-full grid grid-cols-2 h-auto p-1">
-              <TabsTrigger value="my" className="text-xs sm:text-sm py-1.5"><Lock className="w-3 h-3 mr-1" />My ({myDocuments.length})</TabsTrigger>
-              <TabsTrigger value="public" className="text-xs sm:text-sm py-1.5"><Globe className="w-3 h-3 mr-1" />Public ({publicDocuments.length})</TabsTrigger>
+            <TabsList className="glass-card w-full grid grid-cols-2 h-auto p-0.5">
+              <TabsTrigger value="my" className="text-[10px] py-1"><Lock className="w-2.5 h-2.5 mr-0.5" />My ({myDocuments.length})</TabsTrigger>
+              <TabsTrigger value="public" className="text-[10px] py-1"><Globe className="w-2.5 h-2.5 mr-0.5" />Public ({publicDocuments.length})</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="my" className="mt-3">
-              {docLoading ? <p className="text-center py-8 text-muted-foreground">Loading...</p> : filteredMyDocs.length === 0 ? (
-                <Card className="glass-card"><CardContent className="py-8 text-center"><BookOpen className="h-12 w-12 mx-auto text-muted-foreground mb-3" /><p className="text-sm text-muted-foreground">No documents yet</p></CardContent></Card>
+            <TabsContent value="my" className="mt-2">
+              {docLoading ? <p className="text-center py-6 text-muted-foreground text-xs">Loading...</p> : filteredMyDocs.length === 0 ? (
+                <Card className="glass-card"><CardContent className="py-6 text-center"><BookOpen className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-xs text-muted-foreground">No documents yet</p></CardContent></Card>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-2">
                   {filteredMyDocs.map((doc) => (
-                    <Card key={doc.id} className="glass-card hover-lift">
-                      <CardContent className="p-3 space-y-2">
+                    <Card key={doc.id} className="glass-card">
+                      <CardContent className="p-2.5 space-y-1.5">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <BookOpen className="w-5 h-5 text-primary shrink-0" />
-                            <Badge variant={doc.visibility === 'public' ? 'default' : 'secondary'} className="text-[10px] shrink-0">
-                              {doc.visibility === 'public' ? <Globe className="w-2.5 h-2.5 mr-0.5" /> : <Lock className="w-2.5 h-2.5 mr-0.5" />}
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <BookOpen className="w-4 h-4 text-primary shrink-0" />
+                            <Badge variant={doc.visibility === 'public' ? 'default' : 'secondary'} className="text-[9px] h-4 px-1">
                               {doc.visibility}
                             </Badge>
                           </div>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => handleDeleteDoc(doc.id, doc.file_url)}>
-                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => handleDeleteDoc(doc.id, doc.file_url)}>
+                            <Trash2 className="w-3 h-3 text-destructive" />
                           </Button>
                         </div>
-                        <div className="min-w-0">
-                          <h3 className="font-medium text-sm truncate">{doc.title}</h3>
-                          {doc.description && <p className="text-xs text-muted-foreground line-clamp-2">{doc.description}</p>}
-                          <p className="text-[10px] text-muted-foreground">{new Date(doc.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => handleDownload(doc.file_url, doc.file_name)}>
-                            <Download className="w-3 h-3 mr-1" />Download
+                        <h3 className="font-medium text-xs truncate">{doc.title}</h3>
+                        {doc.description && <p className="text-[10px] text-muted-foreground line-clamp-1">{doc.description}</p>}
+                        <div className="flex gap-1.5">
+                          <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={() => handleOpenInBrowser(doc.file_url)}>
+                            <ExternalLink className="w-2.5 h-2.5 mr-0.5" />Open
                           </Button>
-                          <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" asChild>
-                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer"><BookOpen className="w-3 h-3 mr-1" />Open</a>
+                          <Button size="sm" variant="outline" className="flex-1 h-7 text-[10px]" onClick={() => handleDownload(doc.file_url, doc.file_name)}>
+                            <Download className="w-2.5 h-2.5 mr-0.5" />Download
                           </Button>
                         </div>
                       </CardContent>
@@ -294,42 +338,53 @@ export default function Education() {
                   ))}
                 </div>
               )}
+              
+              {/* Upload button at bottom */}
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="w-full mt-3 gap-1.5 h-8">
+                    <Upload className="w-3.5 h-3.5" />Upload Document
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="glass-card max-w-sm mx-4">
+                  <DialogHeader><DialogTitle className="text-sm">Upload Document</DialogTitle></DialogHeader>
+                  <div className="space-y-2">
+                    <div><Label className="text-[10px]">File</Label><Input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="glass-card text-xs h-8" /></div>
+                    <div><Label className="text-[10px]">Title</Label><Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} className="glass-card h-8 text-xs" /></div>
+                    <div><Label className="text-[10px]">Description</Label><Textarea value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} className="glass-card text-xs" rows={2} /></div>
+                    <RadioGroup value={visibility} onValueChange={(val) => setVisibility(val as 'private' | 'public')} className="flex gap-3">
+                      <div className="flex items-center gap-1"><RadioGroupItem value="private" id="priv" /><Label htmlFor="priv" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Lock className="w-2.5 h-2.5" />Private</Label></div>
+                      <div className="flex items-center gap-1"><RadioGroupItem value="public" id="pub" /><Label htmlFor="pub" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Globe className="w-2.5 h-2.5" />Public</Label></div>
+                    </RadioGroup>
+                    <Button onClick={handleUpload} disabled={uploading} className="w-full h-8 text-xs">{uploading ? 'Uploading...' : 'Upload'}</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
-            <TabsContent value="public" className="mt-3">
+            <TabsContent value="public" className="mt-2">
               {filteredPublicDocs.length === 0 ? (
-                <Card className="glass-card"><CardContent className="py-8 text-center"><Globe className="h-12 w-12 mx-auto text-muted-foreground mb-3" /><p className="text-sm text-muted-foreground">No public documents</p></CardContent></Card>
+                <Card className="glass-card"><CardContent className="py-6 text-center"><Globe className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-xs text-muted-foreground">No public documents</p></CardContent></Card>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-2">
                   {filteredPublicDocs.map((doc) => (
-                    <Card key={doc.id} className="glass-card hover-lift">
-                      <CardContent className="p-3 space-y-2">
-                        {/* User Profile Section */}
-                        <div 
-                          className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => navigate(`/profile/${doc.user_id}`)}
-                        >
-                          <Avatar className="w-8 h-8">
+                    <Card key={doc.id} className="glass-card">
+                      <CardContent className="p-2.5 space-y-1.5">
+                        <div className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/profile/${doc.user_id}`)}>
+                          <Avatar className="w-6 h-6">
                             <AvatarImage src={doc.profiles?.avatar_url || undefined} />
-                            <AvatarFallback className="bg-primary/20 text-xs">
-                              {doc.profiles?.name?.[0] || 'U'}
-                            </AvatarFallback>
+                            <AvatarFallback className="bg-primary/20 text-[9px]">{doc.profiles?.name?.[0] || 'U'}</AvatarFallback>
                           </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate">{doc.profiles?.name || 'Anonymous'}</p>
-                            <p className="text-[10px] text-muted-foreground">View profile →</p>
-                          </div>
+                          <p className="text-[10px] font-medium truncate">{doc.profiles?.name || 'Anonymous'}</p>
                         </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <BookOpen className="w-5 h-5 text-primary" />
-                          <Badge className="text-[10px]"><Globe className="w-2.5 h-2.5 mr-0.5" />Public</Badge>
-                        </div>
-                        <h3 className="font-medium text-sm truncate">{doc.title}</h3>
-                        {doc.description && <p className="text-xs text-muted-foreground line-clamp-2">{doc.description}</p>}
-                        <div className="flex gap-2">
-                          <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => handleDownload(doc.file_url, doc.file_name)}><Download className="w-3 h-3 mr-1" />Download</Button>
-                          <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" asChild><a href={doc.file_url} target="_blank" rel="noopener noreferrer"><BookOpen className="w-3 h-3 mr-1" />Open</a></Button>
+                        <h3 className="font-medium text-xs truncate">{doc.title}</h3>
+                        <div className="flex gap-1.5">
+                          <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={() => handleOpenInBrowser(doc.file_url)}>
+                            <ExternalLink className="w-2.5 h-2.5 mr-0.5" />Open
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1 h-7 text-[10px]" onClick={() => handleDownload(doc.file_url, doc.file_name)}>
+                            <Download className="w-2.5 h-2.5 mr-0.5" />Download
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
@@ -341,56 +396,52 @@ export default function Education() {
         </TabsContent>
 
         {/* Notes Tab */}
-        <TabsContent value="notes" className="space-y-3 mt-4">
+        <TabsContent value="notes" className="space-y-2 mt-3">
           <div className="flex justify-end">
             <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" onClick={() => { setEditingNote(null); setNoteTitle(''); setNoteContent(''); setNoteVisibility('private'); }}>
-                  <Plus className="w-4 h-4 mr-1" />New Note
+                <Button size="sm" className="h-7 text-xs" onClick={() => { setEditingNote(null); setNoteTitle(''); setNoteContent(''); setNoteVisibility('private'); }}>
+                  <Plus className="w-3 h-3 mr-0.5" />New Note
                 </Button>
               </DialogTrigger>
-              <DialogContent className="glass-card max-w-md mx-4">
-                <DialogHeader><DialogTitle>{editingNote ? 'Edit Note' : 'New Note'}</DialogTitle></DialogHeader>
-                <div className="space-y-3">
-                  <div><Label className="text-xs">Title</Label><Input value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} className="glass-card" /></div>
-                  <div><Label className="text-xs">Content</Label><Textarea value={noteContent} onChange={(e) => setNoteContent(e.target.value)} className="glass-card min-h-[120px]" placeholder="Write your notes..." /></div>
-                  <RadioGroup value={noteVisibility} onValueChange={(val) => setNoteVisibility(val as 'private' | 'public')} className="flex gap-4">
-                    <div className="flex items-center gap-2"><RadioGroupItem value="private" id="note-private" /><Label htmlFor="note-private" className="flex items-center gap-1 text-xs cursor-pointer"><Lock className="w-3 h-3" />Private</Label></div>
-                    <div className="flex items-center gap-2"><RadioGroupItem value="public" id="note-public" /><Label htmlFor="note-public" className="flex items-center gap-1 text-xs cursor-pointer"><Globe className="w-3 h-3" />Public</Label></div>
+              <DialogContent className="glass-card max-w-sm mx-4">
+                <DialogHeader><DialogTitle className="text-sm">{editingNote ? 'Edit Note' : 'New Note'}</DialogTitle></DialogHeader>
+                <div className="space-y-2">
+                  <div><Label className="text-[10px]">Title</Label><Input value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} className="glass-card h-8 text-xs" /></div>
+                  <div><Label className="text-[10px]">Content</Label><Textarea value={noteContent} onChange={(e) => setNoteContent(e.target.value)} className="glass-card min-h-[80px] text-xs" placeholder="Write your notes..." /></div>
+                  <RadioGroup value={noteVisibility} onValueChange={(val) => setNoteVisibility(val as 'private' | 'public')} className="flex gap-3">
+                    <div className="flex items-center gap-1"><RadioGroupItem value="private" id="note-priv" /><Label htmlFor="note-priv" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Lock className="w-2.5 h-2.5" />Private</Label></div>
+                    <div className="flex items-center gap-1"><RadioGroupItem value="public" id="note-pub" /><Label htmlFor="note-pub" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Globe className="w-2.5 h-2.5" />Public</Label></div>
                   </RadioGroup>
-                  <Button onClick={handleSaveNote} className="w-full">{editingNote ? 'Update' : 'Save'}</Button>
+                  <Button onClick={handleSaveNote} className="w-full h-8 text-xs">{editingNote ? 'Update' : 'Save'}</Button>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
 
           {notes.length === 0 ? (
-            <Card className="glass-card"><CardContent className="py-8 text-center"><StickyNote className="h-12 w-12 mx-auto text-muted-foreground mb-3" /><p className="text-sm text-muted-foreground">No notes yet</p></CardContent></Card>
+            <Card className="glass-card"><CardContent className="py-6 text-center"><StickyNote className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-xs text-muted-foreground">No notes yet</p></CardContent></Card>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-2">
               {notes.map((note) => (
-                <Card key={note.id} className="glass-card hover-lift">
-                  <CardContent className="p-3 space-y-2">
+                <Card key={note.id} className="glass-card">
+                  <CardContent className="p-2.5 space-y-1">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <StickyNote className="w-4 h-4 text-yellow-500" />
-                        <Badge variant={note.visibility === 'public' ? 'default' : 'secondary'} className="text-[10px]">
-                          {note.visibility === 'public' ? <Globe className="w-2.5 h-2.5 mr-0.5" /> : <Lock className="w-2.5 h-2.5 mr-0.5" />}
-                          {note.visibility}
-                        </Badge>
+                      <div className="flex items-center gap-1">
+                        <StickyNote className="w-3.5 h-3.5 text-yellow-500" />
+                        <Badge variant={note.visibility === 'public' ? 'default' : 'secondary'} className="text-[9px] h-4 px-1">{note.visibility}</Badge>
                       </div>
-                      <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>
-                          <FileText className="w-3 h-3" />
+                      <div className="flex gap-0.5">
+                        <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>
+                          <FileText className="w-2.5 h-2.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => deleteNote(note.id)}>
-                          <Trash2 className="w-3 h-3 text-destructive" />
+                        <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => deleteNote(note.id)}>
+                          <Trash2 className="w-2.5 h-2.5 text-destructive" />
                         </Button>
                       </div>
                     </div>
-                    <h3 className="font-medium text-sm">{note.title}</h3>
-                    {note.content && <p className="text-xs text-muted-foreground line-clamp-3">{note.content}</p>}
-                    <p className="text-[10px] text-muted-foreground">{new Date(note.created_at || '').toLocaleDateString()}</p>
+                    <h3 className="font-medium text-xs">{note.title}</h3>
+                    {note.content && <p className="text-[10px] text-muted-foreground line-clamp-2">{note.content}</p>}
                   </CardContent>
                 </Card>
               ))}
@@ -399,32 +450,91 @@ export default function Education() {
         </TabsContent>
 
         {/* Todos Tab */}
-        <TabsContent value="todos" className="space-y-3 mt-4">
-          <div className="flex gap-2">
-            <Input placeholder="Add new task..." value={newTodo} onChange={(e) => setNewTodo(e.target.value)} className="glass-card flex-1"
+        <TabsContent value="todos" className="space-y-3 mt-3">
+          {/* Add todo input */}
+          <div className="flex gap-1.5">
+            <Input placeholder="Add new task..." value={newTodo} onChange={(e) => setNewTodo(e.target.value)} className="glass-card flex-1 h-8 text-xs"
               onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()} />
-            <Button onClick={handleAddTodo} disabled={todoLoading}><Plus className="w-4 h-4" /></Button>
+            <select 
+              value={todoCategory} 
+              onChange={(e) => setTodoCategory(e.target.value as TodoCategory)}
+              className="h-8 px-2 text-[10px] rounded-md border border-border bg-background"
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+            <Button onClick={handleAddTodo} disabled={todoLoading} className="h-8 w-8 p-0"><Plus className="w-3.5 h-3.5" /></Button>
           </div>
 
-          {todos.length === 0 ? (
-            <Card className="glass-card"><CardContent className="py-8 text-center"><CheckSquare className="h-12 w-12 mx-auto text-muted-foreground mb-3" /><p className="text-sm text-muted-foreground">No tasks yet</p></CardContent></Card>
-          ) : (
-            <div className="space-y-2">
-              {todos.map((todo) => (
-                <Card key={todo.id} className={`glass-card ${todo.completed ? 'opacity-60' : ''}`}>
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => toggleTodo(todo.id, todo.completed || false)}>
-                      <CheckSquare className={`w-4 h-4 ${todo.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
+          {/* Daily Todos */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-medium">
+              <Calendar className="w-3.5 h-3.5 text-green-500" />
+              <span>🌞 DAILY ({dailyTodos.length})</span>
+            </div>
+            <div className="space-y-1">
+              {dailyTodos.map((todo) => (
+                <Card key={todo.id} className={`glass-card ${todo.completed ? 'opacity-50' : ''}`}>
+                  <CardContent className="p-2 flex items-center gap-2">
+                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => toggleTodo(todo.id, todo.completed || false)}>
+                      <CheckSquare className={`w-3.5 h-3.5 ${todo.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
                     </Button>
-                    <span className={`flex-1 text-sm ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>{todo.text}</span>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => deleteTodo(todo.id)}>
-                      <Trash2 className="w-3 h-3 text-destructive" />
+                    <span className={`flex-1 text-[11px] ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>{getTodoDisplayText(todo.text)}</span>
+                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => deleteTodo(todo.id)}>
+                      <Trash2 className="w-2.5 h-2.5 text-destructive" />
                     </Button>
                   </CardContent>
                 </Card>
               ))}
             </div>
-          )}
+          </div>
+
+          {/* Weekly Todos */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-medium">
+              <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
+              <span>📅 WEEKLY ({weeklyTodos.length})</span>
+            </div>
+            <div className="space-y-1">
+              {weeklyTodos.map((todo) => (
+                <Card key={todo.id} className={`glass-card ${todo.completed ? 'opacity-50' : ''}`}>
+                  <CardContent className="p-2 flex items-center gap-2">
+                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => toggleTodo(todo.id, todo.completed || false)}>
+                      <CheckSquare className={`w-3.5 h-3.5 ${todo.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
+                    </Button>
+                    <span className={`flex-1 text-[11px] ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>{getTodoDisplayText(todo.text)}</span>
+                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => deleteTodo(todo.id)}>
+                      <Trash2 className="w-2.5 h-2.5 text-destructive" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* Monthly Todos */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-medium">
+              <CalendarRange className="w-3.5 h-3.5 text-purple-500" />
+              <span>🗓️ MONTHLY ({monthlyTodos.length})</span>
+            </div>
+            <div className="space-y-1">
+              {monthlyTodos.map((todo) => (
+                <Card key={todo.id} className={`glass-card ${todo.completed ? 'opacity-50' : ''}`}>
+                  <CardContent className="p-2 flex items-center gap-2">
+                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => toggleTodo(todo.id, todo.completed || false)}>
+                      <CheckSquare className={`w-3.5 h-3.5 ${todo.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
+                    </Button>
+                    <span className={`flex-1 text-[11px] ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>{getTodoDisplayText(todo.text)}</span>
+                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => deleteTodo(todo.id)}>
+                      <Trash2 className="w-2.5 h-2.5 text-destructive" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

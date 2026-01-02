@@ -1,10 +1,11 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Crown, Sun, Moon } from 'lucide-react';
+import { Crown, Sun, Moon, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import logo from '@/assets/logo.png';
 import { NotificationBell } from './NotificationBell';
 import { TodoWidget } from './TodoWidget';
@@ -24,6 +25,63 @@ const menuItems = [
   { title: 'Marketplace', url: '/marketplace', emoji: '🛒', desc: 'Buy/Sell/Local Business' },
   { title: 'Settings', url: '/settings', emoji: '⚙️', desc: 'Controls + Privacy' },
 ];
+
+function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => boolean; onNavigate: (url: string) => void }) {
+  const [open, setOpen] = useState(false);
+
+  const handleItemClick = (url: string) => {
+    onNavigate(url);
+    setOpen(false);
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-9 w-9 relative"
+          style={{
+            boxShadow: '0 0 15px 3px hsl(var(--primary) / 0.4), 0 0 30px 5px hsl(var(--primary) / 0.2)',
+            animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+          }}
+        >
+          <Menu className="h-5 w-5 text-primary" />
+          <span className="absolute inset-0 rounded-md bg-primary/10 animate-pulse" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-[280px] p-0 glass-card border-r border-primary/20">
+        <div className="flex items-center gap-3 p-4 border-b border-border">
+          <img 
+            src={logo} 
+            alt="Crown of Creation" 
+            className="w-8 h-8 animate-pulse-glow" 
+          />
+          <span className="text-lg font-bold gradient-text">Crown Of Creation</span>
+        </div>
+        <nav className="p-2 space-y-1">
+          {menuItems.map((item) => (
+            <button
+              key={item.title}
+              onClick={() => handleItemClick(item.url)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                isActive(item.url) 
+                  ? 'bg-primary/20 text-primary' 
+                  : 'hover:bg-muted/50 text-foreground'
+              }`}
+            >
+              <span className="text-xl">{item.emoji}</span>
+              <div className="flex-1 text-left">
+                <span className="font-medium block text-sm">{item.title}</span>
+                <span className="text-[10px] text-muted-foreground">{item.desc}</span>
+              </div>
+            </button>
+          ))}
+        </nav>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 function LayoutContent({ children }: LayoutProps) {
   const location = useLocation();
@@ -98,9 +156,6 @@ function LayoutContent({ children }: LayoutProps) {
     return <>{children}</>;
   }
 
-  // Check if in chat conversation (hide layout on mobile)
-  const isChatOpen = location.pathname.startsWith('/chat/');
-
   return (
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
@@ -150,17 +205,33 @@ function LayoutContent({ children }: LayoutProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
-        {/* Header - Crown of Creation, Notification, Theme */}
-        <header className="sticky top-0 z-40 glass-card border-b border-border px-3 py-2">
+        {/* Header */}
+        <header className="sticky top-0 z-40 glass-card border-b border-border px-2 py-1.5">
           <div className="flex items-center justify-between gap-2">
+            {/* Left side - Mobile sidebar trigger + Logo centered on mobile */}
             <div className="flex items-center gap-2">
-              {!isMobile && <SidebarTrigger className="transition-transform hover:scale-110" />}
-              <Link to="/" className="flex items-center gap-2" onClick={handleLogoClick}>
-                <Crown className="w-5 h-5 text-primary" />
-                <span className="font-bold text-sm gradient-text">Crown of Creation</span>
-              </Link>
+              {isMobile && (
+                <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
+              )}
+              
+              {/* Desktop: Logo on left */}
+              {!isMobile && (
+                <Link to="/" className="flex items-center gap-2" onClick={handleLogoClick}>
+                  <Crown className="w-5 h-5 text-primary" />
+                  <span className="font-bold text-sm gradient-text">Crown of Creation</span>
+                </Link>
+              )}
             </div>
 
+            {/* Center - Mobile logo */}
+            {isMobile && (
+              <Link to="/" className="flex items-center gap-1.5 absolute left-1/2 -translate-x-1/2" onClick={handleLogoClick}>
+                <Crown className="w-4 h-4 text-primary" />
+                <span className="font-bold text-xs gradient-text whitespace-nowrap">Crown of Creation</span>
+              </Link>
+            )}
+
+            {/* Right side - Notifications + Theme */}
             <div className="flex items-center gap-1">
               {user && <NotificationBell />}
               <Button 
