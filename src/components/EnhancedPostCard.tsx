@@ -38,6 +38,7 @@ export function EnhancedPostCard({
 }: EnhancedPostCardProps) {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   
   const [imageOpen, setImageOpen] = useState(false);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
@@ -46,7 +47,7 @@ export function EnhancedPostCard({
   const [editContent, setEditContent] = useState(post.content || '');
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
-  const [isVideoFullscreen, setIsVideoFullscreen] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   
   // Get all media URLs
@@ -60,6 +61,29 @@ export function EnhancedPostCard({
   const isOwner = currentUserId === post.user_id;
   const isLongText = (post.content?.length || 0) > 200;
   const isVideo = currentMediaType?.includes('video');
+
+  // Video autoplay on scroll
+  useEffect(() => {
+    if (!isVideo || !videoRef.current || !cardRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            videoRef.current?.play();
+            setIsPlaying(true);
+          } else {
+            videoRef.current?.pause();
+            setIsPlaying(false);
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, [isVideo, currentMediaIndex]);
 
   useEffect(() => {
     // Check if following this user
@@ -77,7 +101,7 @@ export function EnhancedPostCard({
   }, [post.user_id, currentUserId, isOwner]);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(`${post.title}\n\n${post.content}\n\n- ${post.profiles?.name || 'Anonymous'}`);
+    navigator.clipboard.writeText(`${post.content}\n\n- ${post.profiles?.name || 'Anonymous'}`);
     toast.success("Copied to clipboard!");
   };
 
@@ -164,32 +188,43 @@ export function EnhancedPostCard({
     if (videoRef.current) {
       if (document.fullscreenElement) {
         document.exitFullscreen();
-        setIsVideoFullscreen(false);
       } else {
         videoRef.current.requestFullscreen();
-        setIsVideoFullscreen(true);
+      }
+    }
+  };
+
+  const handleVideoClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
       }
     }
   };
 
   return (
     <>
-      <Card className="group hover-lift glass-card overflow-hidden border-border h-full flex flex-col">
+      <Card ref={cardRef} className="group hover-lift glass-card overflow-hidden border-border h-full flex flex-col">
         {/* User Info Header - FB Style */}
-        <div className="flex items-center justify-between p-3 border-b border-border/30">
+        <div className="flex items-center justify-between p-2.5 border-b border-border/30">
           <div 
-            className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
             onClick={() => navigate(`/profile/${post.user_id}`)}
           >
-            <Avatar className="w-10 h-10 ring-2 ring-primary/20">
+            <Avatar className="w-9 h-9 ring-2 ring-primary/20">
               <AvatarImage src={post.profiles?.avatar_url || undefined} />
-              <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground">
+              <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground text-sm">
                 {post.profiles?.name?.[0] || 'U'}
               </AvatarFallback>
             </Avatar>
             <div>
               <p className="font-semibold text-sm">{post.profiles?.name || 'Anonymous'}</p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[10px] text-muted-foreground">
                 {new Date(post.created_at || '').toLocaleDateString('en-US', {
                   month: 'short', day: 'numeric', year: 'numeric'
                 })}
@@ -200,43 +235,43 @@ export function EnhancedPostCard({
           {/* Three dots menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 rounded-full">
+              <Button variant="ghost" size="sm" className="h-7 w-7 rounded-full p-0">
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="glass-card border-border w-48">
-              <DropdownMenuItem onClick={handleCopy}>
-                <Copy className="w-4 h-4 mr-2" /> Copy text
+            <DropdownMenuContent align="end" className="glass-card border-border w-44">
+              <DropdownMenuItem onClick={handleCopy} className="text-xs">
+                <Copy className="w-3.5 h-3.5 mr-2" /> Copy text
               </DropdownMenuItem>
               {hasMedia && (
-                <DropdownMenuItem onClick={handleDownload}>
-                  <Download className="w-4 h-4 mr-2" /> Download media
+                <DropdownMenuItem onClick={handleDownload} className="text-xs">
+                  <Download className="w-3.5 h-3.5 mr-2" /> Download media
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
               {isOwner ? (
                 <>
                   {onUpdate && (
-                    <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                      <Edit className="w-4 h-4 mr-2" /> Edit post
+                    <DropdownMenuItem onClick={() => setIsEditing(true)} className="text-xs">
+                      <Edit className="w-3.5 h-3.5 mr-2" /> Edit post
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem>
-                    <MessageSquareOff className="w-4 h-4 mr-2" /> Turn off comments
+                  <DropdownMenuItem className="text-xs">
+                    <MessageSquareOff className="w-3.5 h-3.5 mr-2" /> Turn off comments
                   </DropdownMenuItem>
                   {onDelete && (
-                    <DropdownMenuItem onClick={() => onDelete(post.id)} className="text-destructive">
-                      <Trash2 className="w-4 h-4 mr-2" /> Delete post
+                    <DropdownMenuItem onClick={() => onDelete(post.id)} className="text-destructive text-xs">
+                      <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete post
                     </DropdownMenuItem>
                   )}
                 </>
               ) : (
                 <>
-                  <DropdownMenuItem onClick={toggleFollow}>
+                  <DropdownMenuItem onClick={toggleFollow} className="text-xs">
                     {isFollowing ? (
-                      <><UserMinus className="w-4 h-4 mr-2" /> Not interested</>
+                      <><UserMinus className="w-3.5 h-3.5 mr-2" /> Not interested</>
                     ) : (
-                      <><UserPlus className="w-4 h-4 mr-2" /> Interested (Follow)</>
+                      <><UserPlus className="w-3.5 h-3.5 mr-2" /> Interested (Follow)</>
                     )}
                   </DropdownMenuItem>
                 </>
@@ -245,35 +280,18 @@ export function EnhancedPostCard({
           </DropdownMenu>
         </div>
 
-        {/* Title and Categories */}
-        <div className="px-3 pt-2 space-y-1.5">
-          <h3 className="font-bold text-base">{post.title}</h3>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {post.category && (
-              <Badge variant="secondary" className="capitalize text-[10px] h-5">
-                {post.category}
-              </Badge>
-            )}
-            {post.subcategory && (
-              <Badge variant="outline" className="capitalize text-[10px] h-5">
-                {post.subcategory}
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="px-3 py-2">
+        {/* Content - No title, just content text */}
+        <div className="px-2.5 py-2">
           {isEditing ? (
             <div className="space-y-2">
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full p-2 rounded glass-card border-border min-h-[80px] text-sm bg-background text-foreground"
+                className="w-full p-2 rounded glass-card border-border min-h-[60px] text-sm bg-background text-foreground"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveEdit}>Save</Button>
-                <Button size="sm" variant="outline" onClick={() => { setIsEditing(false); setEditContent(post.content || ''); }}>Cancel</Button>
+                <Button size="sm" className="h-7 text-xs" onClick={handleSaveEdit}>Save</Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setIsEditing(false); setEditContent(post.content || ''); }}>Cancel</Button>
               </div>
             </div>
           ) : (
@@ -290,45 +308,49 @@ export function EnhancedPostCard({
           )}
         </div>
 
-        {/* Media Section */}
+        {/* Media Section - Full size, not square */}
         {hasMedia && (
           <div className="relative cursor-pointer overflow-hidden" onClick={() => !isVideo && setImageOpen(true)}>
             {isVideo ? (
-              <div className="relative aspect-video bg-black">
+              <div className="relative bg-black">
                 <video 
                   ref={videoRef}
                   src={currentMedia} 
-                  className="w-full h-full object-contain"
+                  className="w-full max-h-[500px] object-contain"
                   controls={false}
                   muted={isMuted}
                   loop
                   playsInline
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (videoRef.current?.paused) videoRef.current.play();
-                    else videoRef.current?.pause();
-                  }}
+                  onClick={handleVideoClick}
                 />
-                {/* Video Controls */}
-                <div className="absolute bottom-2 right-2 flex gap-1.5">
-                  <Button size="icon" variant="secondary" className="h-8 w-8 bg-black/60 hover:bg-black/80" onClick={toggleMute}>
-                    {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
+                {/* Video Controls Overlay */}
+                <div className="absolute bottom-2 right-2 flex gap-1">
+                  <Button size="icon" variant="secondary" className="h-7 w-7 bg-black/60 hover:bg-black/80" onClick={toggleMute}>
+                    {isMuted ? <VolumeX className="w-3.5 h-3.5 text-white" /> : <Volume2 className="w-3.5 h-3.5 text-white" />}
                   </Button>
-                  <Button size="icon" variant="secondary" className="h-8 w-8 bg-black/60 hover:bg-black/80" onClick={toggleVideoFullscreen}>
-                    <Maximize className="w-4 h-4 text-white" />
+                  <Button size="icon" variant="secondary" className="h-7 w-7 bg-black/60 hover:bg-black/80" onClick={toggleVideoFullscreen}>
+                    <Maximize className="w-3.5 h-3.5 text-white" />
                   </Button>
                 </div>
-                {/* Video indicator */}
-                <div className="absolute top-2 right-2 bg-black/60 text-white px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1">
-                  <Play className="w-2.5 h-2.5" /> Video
+                {/* Play/Pause indicator */}
+                {!isPlaying && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20" onClick={handleVideoClick}>
+                    <div className="w-12 h-12 rounded-full bg-black/60 flex items-center justify-center">
+                      <Play className="w-6 h-6 text-white ml-1" />
+                    </div>
+                  </div>
+                )}
+                {/* Video badge */}
+                <div className="absolute top-2 right-2 bg-black/60 text-white px-1.5 py-0.5 rounded-full text-[9px] flex items-center gap-0.5">
+                  <Play className="w-2 h-2" /> Video
                 </div>
               </div>
             ) : (
-              <div className="relative">
+              <div className="relative bg-black/5">
                 <LazyImage
                   src={currentMedia}
-                  alt={post.title}
-                  className="w-full h-auto max-h-[400px] object-contain bg-black/5"
+                  alt="Post media"
+                  className="w-full h-auto max-h-[500px] object-contain"
                   aspectRatio="auto"
                 />
               </div>
@@ -337,10 +359,10 @@ export function EnhancedPostCard({
             {/* Multi-media navigation */}
             {hasMultipleMedia && (
               <>
-                <Button variant="ghost" size="icon" className="absolute left-1.5 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full h-8 w-8" onClick={prevMedia}>
+                <Button variant="ghost" size="icon" className="absolute left-1 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full h-7 w-7" onClick={prevMedia}>
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full h-8 w-8" onClick={nextMedia}>
+                <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background rounded-full h-7 w-7" onClick={nextMedia}>
                   <ChevronRight className="w-4 h-4" />
                 </Button>
                 <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
@@ -364,7 +386,7 @@ export function EnhancedPostCard({
               <X className="w-5 h-5" />
             </Button>
             <div className="relative flex items-center justify-center min-h-[60vh]">
-              <img src={currentMedia} alt={post.title} className="max-w-full max-h-[90vh] object-contain" />
+              <img src={currentMedia} alt="Full size" className="max-w-full max-h-[90vh] object-contain" />
               {hasMultipleMedia && (
                 <>
                   <Button variant="ghost" size="icon" className="absolute left-3 bg-white/20 hover:bg-white/40 text-white rounded-full" onClick={prevMedia}>
@@ -383,12 +405,12 @@ export function EnhancedPostCard({
         </Dialog>
 
         {/* Action buttons */}
-        <div className="flex items-center justify-between px-3 py-2 border-t border-border/50 mt-auto">
+        <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/50 mt-auto">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onToggleLike(post.id)}
-            className={`flex-1 gap-1.5 h-9 ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+            className={`flex-1 gap-1 h-8 ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
           >
             <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
             <span className="text-xs">{likesCount > 0 ? likesCount : 'Like'}</span>
@@ -398,7 +420,7 @@ export function EnhancedPostCard({
             variant="ghost"
             size="sm"
             onClick={() => setCommentsOpen(true)}
-            className="flex-1 gap-1.5 h-9 text-muted-foreground"
+            className="flex-1 gap-1 h-8 text-muted-foreground"
           >
             <MessageCircle className="w-4 h-4" />
             <span className="text-xs">Comment</span>
@@ -408,7 +430,7 @@ export function EnhancedPostCard({
             variant="ghost"
             size="sm"
             onClick={handleShare}
-            className="flex-1 gap-1.5 h-9 text-muted-foreground"
+            className="flex-1 gap-1 h-8 text-muted-foreground"
           >
             <Share2 className="w-4 h-4" />
             <span className="text-xs">Share</span>
@@ -418,7 +440,7 @@ export function EnhancedPostCard({
             variant="ghost"
             size="sm"
             onClick={() => onToggleSave(post.id)}
-            className={`h-9 w-9 p-0 ${isSaved ? 'text-primary' : 'text-muted-foreground'}`}
+            className={`h-8 w-8 p-0 ${isSaved ? 'text-primary' : 'text-muted-foreground'}`}
           >
             <Star className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
           </Button>
