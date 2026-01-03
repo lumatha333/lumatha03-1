@@ -9,12 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { BookOpen, Upload, Search, Download, Trash2, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, User, Calendar, CalendarDays, CalendarRange, ExternalLink } from 'lucide-react';
+import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Calendar, CalendarDays, CalendarRange, Trash2 } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
+import DocumentCard from '@/components/DocumentCard';
 
 type Document = Database['public']['Tables']['documents']['Row'];
 type Todo = Database['public']['Tables']['todos']['Row'];
@@ -298,6 +297,28 @@ export default function Education() {
             />
           </div>
 
+          {/* Upload Button below search */}
+          <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="w-full gap-1.5 h-8 border-dashed border-primary/50 hover:bg-primary/10">
+                <Plus className="w-3.5 h-3.5" />Add Document
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="glass-card max-w-sm mx-4">
+              <DialogHeader><DialogTitle className="text-sm">Upload Document</DialogTitle></DialogHeader>
+              <div className="space-y-2">
+                <div><Label className="text-[10px]">File</Label><Input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="glass-card text-xs h-8" /></div>
+                <div><Label className="text-[10px]">Title</Label><Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} className="glass-card h-8 text-xs" /></div>
+                <div><Label className="text-[10px]">Description</Label><Textarea value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} className="glass-card text-xs" rows={2} /></div>
+                <RadioGroup value={visibility} onValueChange={(val) => setVisibility(val as 'private' | 'public')} className="flex gap-3">
+                  <div className="flex items-center gap-1"><RadioGroupItem value="private" id="priv" /><Label htmlFor="priv" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Lock className="w-2.5 h-2.5" />Private</Label></div>
+                  <div className="flex items-center gap-1"><RadioGroupItem value="public" id="pub" /><Label htmlFor="pub" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Globe className="w-2.5 h-2.5" />Public</Label></div>
+                </RadioGroup>
+                <Button onClick={handleUpload} disabled={uploading} className="w-full h-8 text-xs">{uploading ? 'Uploading...' : 'Upload'}</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Tabs value={docTab} onValueChange={(val) => setDocTab(val as 'my' | 'public')}>
             <TabsList className="glass-card w-full grid grid-cols-2 h-auto p-0.5">
               <TabsTrigger value="my" className="text-[10px] py-1"><Lock className="w-2.5 h-2.5 mr-0.5" />My ({myDocuments.length})</TabsTrigger>
@@ -310,56 +331,17 @@ export default function Education() {
               ) : (
                 <div className="grid grid-cols-1 gap-2">
                   {filteredMyDocs.map((doc) => (
-                    <Card key={doc.id} className="glass-card">
-                      <CardContent className="p-2.5 space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <BookOpen className="w-4 h-4 text-primary shrink-0" />
-                            <Badge variant={doc.visibility === 'public' ? 'default' : 'secondary'} className="text-[9px] h-4 px-1">
-                              {doc.visibility}
-                            </Badge>
-                          </div>
-                          <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => handleDeleteDoc(doc.id, doc.file_url)}>
-                            <Trash2 className="w-3 h-3 text-destructive" />
-                          </Button>
-                        </div>
-                        <h3 className="font-medium text-xs truncate">{doc.title}</h3>
-                        {doc.description && <p className="text-[10px] text-muted-foreground line-clamp-1">{doc.description}</p>}
-                        <div className="flex gap-1.5">
-                          <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={() => handleOpenInBrowser(doc.file_url)}>
-                            <ExternalLink className="w-2.5 h-2.5 mr-0.5" />Open
-                          </Button>
-                          <Button size="sm" variant="outline" className="flex-1 h-7 text-[10px]" onClick={() => handleDownload(doc.file_url, doc.file_name)}>
-                            <Download className="w-2.5 h-2.5 mr-0.5" />Download
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <DocumentCard 
+                      key={doc.id}
+                      doc={doc}
+                      onDelete={handleDeleteDoc}
+                      onDownload={handleDownload}
+                      onOpenInBrowser={handleOpenInBrowser}
+                      onRefresh={fetchDocuments}
+                    />
                   ))}
                 </div>
               )}
-              
-              {/* Upload button at bottom */}
-              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="w-full mt-3 gap-1.5 h-8">
-                    <Upload className="w-3.5 h-3.5" />Upload Document
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="glass-card max-w-sm mx-4">
-                  <DialogHeader><DialogTitle className="text-sm">Upload Document</DialogTitle></DialogHeader>
-                  <div className="space-y-2">
-                    <div><Label className="text-[10px]">File</Label><Input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="glass-card text-xs h-8" /></div>
-                    <div><Label className="text-[10px]">Title</Label><Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} className="glass-card h-8 text-xs" /></div>
-                    <div><Label className="text-[10px]">Description</Label><Textarea value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} className="glass-card text-xs" rows={2} /></div>
-                    <RadioGroup value={visibility} onValueChange={(val) => setVisibility(val as 'private' | 'public')} className="flex gap-3">
-                      <div className="flex items-center gap-1"><RadioGroupItem value="private" id="priv" /><Label htmlFor="priv" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Lock className="w-2.5 h-2.5" />Private</Label></div>
-                      <div className="flex items-center gap-1"><RadioGroupItem value="public" id="pub" /><Label htmlFor="pub" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Globe className="w-2.5 h-2.5" />Public</Label></div>
-                    </RadioGroup>
-                    <Button onClick={handleUpload} disabled={uploading} className="w-full h-8 text-xs">{uploading ? 'Uploading...' : 'Upload'}</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
             </TabsContent>
 
             <TabsContent value="public" className="mt-2">
@@ -368,26 +350,14 @@ export default function Education() {
               ) : (
                 <div className="grid grid-cols-1 gap-2">
                   {filteredPublicDocs.map((doc) => (
-                    <Card key={doc.id} className="glass-card">
-                      <CardContent className="p-2.5 space-y-1.5">
-                        <div className="flex items-center gap-2 p-1.5 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/profile/${doc.user_id}`)}>
-                          <Avatar className="w-6 h-6">
-                            <AvatarImage src={doc.profiles?.avatar_url || undefined} />
-                            <AvatarFallback className="bg-primary/20 text-[9px]">{doc.profiles?.name?.[0] || 'U'}</AvatarFallback>
-                          </Avatar>
-                          <p className="text-[10px] font-medium truncate">{doc.profiles?.name || 'Anonymous'}</p>
-                        </div>
-                        <h3 className="font-medium text-xs truncate">{doc.title}</h3>
-                        <div className="flex gap-1.5">
-                          <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={() => handleOpenInBrowser(doc.file_url)}>
-                            <ExternalLink className="w-2.5 h-2.5 mr-0.5" />Open
-                          </Button>
-                          <Button size="sm" variant="outline" className="flex-1 h-7 text-[10px]" onClick={() => handleDownload(doc.file_url, doc.file_name)}>
-                            <Download className="w-2.5 h-2.5 mr-0.5" />Download
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <DocumentCard 
+                      key={doc.id}
+                      doc={doc}
+                      onDelete={handleDeleteDoc}
+                      onDownload={handleDownload}
+                      onOpenInBrowser={handleOpenInBrowser}
+                      onRefresh={fetchDocuments}
+                    />
                   ))}
                 </div>
               )}
@@ -429,7 +399,7 @@ export default function Education() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1">
                         <StickyNote className="w-3.5 h-3.5 text-yellow-500" />
-                        <Badge variant={note.visibility === 'public' ? 'default' : 'secondary'} className="text-[9px] h-4 px-1">{note.visibility}</Badge>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded ${note.visibility === 'public' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>{note.visibility}</span>
                       </div>
                       <div className="flex gap-0.5">
                         <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>
