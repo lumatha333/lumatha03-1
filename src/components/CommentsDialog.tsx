@@ -86,14 +86,27 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
       }
       setComments(commentsWithProfiles);
       
-      // Initialize reactions state
+      // Fetch reactions from database
       const reactionsMap: Record<string, { reactions: Record<string, number>; userReaction: string | null }> = {};
-      commentsWithProfiles.forEach(c => {
-        reactionsMap[c.id] = { 
-          reactions: { like: Math.floor(Math.random() * 5), dislike: 0, haha: Math.floor(Math.random() * 3), sad: 0, love: Math.floor(Math.random() * 2) },
-          userReaction: null 
-        };
-      });
+      
+      for (const comment of commentsWithProfiles) {
+        const { data: reactions } = await supabase
+          .from('comment_reactions')
+          .select('reaction, user_id')
+          .eq('comment_id', comment.id);
+        
+        const counts: Record<string, number> = { like: 0, dislike: 0, haha: 0, sad: 0, love: 0 };
+        let userReaction: string | null = null;
+        
+        reactions?.forEach(r => {
+          counts[r.reaction] = (counts[r.reaction] || 0) + 1;
+          if (user && r.user_id === user.id) {
+            userReaction = r.reaction;
+          }
+        });
+        
+        reactionsMap[comment.id] = { reactions: counts, userReaction };
+      }
       setCommentReactions(reactionsMap);
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -176,31 +189,50 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
     }
   };
 
-  const handleReaction = (commentId: string, reactionType: string) => {
-    setCommentReactions(prev => {
-      const current = prev[commentId] || { reactions: { like: 0, dislike: 0, haha: 0, sad: 0, love: 0 }, userReaction: null };
-      const newReactions = { ...current.reactions };
-      
-      // Remove previous reaction if exists
-      if (current.userReaction) {
-        newReactions[current.userReaction] = Math.max(0, (newReactions[current.userReaction] || 0) - 1);
-      }
-      
-      // If clicking same reaction, just remove it
+  const handleReaction = async (commentId: string, reactionType: string) => {
+    if (!user) return;
+    
+    const current = commentReactions[commentId] || { reactions: { like: 0, dislike: 0, haha: 0, sad: 0, love: 0 }, userReaction: null };
+    
+    try {
       if (current.userReaction === reactionType) {
-        return {
-          ...prev,
-          [commentId]: { reactions: newReactions, userReaction: null }
-        };
+        // Remove reaction
+        await supabase.from('comment_reactions').delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+      } else if (current.userReaction) {
+        // Update reaction
+        await supabase.from('comment_reactions')
+          .update({ reaction: reactionType })
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+      } else {
+        // Add new reaction
+        await supabase.from('comment_reactions').insert({
+          comment_id: commentId,
+          user_id: user.id,
+          reaction: reactionType
+        });
       }
       
-      // Add new reaction
-      newReactions[reactionType] = (newReactions[reactionType] || 0) + 1;
-      return {
-        ...prev,
-        [commentId]: { reactions: newReactions, userReaction: reactionType }
-      };
-    });
+      // Update local state
+      setCommentReactions(prev => {
+        const newReactions = { ...current.reactions };
+        
+        if (current.userReaction) {
+          newReactions[current.userReaction] = Math.max(0, (newReactions[current.userReaction] || 0) - 1);
+        }
+        
+        if (current.userReaction === reactionType) {
+          return { ...prev, [commentId]: { reactions: newReactions, userReaction: null } };
+        }
+        
+        newReactions[reactionType] = (newReactions[reactionType] || 0) + 1;
+        return { ...prev, [commentId]: { reactions: newReactions, userReaction: reactionType } };
+      });
+    } catch (error) {
+      console.error('Reaction error:', error);
+    }
   };
 
   const getTotalReactions = (commentId: string) => {
