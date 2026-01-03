@@ -113,6 +113,28 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
     }
   };
 
+  // Fixed download function using fetch and blob
+  const handleDownloadFile = async (fileUrl: string, fileName: string) => {
+    try {
+      toast.info('Starting download...');
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error('Download failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Downloaded!');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Download failed. Try opening in browser first.');
+    }
+  };
+
   const loadComments = async () => {
     const { data } = await supabase
       .from('comments')
@@ -182,24 +204,28 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" className="h-6 w-6">
-                    <MoreVertical className="w-3.5 h-3.5" />
+                  <Button 
+                    size="icon" 
+                    variant="outline" 
+                    className="h-7 w-7 border-primary/50 bg-primary/10 hover:bg-primary/20 shadow-[0_0_8px_2px_hsl(var(--primary)/0.3)]"
+                  >
+                    <MoreVertical className="w-4 h-4 text-primary" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem onClick={() => onOpenInBrowser(doc.file_url)}>
-                    <ExternalLink className="w-3 h-3 mr-2" />Open in Browser
+                <DropdownMenuContent align="end" className="w-44 glass-card">
+                  <DropdownMenuItem onClick={() => window.open(doc.file_url, '_blank', 'noopener,noreferrer')}>
+                    <ExternalLink className="w-3.5 h-3.5 mr-2" />Open in Browser
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onDownload(doc.file_url, doc.file_name)}>
-                    <Download className="w-3 h-3 mr-2" />Download
+                  <DropdownMenuItem onClick={() => handleDownloadFile(doc.file_url, doc.file_name)}>
+                    <Download className="w-3.5 h-3.5 mr-2" />Download
                   </DropdownMenuItem>
                   {isOwner && (
                     <>
                       <DropdownMenuItem onClick={() => { setEditDescription(doc.description || ''); setEditDialogOpen(true); }}>
-                        <Edit className="w-3 h-3 mr-2" />Edit Description
+                        <Edit className="w-3.5 h-3.5 mr-2" />Edit Description
                       </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={() => onDelete(doc.id, doc.file_url)}>
-                        <Trash2 className="w-3 h-3 mr-2" />Delete
+                        <Trash2 className="w-3.5 h-3.5 mr-2" />Delete
                       </DropdownMenuItem>
                     </>
                   )}
