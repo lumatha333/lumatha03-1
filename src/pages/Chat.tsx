@@ -200,7 +200,8 @@ export default function Chat() {
 
   // Navigate back to chat list (stay in messages section)
   const handleBackToChats = () => {
-    navigate('/chat');
+    // Use replace to properly go back to chat list without adding to history
+    navigate('/chat', { replace: true });
   };
 
   const selectedConversation = conversations.find(c => c.user_id === currentChatUser);

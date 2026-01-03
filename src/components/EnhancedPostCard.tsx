@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Database } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +19,20 @@ import { toast } from 'sonner';
 
 type Post = Database['public']['Tables']['posts']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
+
+// Global state for video sound synchronization
+let globalVideoMuted = true;
+let globalVideoListeners: Set<(muted: boolean) => void> = new Set();
+
+const setGlobalVideoMuted = (muted: boolean) => {
+  globalVideoMuted = muted;
+  globalVideoListeners.forEach(listener => listener(muted));
+};
+
+const subscribeToGlobalMute = (listener: (muted: boolean) => void) => {
+  globalVideoListeners.add(listener);
+  return () => globalVideoListeners.delete(listener);
+};
 
 interface EnhancedPostCardProps {
   post: Post & { profiles?: Profile };
@@ -46,7 +60,7 @@ export function EnhancedPostCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content || '');
   const [commentsOpen, setCommentsOpen] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(globalVideoMuted);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   
@@ -61,6 +75,17 @@ export function EnhancedPostCard({
   const isOwner = currentUserId === post.user_id;
   const isLongText = (post.content?.length || 0) > 200;
   const isVideo = currentMediaType?.includes('video');
+
+  // Subscribe to global mute state
+  useEffect(() => {
+    const unsubscribe = subscribeToGlobalMute((muted) => {
+      setIsMuted(muted);
+      if (videoRef.current) {
+        videoRef.current.muted = muted;
+      }
+    });
+    return () => { unsubscribe(); };
+  }, []);
 
   // Video autoplay on scroll
   useEffect(() => {
@@ -177,10 +202,13 @@ export function EnhancedPostCard({
 
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
+    const newMuted = !isMuted;
+    // Update global state - all videos sync
+    setGlobalVideoMuted(newMuted);
     if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
+      videoRef.current.muted = newMuted;
     }
+    setIsMuted(newMuted);
   };
 
   const toggleVideoFullscreen = (e: React.MouseEvent) => {

@@ -8,7 +8,7 @@ import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGrou
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import logo from '@/assets/logo.png';
 import { NotificationBell } from './NotificationBell';
-import { TodoWidget } from './TodoWidget';
+import { DesktopMessagesPanel } from './DesktopMessagesPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -160,22 +160,22 @@ function LayoutContent({ children }: LayoutProps) {
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
       
-      {/* Desktop Sidebar - Sticky for desktop/iPad */}
+      {/* Desktop Sidebar - Sticky, slightly smaller */}
       {!isMobile && (
-        <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen">
+        <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen w-52 shrink-0">
           <SidebarContent className="glass-card">
-            <div className="flex items-center gap-3 p-4 border-b border-border">
+            <div className="flex items-center gap-2 p-3 border-b border-border">
               <img 
                 src={logo} 
                 alt="Crown of Creation" 
-                className="w-8 h-8 animate-pulse-glow cursor-pointer transition-transform hover:scale-110" 
+                className="w-7 h-7 animate-pulse-glow cursor-pointer transition-transform hover:scale-110" 
                 onClick={handleLogoClick} 
               />
-              <span className="text-lg font-bold gradient-text">Crown Of Creation</span>
+              <span className="text-sm font-bold gradient-text">Crown Of Creation</span>
             </div>
 
             <SidebarGroup>
-              <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
+              <SidebarGroupLabel className="text-[10px]">Main Menu</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {menuItems.map((item, index) => (
@@ -183,14 +183,14 @@ function LayoutContent({ children }: LayoutProps) {
                       <SidebarMenuButton 
                         isActive={isActive(item.url)}
                         onClick={() => handleMenuClick(item.url)}
-                        className="cursor-pointer transition-all duration-300 hover:translate-x-1 hover:bg-primary/10"
+                        className="cursor-pointer transition-all duration-300 hover:translate-x-1 hover:bg-primary/10 py-2"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
-                        <div className="flex items-center gap-3 w-full">
-                          <span className="text-lg">{item.emoji}</span>
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="text-base">{item.emoji}</span>
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium block">{item.title}</span>
-                            <span className="text-[10px] text-muted-foreground block truncate">{item.desc}</span>
+                            <span className="font-medium block text-xs">{item.title}</span>
+                            <span className="text-[9px] text-muted-foreground block truncate">{item.desc}</span>
                           </div>
                         </div>
                       </SidebarMenuButton>
@@ -246,19 +246,19 @@ function LayoutContent({ children }: LayoutProps) {
           </div>
         </header>
 
-        {/* Content Area with optional Todo Widget on desktop */}
+        {/* Content Area with Messages Panel on desktop (Home only) */}
         <div className="flex-1 flex overflow-hidden">
           {/* Main Content */}
           <div className="flex-1 overflow-y-auto p-2 md:p-3">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-2xl mx-auto">
               {children}
             </div>
           </div>
 
-          {/* Desktop Todo Widget */}
+          {/* Desktop Messages Panel - Only on Home page */}
           {!isMobile && location.pathname === '/' && (
-            <aside className="hidden lg:block w-72 border-l border-border p-3 overflow-y-auto">
-              <TodoWidget />
+            <aside className="hidden lg:flex w-80 border-l border-border flex-col overflow-hidden">
+              <DesktopMessagesPanel />
             </aside>
           )}
         </div>
