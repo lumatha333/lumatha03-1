@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -41,9 +41,63 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editDescription, setEditDescription] = useState(doc.description || '');
 
-  const handleLove = () => {
-    setLoved(!loved);
-    setLoveCount(prev => loved ? prev - 1 : prev + 1);
+  // Fetch reactions on mount
+  useEffect(() => {
+    fetchReactions();
+  }, [doc.id, currentUser?.id]);
+
+  const fetchReactions = async () => {
+    try {
+      // Get reaction count
+      const { count } = await supabase
+        .from('document_reactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('document_id', doc.id);
+      
+      setLoveCount(count || 0);
+
+      // Check if current user has reacted
+      if (currentUser?.id) {
+        const { data } = await supabase
+          .from('document_reactions')
+          .select('id')
+          .eq('document_id', doc.id)
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+        
+        setLoved(!!data);
+      }
+    } catch (error) {
+      console.error('Error fetching reactions:', error);
+    }
+  };
+
+  const handleLove = async () => {
+    if (!currentUser) {
+      toast.error('Please login to react');
+      return;
+    }
+    
+    try {
+      if (loved) {
+        await supabase
+          .from('document_reactions')
+          .delete()
+          .eq('document_id', doc.id)
+          .eq('user_id', currentUser.id);
+        setLoved(false);
+        setLoveCount(prev => Math.max(0, prev - 1));
+      } else {
+        await supabase
+          .from('document_reactions')
+          .insert({ document_id: doc.id, user_id: currentUser.id, reaction: 'love' });
+        setLoved(true);
+        setLoveCount(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error('Error toggling reaction:', error);
+      toast.error('Failed to update reaction');
+    }
   };
 
   const handleShare = async () => {

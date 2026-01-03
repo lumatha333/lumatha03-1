@@ -243,6 +243,45 @@ export type Database = {
           },
         ]
       }
+      document_reactions: {
+        Row: {
+          created_at: string | null
+          document_id: string
+          id: string
+          reaction: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          document_id: string
+          id?: string
+          reaction?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          document_id?: string
+          id?: string
+          reaction?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_reactions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           created_at: string
