@@ -21,7 +21,7 @@ const menuItems = [
   { title: 'Education', url: '/education', emoji: '📚', desc: 'Notes, Docs, Study Hub' },
   { title: 'Messages', url: '/chat', emoji: '💬', desc: 'Chat + VC + Groups' },
   { title: 'Creativity', url: '/creativity', emoji: '🎨', desc: 'Quotes/Ideas/Moods' },
-  { title: 'Music & Adventure', url: '/music-adventure', emoji: '🎵', desc: 'Songs + Trips + Maps' },
+  { title: 'Adventure', url: '/music-adventure', emoji: '🏔️', desc: 'Challenges + Discover + Travel' },
   { title: 'Marketplace', url: '/marketplace', emoji: '🛒', desc: 'Buy/Sell/Local Business' },
   { title: 'Settings', url: '/settings', emoji: '⚙️', desc: 'Controls + Privacy' },
 ];
@@ -160,9 +160,9 @@ function LayoutContent({ children }: LayoutProps) {
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
       
-      {/* Desktop Sidebar - Hidden on mobile */}
+      {/* Desktop Sidebar - Sticky for desktop/iPad */}
       {!isMobile && (
-        <Sidebar className="border-r border-border transition-transform duration-300">
+        <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen">
           <SidebarContent className="glass-card">
             <div className="flex items-center gap-3 p-4 border-b border-border">
               <img 
