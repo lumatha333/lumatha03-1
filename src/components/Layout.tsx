@@ -160,9 +160,9 @@ function LayoutContent({ children }: LayoutProps) {
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
       
-      {/* Desktop Sidebar - Sticky, extended */}
+      {/* Desktop Sidebar - Sticky, extended for ultra-wide */}
       {!isMobile && (
-        <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen w-64 shrink-0">
+        <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen w-72 xl:w-80 shrink-0">
           <SidebarContent className="glass-card">
             <div className="flex items-center gap-2 p-3 border-b border-border">
               <img 
@@ -248,16 +248,16 @@ function LayoutContent({ children }: LayoutProps) {
 
         {/* Content Area with Messages Panel on desktop (Home only) */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Main Content */}
-          <div className="flex-1 overflow-y-auto p-2 md:p-3">
-            <div className="max-w-2xl mx-auto">
+          {/* Main Content - Constrained for balanced layout */}
+          <div className="flex-1 overflow-y-auto p-2 md:p-3 min-w-0">
+            <div className="max-w-lg xl:max-w-xl mx-auto">
               {children}
             </div>
           </div>
 
-          {/* Desktop Messages Panel - Only on Home page, extended */}
+          {/* Desktop Messages Panel - Only on Home page, extended for ultra-wide */}
           {!isMobile && location.pathname === '/' && (
-            <aside className="hidden lg:flex w-96 border-l border-border flex-col overflow-hidden shrink-0">
+            <aside className="hidden lg:flex w-[400px] xl:w-[440px] border-l border-border flex-col overflow-hidden shrink-0">
               <DesktopMessagesPanel />
             </aside>
           )}

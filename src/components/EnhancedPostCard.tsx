@@ -24,6 +24,9 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 let globalVideoMuted = true;
 let globalVideoListeners: Set<(muted: boolean) => void> = new Set();
 
+// Global state for single video playback - only one video plays at a time
+let currentPlayingVideo: HTMLVideoElement | null = null;
+
 const setGlobalVideoMuted = (muted: boolean) => {
   globalVideoMuted = muted;
   globalVideoListeners.forEach(listener => listener(muted));
@@ -32,6 +35,14 @@ const setGlobalVideoMuted = (muted: boolean) => {
 const subscribeToGlobalMute = (listener: (muted: boolean) => void) => {
   globalVideoListeners.add(listener);
   return () => globalVideoListeners.delete(listener);
+};
+
+const setCurrentPlayingVideo = (video: HTMLVideoElement | null) => {
+  // Pause the previously playing video
+  if (currentPlayingVideo && currentPlayingVideo !== video) {
+    currentPlayingVideo.pause();
+  }
+  currentPlayingVideo = video;
 };
 
 interface EnhancedPostCardProps {
@@ -87,19 +98,24 @@ export function EnhancedPostCard({
     return () => { unsubscribe(); };
   }, []);
 
-  // Video autoplay on scroll
+  // Video autoplay on scroll - only one video plays at a time
   useEffect(() => {
     if (!isVideo || !videoRef.current || !cardRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            // Set this as the current playing video (pauses others)
+            setCurrentPlayingVideo(videoRef.current);
             videoRef.current?.play();
             setIsPlaying(true);
           } else {
-            videoRef.current?.pause();
-            setIsPlaying(false);
+            // Only pause if this video is the current one
+            if (currentPlayingVideo === videoRef.current) {
+              videoRef.current?.pause();
+              setIsPlaying(false);
+            }
           }
         });
       },
@@ -226,11 +242,16 @@ export function EnhancedPostCard({
     e.stopPropagation();
     if (videoRef.current) {
       if (videoRef.current.paused) {
+        // Set this as the current playing video (pauses others)
+        setCurrentPlayingVideo(videoRef.current);
         videoRef.current.play();
         setIsPlaying(true);
       } else {
         videoRef.current.pause();
         setIsPlaying(false);
+        if (currentPlayingVideo === videoRef.current) {
+          setCurrentPlayingVideo(null);
+        }
       }
     }
   };
