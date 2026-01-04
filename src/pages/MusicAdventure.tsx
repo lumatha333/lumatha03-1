@@ -59,6 +59,28 @@ const systemChallenges = [
   { id: 'sys_38', title: 'Donate Items', description: 'Donate clothes or items to charity', points: 150, difficulty: 'hard' },
   { id: 'sys_39', title: 'No Junk Week', description: 'Avoid junk food for 7 days', points: 280, difficulty: 'hard' },
   { id: 'sys_40', title: 'Learn Language', description: 'Learn 50 words of a new language', points: 170, difficulty: 'hard' },
+  
+  // Additional challenges
+  { id: 'sys_41', title: 'Sunrise Yoga', description: 'Do yoga while watching sunrise', points: 90, difficulty: 'medium' },
+  { id: 'sys_42', title: 'Digital Detox', description: 'Stay away from all screens for 4 hours', points: 100, difficulty: 'medium' },
+  { id: 'sys_43', title: 'Cook for Family', description: 'Prepare a meal for your family', points: 80, difficulty: 'medium' },
+  { id: 'sys_44', title: 'Write a Letter', description: 'Write a handwritten letter to someone', points: 60, difficulty: 'medium' },
+  { id: 'sys_45', title: 'Plant Seeds', description: 'Plant seeds in your garden or pot', points: 50, difficulty: 'easy' },
+  { id: 'sys_46', title: 'Learn Origami', description: 'Create an origami figure', points: 45, difficulty: 'easy' },
+  { id: 'sys_47', title: 'Stargazing', description: 'Spend 30 minutes stargazing at night', points: 55, difficulty: 'easy' },
+  { id: 'sys_48', title: 'Practice Instrument', description: 'Practice a musical instrument for 30 min', points: 70, difficulty: 'medium' },
+  { id: 'sys_49', title: 'Random Act of Kindness', description: 'Do something kind for a stranger', points: 85, difficulty: 'medium' },
+  { id: 'sys_50', title: 'Nature Photography', description: 'Take 10 nature photos outdoors', points: 50, difficulty: 'easy' },
+  { id: 'sys_51', title: 'Complete Puzzle', description: 'Finish a 500+ piece puzzle', points: 120, difficulty: 'hard' },
+  { id: 'sys_52', title: 'Sunrise to Sunset', description: 'Stay active from sunrise to sunset', points: 200, difficulty: 'hard' },
+  { id: 'sys_53', title: 'Bike 10km', description: 'Complete a 10 kilometer bike ride', points: 100, difficulty: 'medium' },
+  { id: 'sys_54', title: 'Swim 500m', description: 'Swim 500 meters without stopping', points: 110, difficulty: 'medium' },
+  { id: 'sys_55', title: 'Climb Stairs 100', description: 'Climb 100 flights of stairs in a day', points: 130, difficulty: 'hard' },
+  { id: 'sys_56', title: 'Silent Hour', description: 'Practice complete silence for 1 hour', points: 60, difficulty: 'medium' },
+  { id: 'sys_57', title: 'Gratitude Journal', description: 'Write 10 things you are grateful for', points: 40, difficulty: 'easy' },
+  { id: 'sys_58', title: 'Declutter Room', description: 'Remove 20 items from your room', points: 80, difficulty: 'medium' },
+  { id: 'sys_59', title: 'Zero Waste Day', description: 'Produce zero waste for an entire day', points: 150, difficulty: 'hard' },
+  { id: 'sys_60', title: 'Memory Challenge', description: 'Memorize 20 random items in order', points: 70, difficulty: 'medium' },
 ];
 
 // 400+ Discover places (2 per country from 200 countries)
@@ -561,7 +583,7 @@ export default function MusicAdventure() {
   const [proofDialogOpen, setProofDialogOpen] = useState(false);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [challengeFilter, setChallengeFitler] = useState<'all' | 'system' | 'custom'>('all');
+  const [challengeFilter, setChallengeFitler] = useState<'system' | 'custom'>('system');
   const [difficultyFilter, setDifficultyFilter] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
   
   // Discover States
@@ -802,10 +824,10 @@ export default function MusicAdventure() {
 
         {/* CHALLENGES TAB */}
         <TabsContent value="challenges" className="space-y-4">
-          {/* Filters */}
+          {/* Filters - Only show difficulty filter when viewing system challenges */}
           <div className="flex flex-wrap gap-2 items-center justify-between">
             <div className="flex gap-1.5 flex-wrap">
-              {(['all', 'system', 'custom'] as const).map(f => (
+              {(['system', 'custom'] as const).map(f => (
                 <Button
                   key={f}
                   size="sm"
@@ -813,23 +835,25 @@ export default function MusicAdventure() {
                   onClick={() => setChallengeFitler(f)}
                   className="text-xs h-7"
                 >
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                  {f === 'system' ? '🎯 System' : '✨ Custom'}
                 </Button>
               ))}
             </div>
-            <div className="flex gap-1.5 flex-wrap">
-              {(['all', 'easy', 'medium', 'hard'] as const).map(d => (
-                <Button
-                  key={d}
-                  size="sm"
-                  variant={difficultyFilter === d ? 'default' : 'outline'}
-                  onClick={() => setDifficultyFilter(d)}
-                  className={`text-xs h-7 ${d !== 'all' ? getDifficultyColor(d) : ''}`}
-                >
-                  {d.charAt(0).toUpperCase() + d.slice(1)}
-                </Button>
-              ))}
-            </div>
+            {challengeFilter === 'system' && (
+              <div className="flex gap-1.5 flex-wrap">
+                {(['all', 'easy', 'medium', 'hard'] as const).map(d => (
+                  <Button
+                    key={d}
+                    size="sm"
+                    variant={difficultyFilter === d ? 'default' : 'outline'}
+                    onClick={() => setDifficultyFilter(d)}
+                    className={`text-xs h-7 ${d !== 'all' ? getDifficultyColor(d) : ''}`}
+                  >
+                    {d.charAt(0).toUpperCase() + d.slice(1)}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Create Custom Challenge Button */}
@@ -873,8 +897,8 @@ export default function MusicAdventure() {
             </DialogContent>
           </Dialog>
 
-          {/* System Challenges */}
-          {(challengeFilter === 'all' || challengeFilter === 'system') && (
+          {/* System Challenges - Only show when filter is 'system' */}
+          {challengeFilter === 'system' && (
             <div className="space-y-2">
               <h3 className="font-semibold text-sm flex items-center gap-2">
                 <Target className="w-4 h-4 text-primary" />
@@ -924,9 +948,9 @@ export default function MusicAdventure() {
             </div>
           )}
 
-          {/* Custom Challenges */}
-          {(challengeFilter === 'all' || challengeFilter === 'custom') && (
-            <div className="space-y-2">
+          {/* Custom Challenges - Only show when filter is 'custom' */}
+          {challengeFilter === 'custom' && (
+            <div className="space-y-3">
               <h3 className="font-semibold text-sm flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-purple-500" />
                 Custom Challenges ({customChallenges.length})
@@ -1042,7 +1066,6 @@ export default function MusicAdventure() {
                   <Card 
                     key={place.id} 
                     className={`glass-card border cursor-pointer transition-all ${isVisited ? 'border-blue-500/50 bg-blue-500/10' : 'hover:border-primary/50 hover-lift'}`}
-                    onClick={() => handleVisitPlace(place.id)}
                   >
                     <CardContent className="p-2 md:p-3 text-center">
                       <div className="text-2xl md:text-3xl mb-1">{place.emoji}</div>
@@ -1054,10 +1077,16 @@ export default function MusicAdventure() {
                           href={place.link} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Auto-count visit when opening map link
+                            if (!isVisited && user) {
+                              handleVisitPlace(place.id);
+                            }
+                          }}
                           className="text-[10px] text-primary hover:underline flex items-center gap-0.5"
                         >
-                          <MapPin className="w-2.5 h-2.5" /> Map
+                          <MapPin className="w-2.5 h-2.5" /> {isVisited ? 'Visited ✓' : 'Visit & Earn ⭐'}
                         </a>
                       </div>
                     </CardContent>

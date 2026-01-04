@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Send, ArrowLeft, Search, Plus, CheckCheck, Paperclip, X, MoreVertical, Archive, Ghost, Trash2, ShieldOff, Smile } from 'lucide-react';
+import { Send, ArrowLeft, Search, Plus, CheckCheck, Paperclip, X, MoreVertical, Archive, Ghost, Trash2, ShieldOff, Smile, Mic, MicOff, Play, Pause, Phone, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -34,8 +34,14 @@ export default function Chat() {
   const [showArchived, setShowArchived] = useState(false);
   const [ghostMode, setGhostMode] = useState(false);
   const [showStickers, setShowStickers] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
 
   // Screenshot prevention
@@ -182,6 +188,86 @@ export default function Chat() {
     }
   };
 
+  // Voice Recording Functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+      toast.info('🎤 Recording started...');
+    } catch (error) {
+      toast.error('Microphone access denied');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    stopRecording();
+    setAudioBlob(null);
+    setRecordingTime(0);
+  };
+
+  const sendVoiceMessage = async () => {
+    if (!audioBlob || !currentChatUser || !user) return;
+    
+    setUploading(true);
+    try {
+      const fileName = `${user.id}/${Date.now()}_voice.webm`;
+      const { error: uploadError } = await supabase.storage
+        .from('chat-media')
+        .upload(fileName, audioBlob, { contentType: 'audio/webm' });
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
+      await sendMessage(currentChatUser, '🎤 Voice message', publicUrl, 'audio');
+      
+      setAudioBlob(null);
+      setRecordingTime(0);
+      toast.success('Voice message sent!');
+    } catch (error) {
+      toast.error('Failed to send voice message');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const handleSendSticker = async (sticker: string) => {
     if (!currentChatUser) return;
     await sendMessage(currentChatUser, sticker);
@@ -323,8 +409,15 @@ export default function Chat() {
                             <video 
                               src={message.media_url} 
                               className="max-w-full max-h-64 rounded-lg" 
-                              controls 
+                              controls
+                              playsInline
+                              preload="metadata"
                             />
+                          ) : message.media_type === 'audio' ? (
+                            <div className="flex items-center gap-2 bg-black/10 rounded-lg p-2">
+                              <Mic className="w-4 h-4 text-primary shrink-0" />
+                              <audio src={message.media_url} controls className="w-full h-8" preload="metadata" />
+                            </div>
                           ) : (
                             <a href={message.media_url} target="_blank" rel="noopener noreferrer" className="text-xs underline">
                               📎 Attachment
@@ -398,6 +491,32 @@ export default function Chat() {
           </div>
         )}
 
+        {/* Voice Recording UI */}
+        {(isRecording || audioBlob) && (
+          <div className="p-3 border-t border-border/50 bg-card/80 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-3 h-3 rounded-full",
+                isRecording ? "bg-red-500 animate-pulse" : "bg-primary"
+              )} />
+              <span className="font-mono text-sm">{formatRecordingTime(recordingTime)}</span>
+              <div className="flex-1" />
+              {isRecording ? (
+                <Button size="sm" variant="destructive" onClick={stopRecording}>
+                  <MicOff className="w-4 h-4 mr-1" /> Stop
+                </Button>
+              ) : audioBlob && (
+                <>
+                  <Button size="sm" variant="outline" onClick={cancelRecording}>Cancel</Button>
+                  <Button size="sm" onClick={sendVoiceMessage} disabled={uploading}>
+                    <Send className="w-4 h-4 mr-1" /> Send
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Input */}
         <div className="p-3 border-t border-border/50 bg-card/80 backdrop-blur-sm safe-area-bottom">
           <div className="flex items-center gap-2">
@@ -405,7 +524,7 @@ export default function Chat() {
               type="file"
               ref={fileInputRef}
               onChange={handleFileSelect}
-              accept="image/*,video/*"
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
               multiple
               className="hidden"
             />
@@ -428,6 +547,20 @@ export default function Chat() {
             >
               <Smile className="w-5 h-5" />
             </Button>
+            
+            {/* Voice Recording Button */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className={cn(
+                "shrink-0 h-10 w-10 transition-all hover:scale-110",
+                isRecording && "bg-red-500/20 text-red-500"
+              )}
+              onClick={isRecording ? stopRecording : startRecording}
+            >
+              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </Button>
+            
             <Input
               placeholder="Type a message..."
               value={newMessage}

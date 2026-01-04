@@ -213,7 +213,22 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44 glass-card">
-                  <DropdownMenuItem onClick={() => window.open(doc.file_url, '_blank', 'noopener,noreferrer')}>
+                  <DropdownMenuItem onClick={async () => {
+                    try {
+                      // Fetch blob first to force browser to handle it properly
+                      const response = await fetch(doc.file_url);
+                      if (!response.ok) throw new Error('Failed to fetch');
+                      const blob = await response.blob();
+                      const blobUrl = URL.createObjectURL(blob);
+                      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                      // Clean up after a delay
+                      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                      toast.success('Opened in new tab!');
+                    } catch (error) {
+                      // Fallback to direct URL
+                      window.open(doc.file_url, '_blank', 'noopener,noreferrer');
+                    }
+                  }}>
                     <ExternalLink className="w-3.5 h-3.5 mr-2" />Open in Browser
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleDownloadFile(doc.file_url, doc.file_name)}>
