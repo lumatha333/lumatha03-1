@@ -160,9 +160,9 @@ function LayoutContent({ children }: LayoutProps) {
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
       
-      {/* Desktop Sidebar - Sticky, slightly smaller */}
+      {/* Desktop Sidebar - Sticky, extended */}
       {!isMobile && (
-        <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen w-52 shrink-0">
+        <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen w-64 shrink-0">
           <SidebarContent className="glass-card">
             <div className="flex items-center gap-2 p-3 border-b border-border">
               <img 
@@ -255,9 +255,9 @@ function LayoutContent({ children }: LayoutProps) {
             </div>
           </div>
 
-          {/* Desktop Messages Panel - Only on Home page */}
+          {/* Desktop Messages Panel - Only on Home page, extended */}
           {!isMobile && location.pathname === '/' && (
-            <aside className="hidden lg:flex w-80 border-l border-border flex-col overflow-hidden">
+            <aside className="hidden lg:flex w-96 border-l border-border flex-col overflow-hidden shrink-0">
               <DesktopMessagesPanel />
             </aside>
           )}
