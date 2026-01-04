@@ -2,15 +2,20 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Gamepad2, Shuffle, Mic, Brain, Target, Paintbrush, Users, Calendar,
   Play, Pause, Check, X, Volume2, VolumeX, RefreshCw, Trophy, Star,
-  Timer, Zap, Lock, ArrowRight, ChevronLeft, ChevronRight
+  Timer, Zap, Lock, ArrowRight, ChevronLeft, ChevronRight, Square,
+  Circle, Minus, Eraser, Undo2, Send, StopCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useGameSounds, SoundType } from '@/hooks/useGameSounds';
+import { 
+  randomChallenges, voicePractices, imposterSets, stressObjects,
+  drawChallenges, roleScenarios, dailyChallengePool 
+} from '@/data/funpunChallenges';
 
 // Game modes configuration
 const gameModes = [
@@ -23,106 +28,6 @@ const gameModes = [
   { id: 'daily', name: 'Daily Challenge', icon: Calendar, color: 'from-pink-500 to-fuchsia-500', desc: 'One meaningful task per day' },
 ];
 
-// Random Discovery Challenges
-const randomChallenges = [
-  { id: 1, type: 'logic', level: 1, title: 'Pattern Match', instruction: 'Find the next number: 2, 4, 8, 16, ?', options: ['24', '32', '30', '20'], correct: 1, time: 15 },
-  { id: 2, type: 'reaction', level: 1, title: 'Quick Pick', instruction: 'Select the odd one out', options: ['🍎', '🍊', '🚗', '🍇'], correct: 2, time: 10 },
-  { id: 3, type: 'memory', level: 2, title: 'Remember Sequence', instruction: 'Which color came first?', options: ['Red', 'Blue', 'Green', 'Yellow'], correct: 0, time: 20 },
-  { id: 4, type: 'logic', level: 2, title: 'Logical Order', instruction: 'What comes next: Mon, Wed, Fri, ?', options: ['Sat', 'Sun', 'Thu', 'Tue'], correct: 1, time: 15 },
-  { id: 5, type: 'decision', level: 3, title: 'Priority Task', instruction: 'Under pressure, which task first?', options: ['Reply email', 'Fire alarm', 'Lunch break', 'Meeting prep'], correct: 1, time: 12 },
-  { id: 6, type: 'pattern', level: 3, title: 'Hidden Rule', instruction: 'Find pattern: AB, BC, CD, ?', options: ['DE', 'EF', 'DD', 'CE'], correct: 0, time: 15 },
-  { id: 7, type: 'logic', level: 4, title: 'Multi-Step', instruction: 'If A=1, B=2, then CAB=?', options: ['312', '321', '123', '213'], correct: 0, time: 20 },
-  { id: 8, type: 'simulation', level: 5, title: 'Route Decision', instruction: 'Fastest safe route during traffic?', options: ['Highway', 'Side streets', 'Wait 30min', 'Public transit'], correct: 3, time: 25 },
-];
-
-// Voice Practice Sentences
-const voicePractices = [
-  { level: 1, text: 'Hello', mode: 'learning' },
-  { level: 1, text: 'Good morning', mode: 'learning' },
-  { level: 2, text: 'The quick brown fox jumps over the lazy dog.', mode: 'performance' },
-  { level: 3, text: 'In case of emergency, please proceed to the nearest exit calmly and quickly.', mode: 'emergency' },
-  { level: 4, text: 'We are pleased to announce the successful completion of our quarterly targets.', mode: 'presentation' },
-  { level: 5, text: 'Attention all passengers. Due to technical difficulties, Flight 247 has been delayed by approximately 45 minutes.', mode: 'announcement' },
-];
-
-// Imposter Game Sets
-const imposterSets = [
-  { level: 1, items: ['Apple', 'Banana', 'Carrot', 'Orange'], imposter: 2, rule: 'Fruits vs Vegetable' },
-  { level: 2, items: ['Hammer', 'Screwdriver', 'Banana', 'Wrench'], imposter: 2, rule: 'Tools vs Food' },
-  { level: 3, items: ['2', '4', '7', '8'], imposter: 2, rule: 'Even numbers only' },
-  { level: 4, items: ['Paris', 'London', 'Amazon', 'Tokyo'], imposter: 2, rule: 'Cities vs River' },
-  { level: 5, items: ['Input', 'Process', 'Coffee', 'Output'], imposter: 2, rule: 'System flow step' },
-];
-
-// Stress Relief Objects
-const stressObjects = [
-  { id: 1, type: 'glass', emoji: '🍷', sound: 'glass', points: 10 },
-  { id: 2, type: 'plate', emoji: '🍽️', sound: 'ceramic', points: 15 },
-  { id: 3, type: 'box', emoji: '📦', sound: 'cardboard', points: 5 },
-  { id: 4, type: 'bottle', emoji: '🍾', sound: 'glass', points: 20 },
-  { id: 5, type: 'cup', emoji: '☕', sound: 'ceramic', points: 12 },
-  { id: 6, type: 'vase', emoji: '🏺', sound: 'glass', points: 25 },
-];
-
-// Draw Challenges
-const drawChallenges = [
-  { level: 1, type: 'copy', instruction: 'Draw a circle', time: 30, tools: 4 },
-  { level: 2, type: 'constraint', instruction: 'Draw a house using only triangles', time: 45, tools: 2 },
-  { level: 3, type: 'memory', instruction: 'Draw the shape you saw earlier', time: 30, tools: 3 },
-  { level: 4, type: 'abstract', instruction: 'Represent "happiness" visually', time: 60, tools: 2, colors: 2 },
-  { level: 5, type: 'complex', instruction: 'Design a logo for an eco-friendly brand', time: 90, tools: 3, colors: 3 },
-];
-
-// Role-Based Scenarios
-const roleScenarios = [
-  { 
-    id: 1, level: 1, role: 'Leader',
-    situation: 'Your team member is late for an important presentation.',
-    options: ['Wait and start late', 'Start without them', 'Call to check', 'Reschedule meeting'],
-    consequences: ['Client frustrated', 'Team member embarrassed', 'Shows care, slight delay', 'Unprofessional'],
-    best: 2
-  },
-  {
-    id: 2, level: 2, role: 'Responder',
-    situation: 'Fire alarm goes off during a customer call.',
-    options: ['Ignore and continue', 'End call immediately', 'Politely pause call', 'Transfer to colleague'],
-    consequences: ['Safety risk', 'Rude behavior', 'Professional handling', 'Delays but safe'],
-    best: 2
-  },
-  {
-    id: 3, level: 3, role: 'Planner',
-    situation: 'Budget cut by 30%. Which project to cancel?',
-    options: ['Marketing campaign', 'Staff training', 'Equipment upgrade', 'Safety measures'],
-    consequences: ['Lower visibility', 'Skill gap', 'Efficiency drop', 'Risk increase'],
-    best: 0
-  },
-  {
-    id: 4, level: 4, role: 'Mediator',
-    situation: 'Two team leads disagree on project direction.',
-    options: ['Side with senior', 'Split the work', 'Facilitate discussion', 'Escalate to manager'],
-    consequences: ['Bias perceived', 'Fragmented work', 'Collaborative solution', 'Shows weakness'],
-    best: 2
-  },
-  {
-    id: 5, level: 5, role: 'Decision Maker',
-    situation: 'Ethical dilemma: Profitable client uses unethical practices.',
-    options: ['Continue business', 'End partnership', 'Negotiate changes', 'Report to authorities'],
-    consequences: ['Complicit', 'Revenue loss', 'Potential change', 'Legal implications'],
-    best: 2
-  },
-];
-
-// Daily Challenges
-const dailyChallengePool = [
-  { type: 'observation', task: 'Notice 3 new things in your daily route today', points: 50 },
-  { type: 'memory', task: 'Memorize 5 random phone numbers from your contacts', points: 60 },
-  { type: 'calm', task: 'Respond to every message with a 10-second pause first', points: 40 },
-  { type: 'logic', task: 'Solve 3 math problems without a calculator', points: 55 },
-  { type: 'creative', task: 'Write a 4-line poem about your morning', points: 45 },
-  { type: 'physical', task: 'Take 10 deep breaths before every decision today', points: 35 },
-  { type: 'social', task: 'Give a genuine compliment to someone you rarely talk to', points: 50 },
-];
-
 // Progress storage keys
 const STORAGE_KEYS = {
   completedChallenges: 'funpun_completed',
@@ -130,6 +35,10 @@ const STORAGE_KEYS = {
   dailyStreak: 'funpun_streak',
   totalPoints: 'funpun_points',
   currentLevel: 'funpun_level',
+  completedImposters: 'funpun_imposters',
+  completedVoice: 'funpun_voice',
+  completedDraw: 'funpun_draw',
+  completedRole: 'funpun_role',
 };
 
 export default function FunPun() {
@@ -146,6 +55,9 @@ export default function FunPun() {
   const [showResult, setShowResult] = useState(false);
   const [userLevel, setUserLevel] = useState(1);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const tickIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const { playSound, playSuccessMelody, playFailureMelody, playLevelUpMelody } = useGameSounds(soundEnabled);
 
   // Load progress from localStorage
   useEffect(() => {
@@ -175,20 +87,22 @@ export default function FunPun() {
     saveProgress();
   }, [saveProgress]);
 
-  // Timer logic
+  // Timer logic with tick sound
   useEffect(() => {
     if (isPlaying && timeLeft > 0) {
       timerRef.current = setTimeout(() => setTimeLeft(t => t - 1), 1000);
+      
+      // Play tick sound for last 5 seconds
+      if (timeLeft <= 5) {
+        playSound('tick', 0.5 + (5 - timeLeft) * 0.1);
+      }
     } else if (timeLeft === 0 && isPlaying) {
       handleTimeout();
     }
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    return () => { 
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [isPlaying, timeLeft]);
-
-  const playSound = (type: 'start' | 'correct' | 'wrong' | 'complete') => {
-    if (!soundEnabled) return;
-    // Sound would be played here - using Web Audio API in production
-  };
 
   const handleTimeout = () => {
     setIsPlaying(false);
@@ -196,27 +110,22 @@ export default function FunPun() {
     if (currentChallenge) {
       setIncorrectIds(prev => new Set([...prev, currentChallenge.id]));
     }
-    playSound('wrong');
+    playFailureMelody();
     toast.error('⏱️ Time\'s up!');
   };
 
   const startRandomChallenge = () => {
+    playSound('start');
+    
     // Filter challenges based on completion status
     const available = randomChallenges.filter(c => {
-      // If completed without error, skip unless all completed
       if (completedIds.has(c.id) && !incorrectIds.has(c.id)) return false;
-      // Prioritize incorrect ones
       return true;
     });
 
-    // If all completed, reset
     const pool = available.length > 0 ? available : randomChallenges;
-    
-    // Prioritize incorrect challenges
     const incorrectPool = pool.filter(c => incorrectIds.has(c.id));
     const targetPool = incorrectPool.length > 0 ? incorrectPool : pool;
-    
-    // Filter by user level
     const levelPool = targetPool.filter(c => c.level <= userLevel + 1);
     const finalPool = levelPool.length > 0 ? levelPool : targetPool;
 
@@ -226,17 +135,18 @@ export default function FunPun() {
     setSelectedAnswer(null);
     setShowResult(false);
     setIsPlaying(true);
-    playSound('start');
   };
 
   const handleAnswer = (index: number) => {
     if (showResult || !currentChallenge) return;
+    
+    playSound('click');
     setSelectedAnswer(index);
     setIsPlaying(false);
     setShowResult(true);
 
     if (index === currentChallenge.correct) {
-      playSound('correct');
+      playSuccessMelody();
       const points = currentChallenge.level * 10 + Math.floor(timeLeft / 2);
       setScore(s => s + points);
       setStreak(s => s + 1);
@@ -247,15 +157,15 @@ export default function FunPun() {
         return next;
       });
       
-      // Level up every 5 correct answers
       if ((completedIds.size + 1) % 5 === 0 && userLevel < 5) {
         setUserLevel(l => l + 1);
+        playLevelUpMelody();
         toast.success(`🎉 Level Up! Now Level ${userLevel + 1}`);
       } else {
         toast.success(`✅ Correct! +${points} points`);
       }
     } else {
-      playSound('wrong');
+      playFailureMelody();
       setStreak(0);
       setIncorrectIds(prev => new Set([...prev, currentChallenge.id]));
       toast.error('❌ Incorrect. This will appear again!');
@@ -272,19 +182,181 @@ export default function FunPun() {
     return labels[level - 1] || labels[0];
   };
 
-  // Stress Relief State
+  // ============================================
+  // VOICE INTERACTION STATE
+  // ============================================
+  const [voiceMode, setVoiceMode] = useState<'learning' | 'performance' | 'mimic' | 'emotion'>('learning');
+  const [currentVoicePractice, setCurrentVoicePractice] = useState<typeof voicePractices[0] | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceScore, setVoiceScore] = useState<number | null>(null);
+  const [voiceLevel, setVoiceLevel] = useState(1);
+  const [completedVoiceIds, setCompletedVoiceIds] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.completedVoice);
+    if (saved) setCompletedVoiceIds(new Set(JSON.parse(saved)));
+  }, []);
+
+  const startVoicePractice = () => {
+    playSound('start');
+    const available = voicePractices.filter(v => 
+      v.level <= voiceLevel + 1 && 
+      (v.mode === voiceMode || voiceMode === 'learning') &&
+      !completedVoiceIds.has(v.id)
+    );
+    const pool = available.length > 0 ? available : voicePractices.filter(v => v.level <= voiceLevel + 1);
+    const practice = pool[Math.floor(Math.random() * pool.length)];
+    setCurrentVoicePractice(practice);
+    setVoiceScore(null);
+    setTimeLeft(10 + practice.level * 5);
+    setIsPlaying(true);
+  };
+
+  const startRecording = () => {
+    playSound('notification');
+    setIsRecording(true);
+  };
+
+  const stopRecording = () => {
+    setIsRecording(false);
+    setIsPlaying(false);
+    
+    // Simulate voice evaluation
+    const clarity = Math.floor(Math.random() * 30) + 70;
+    const pace = Math.floor(Math.random() * 30) + 70;
+    const tone = Math.floor(Math.random() * 30) + 70;
+    const finalScore = Math.floor((clarity + pace + tone) / 3);
+    
+    setVoiceScore(finalScore);
+    
+    if (finalScore >= 80) {
+      playSuccessMelody();
+      setScore(s => s + finalScore);
+      if (currentVoicePractice) {
+        setCompletedVoiceIds(prev => {
+          const next = new Set([...prev, currentVoicePractice.id]);
+          localStorage.setItem(STORAGE_KEYS.completedVoice, JSON.stringify([...next]));
+          return next;
+        });
+      }
+      if (voiceLevel < 5 && completedVoiceIds.size > 0 && completedVoiceIds.size % 3 === 0) {
+        setVoiceLevel(l => l + 1);
+        playLevelUpMelody();
+        toast.success(`🎤 Voice Level Up! Now Level ${voiceLevel + 1}`);
+      } else {
+        toast.success(`🎤 Great delivery! Score: ${finalScore}`);
+      }
+    } else {
+      playSound('wrong');
+      toast.info(`Practice more. Score: ${finalScore}`);
+    }
+  };
+
+  // ============================================
+  // IMPOSTER GAME STATE
+  // ============================================
+  const [currentImposterSet, setCurrentImposterSet] = useState<typeof imposterSets[0] | null>(null);
+  const [imposterSelected, setImposterSelected] = useState<number | null>(null);
+  const [showImposterResult, setShowImposterResult] = useState(false);
+  const [imposterLevel, setImposterLevel] = useState(1);
+  const [completedImposterIds, setCompletedImposterIds] = useState<Set<number>>(new Set());
+  const [imposterTimeLeft, setImposterTimeLeft] = useState(0);
+  const [imposterPlaying, setImposterPlaying] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.completedImposters);
+    if (saved) setCompletedImposterIds(new Set(JSON.parse(saved)));
+  }, []);
+
+  useEffect(() => {
+    if (imposterPlaying && imposterTimeLeft > 0) {
+      const timer = setTimeout(() => setImposterTimeLeft(t => t - 1), 1000);
+      if (imposterTimeLeft <= 5) playSound('tick', 0.5);
+      return () => clearTimeout(timer);
+    } else if (imposterTimeLeft === 0 && imposterPlaying) {
+      setImposterPlaying(false);
+      setShowImposterResult(true);
+      playFailureMelody();
+      toast.error('⏱️ Time\'s up!');
+    }
+  }, [imposterPlaying, imposterTimeLeft]);
+
+  const startImposterGame = () => {
+    playSound('start');
+    const available = imposterSets.filter(s => 
+      s.level <= imposterLevel + 1 && !completedImposterIds.has(s.id)
+    );
+    const pool = available.length > 0 ? available : imposterSets.filter(s => s.level <= imposterLevel + 1);
+    const set = pool[Math.floor(Math.random() * pool.length)];
+    setCurrentImposterSet(set);
+    setImposterSelected(null);
+    setShowImposterResult(false);
+    setImposterTimeLeft(set.level >= 3 ? 15 + set.level * 3 : 0);
+    setImposterPlaying(set.level >= 3);
+  };
+
+  const selectImposter = (index: number) => {
+    if (showImposterResult) return;
+    playSound('click');
+    setImposterSelected(index);
+    setShowImposterResult(true);
+    setImposterPlaying(false);
+
+    if (currentImposterSet && index === currentImposterSet.imposter) {
+      playSuccessMelody();
+      const points = currentImposterSet.level * 15;
+      setScore(s => s + points);
+      setCompletedImposterIds(prev => {
+        const next = new Set([...prev, currentImposterSet.id]);
+        localStorage.setItem(STORAGE_KEYS.completedImposters, JSON.stringify([...next]));
+        return next;
+      });
+      if (completedImposterIds.size > 0 && completedImposterIds.size % 4 === 0 && imposterLevel < 5) {
+        setImposterLevel(l => l + 1);
+        playLevelUpMelody();
+        toast.success(`🧠 Logic Level Up! Now Level ${imposterLevel + 1}`);
+      } else {
+        toast.success(`🎯 Correct! +${points} points. Rule: ${currentImposterSet.rule}`);
+      }
+    } else {
+      playFailureMelody();
+      toast.error(`❌ Wrong! The imposter was: ${currentImposterSet?.items[currentImposterSet.imposter]}`);
+    }
+  };
+
+  // ============================================
+  // STRESS RELIEF STATE
+  // ============================================
   const [stressScore, setStressScore] = useState(0);
   const [brokenObjects, setBrokenObjects] = useState<Set<number>>(new Set());
-  const [stressMode, setStressMode] = useState<'free' | 'target' | 'precision'>('free');
+  const [stressMode, setStressMode] = useState<'free' | 'target' | 'precision' | 'endurance'>('free');
   const [targetObject, setTargetObject] = useState<number | null>(null);
+  const [stressLevel, setStressLevel] = useState(1);
+  const [actionsLeft, setActionsLeft] = useState(10);
+  const [stressTimeLeft, setStressTimeLeft] = useState(0);
+
+  useEffect(() => {
+    if (stressMode === 'endurance' && stressTimeLeft > 0) {
+      const timer = setTimeout(() => setStressTimeLeft(t => t - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [stressMode, stressTimeLeft]);
 
   const handleBreakObject = (objId: number) => {
     if (brokenObjects.has(objId)) return;
+    if (stressMode === 'precision' && actionsLeft <= 0) {
+      toast.error('No actions left!');
+      return;
+    }
     
     const obj = stressObjects.find(o => o.id === objId);
     if (!obj) return;
 
+    // Play appropriate sound
+    playSound(obj.sound as SoundType);
+
     if (stressMode === 'target' && targetObject !== objId) {
+      playSound('wrong');
       toast.error('Wrong target! Score reduced.');
       setStressScore(s => Math.max(0, s - 5));
       return;
@@ -292,32 +364,215 @@ export default function FunPun() {
 
     setBrokenObjects(prev => new Set([...prev, objId]));
     setStressScore(s => s + obj.points);
-    playSound('correct');
+    
+    if (stressMode === 'precision') {
+      setActionsLeft(a => a - 1);
+    }
 
     if (stressMode === 'target') {
       const remaining = stressObjects.filter(o => !brokenObjects.has(o.id) && o.id !== objId);
       if (remaining.length > 0) {
         setTargetObject(remaining[Math.floor(Math.random() * remaining.length)].id);
+      } else {
+        playSuccessMelody();
+        toast.success(`🎉 All targets cleared! Score: ${stressScore + obj.points}`);
+        setScore(s => s + stressScore + obj.points);
       }
     }
   };
 
   const resetStressRoom = () => {
+    playSound('whoosh');
     setBrokenObjects(new Set());
     setStressScore(0);
+    setActionsLeft(10 - stressLevel);
     if (stressMode === 'target') {
       setTargetObject(stressObjects[Math.floor(Math.random() * stressObjects.length)].id);
     }
+    if (stressMode === 'endurance') {
+      setStressTimeLeft(30);
+    }
   };
 
-  // Role Decision State
+  // ============================================
+  // DRAW & CREATE STATE
+  // ============================================
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawColor, setDrawColor] = useState('#000000');
+  const [brushSize, setBrushSize] = useState(3);
+  const [currentDrawChallenge, setCurrentDrawChallenge] = useState<typeof drawChallenges[0] | null>(null);
+  const [drawTimeLeft, setDrawTimeLeft] = useState(0);
+  const [drawPlaying, setDrawPlaying] = useState(false);
+  const [undosLeft, setUndosLeft] = useState(5);
+  const [drawLevel, setDrawLevel] = useState(1);
+  const [showPreview, setShowPreview] = useState(false);
+  const [completedDrawIds, setCompletedDrawIds] = useState<Set<number>>(new Set());
+  const drawHistoryRef = useRef<ImageData[]>([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.completedDraw);
+    if (saved) setCompletedDrawIds(new Set(JSON.parse(saved)));
+  }, []);
+
+  useEffect(() => {
+    if (drawPlaying && drawTimeLeft > 0) {
+      const timer = setTimeout(() => setDrawTimeLeft(t => t - 1), 1000);
+      if (drawTimeLeft <= 5) playSound('tick', 0.5);
+      return () => clearTimeout(timer);
+    } else if (drawTimeLeft === 0 && drawPlaying) {
+      setDrawPlaying(false);
+      submitDrawing();
+    }
+  }, [drawPlaying, drawTimeLeft]);
+
+  const startDrawChallenge = () => {
+    playSound('start');
+    const available = drawChallenges.filter(d => 
+      d.level <= drawLevel + 1 && !completedDrawIds.has(d.id)
+    );
+    const pool = available.length > 0 ? available : drawChallenges.filter(d => d.level <= drawLevel + 1);
+    const challenge = pool[Math.floor(Math.random() * pool.length)];
+    setCurrentDrawChallenge(challenge);
+    setDrawTimeLeft(challenge.time);
+    setUndosLeft(challenge.undos || 5);
+    drawHistoryRef.current = [];
+    
+    // Clear canvas
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    if (challenge.type === 'memory' && challenge.preview) {
+      setShowPreview(true);
+      setTimeout(() => {
+        setShowPreview(false);
+        setDrawPlaying(true);
+      }, 3000);
+    } else {
+      setDrawPlaying(true);
+    }
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!drawPlaying) return;
+    playSound('pencil');
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Save state for undo
+        drawHistoryRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        if (drawHistoryRef.current.length > 10) drawHistoryRef.current.shift();
+        
+        const rect = canvas.getBoundingClientRect();
+        ctx.beginPath();
+        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+      }
+    }
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !drawPlaying) return;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const rect = canvas.getBoundingClientRect();
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.strokeStyle = drawColor;
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+    }
+  };
+
+  const handleCanvasMouseUp = () => {
+    setIsDrawing(false);
+  };
+
+  const undoDraw = () => {
+    if (undosLeft <= 0 || drawHistoryRef.current.length === 0) return;
+    playSound('pop');
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const lastState = drawHistoryRef.current.pop();
+        if (lastState) {
+          ctx.putImageData(lastState, 0, 0);
+          setUndosLeft(u => u - 1);
+        }
+      }
+    }
+  };
+
+  const clearCanvas = () => {
+    playSound('whoosh');
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  };
+
+  const submitDrawing = () => {
+    setDrawPlaying(false);
+    // Simulate scoring
+    const creativity = Math.floor(Math.random() * 30) + 70;
+    const points = Math.floor(creativity * (currentDrawChallenge?.level || 1) / 10);
+    
+    playSuccessMelody();
+    setScore(s => s + points);
+    
+    if (currentDrawChallenge) {
+      setCompletedDrawIds(prev => {
+        const next = new Set([...prev, currentDrawChallenge.id]);
+        localStorage.setItem(STORAGE_KEYS.completedDraw, JSON.stringify([...next]));
+        return next;
+      });
+    }
+    
+    toast.success(`🎨 Drawing submitted! +${points} points`);
+    
+    if (completedDrawIds.size > 0 && completedDrawIds.size % 3 === 0 && drawLevel < 5) {
+      setDrawLevel(l => l + 1);
+      playLevelUpMelody();
+      toast.success(`🖌️ Art Level Up! Now Level ${drawLevel + 1}`);
+    }
+  };
+
+  // ============================================
+  // ROLE DECISION STATE
+  // ============================================
   const [currentScenario, setCurrentScenario] = useState<typeof roleScenarios[0] | null>(null);
   const [roleChoice, setRoleChoice] = useState<number | null>(null);
   const [showConsequence, setShowConsequence] = useState(false);
+  const [roleLevel, setRoleLevel] = useState(1);
+  const [completedRoleIds, setCompletedRoleIds] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.completedRole);
+    if (saved) setCompletedRoleIds(new Set(JSON.parse(saved)));
+  }, []);
 
   const startRoleChallenge = () => {
-    const available = roleScenarios.filter(s => s.level <= userLevel + 1);
-    const scenario = available[Math.floor(Math.random() * available.length)];
+    playSound('decision');
+    const available = roleScenarios.filter(s => 
+      s.level <= roleLevel + 1 && !completedRoleIds.has(s.id)
+    );
+    const pool = available.length > 0 ? available : roleScenarios.filter(s => s.level <= roleLevel + 1);
+    const scenario = pool[Math.floor(Math.random() * pool.length)];
     setCurrentScenario(scenario);
     setRoleChoice(null);
     setShowConsequence(false);
@@ -325,18 +580,36 @@ export default function FunPun() {
 
   const makeRoleChoice = (index: number) => {
     if (showConsequence) return;
+    playSound('click');
     setRoleChoice(index);
     setShowConsequence(true);
     
     if (currentScenario && index === currentScenario.best) {
-      setScore(s => s + 30);
-      toast.success('👏 Best decision! +30 points');
+      playSuccessMelody();
+      const points = currentScenario.level * 20;
+      setScore(s => s + points);
+      setCompletedRoleIds(prev => {
+        const next = new Set([...prev, currentScenario.id]);
+        localStorage.setItem(STORAGE_KEYS.completedRole, JSON.stringify([...next]));
+        return next;
+      });
+      
+      if (completedRoleIds.size > 0 && completedRoleIds.size % 3 === 0 && roleLevel < 5) {
+        setRoleLevel(l => l + 1);
+        playLevelUpMelody();
+        toast.success(`👔 Decision Level Up! Now Level ${roleLevel + 1}`);
+      } else {
+        toast.success(`👏 Best decision! +${points} points`);
+      }
     } else {
+      playSound('notification');
       toast.info('Consider the consequences carefully.');
     }
   };
 
-  // Daily Challenge State
+  // ============================================
+  // DAILY CHALLENGE STATE
+  // ============================================
   const [dailyChallenge, setDailyChallenge] = useState<typeof dailyChallengePool[0] | null>(null);
   const [dailyCompleted, setDailyCompleted] = useState(false);
 
@@ -353,6 +626,7 @@ export default function FunPun() {
     const todayKey = `funpun_daily_${new Date().toDateString()}`;
     localStorage.setItem(todayKey, 'true');
     setDailyCompleted(true);
+    playSuccessMelody();
     if (dailyChallenge) {
       setScore(s => s + dailyChallenge.points);
       setStreak(s => s + 1);
@@ -360,6 +634,9 @@ export default function FunPun() {
     toast.success(`🎯 Daily challenge complete! +${dailyChallenge?.points} points`);
   };
 
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <div className="space-y-4 pb-20">
       {/* Header */}
@@ -412,7 +689,12 @@ export default function FunPun() {
           return (
             <button
               key={mode.id}
-              onClick={() => { setActiveMode(mode.id); setIsPlaying(false); setCurrentChallenge(null); }}
+              onClick={() => { 
+                playSound('click');
+                setActiveMode(mode.id); 
+                setIsPlaying(false); 
+                setCurrentChallenge(null); 
+              }}
               className={cn(
                 "glass-card rounded-xl p-2 text-center transition-all hover:scale-105",
                 isActive && "ring-2 ring-primary shadow-lg"
@@ -445,14 +727,19 @@ export default function FunPun() {
                   <h3 className="text-lg font-bold">Random Discovery</h3>
                   <p className="text-sm text-muted-foreground max-w-xs mx-auto">
                     System randomly selects one challenge. No repetition until cycle complete.
+                    Difficulty adapts to your history.
                   </p>
+                  <div className="flex justify-center gap-4 text-xs text-muted-foreground">
+                    <span>📊 {randomChallenges.length} challenges</span>
+                    <span>✅ {completedIds.size} completed</span>
+                    <span>🔄 {incorrectIds.size} to retry</span>
+                  </div>
                   <Button onClick={startRandomChallenge} size="lg" className="gap-2">
                     <Play className="w-5 h-5" /> START
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Timer & Level */}
                   <div className="flex items-center justify-between">
                     <Badge className={getDifficultyColor(currentChallenge.level)}>
                       Level {currentChallenge.level}: {getDifficultyLabel(currentChallenge.level)}
@@ -466,16 +753,13 @@ export default function FunPun() {
                     </div>
                   </div>
 
-                  {/* Progress Bar */}
                   <Progress value={(timeLeft / currentChallenge.time) * 100} className="h-2" />
 
-                  {/* Challenge Card */}
                   <div className="bg-muted/30 rounded-xl p-6 text-center">
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">{currentChallenge.title}</h4>
                     <p className="text-lg font-semibold">{currentChallenge.instruction}</p>
                   </div>
 
-                  {/* Options */}
                   <div className="grid grid-cols-2 gap-3">
                     {currentChallenge.options.map((opt: string, i: number) => (
                       <Button
@@ -503,7 +787,6 @@ export default function FunPun() {
                     ))}
                   </div>
 
-                  {/* Result & Next */}
                   {showResult && (
                     <div className="flex justify-center pt-4">
                       <Button onClick={startRandomChallenge} className="gap-2">
@@ -518,71 +801,186 @@ export default function FunPun() {
 
           {/* Voice Interaction Mode */}
           {activeMode === 'voice' && (
-            <div className="space-y-4 text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mx-auto">
-                <Mic className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-lg font-bold">Text → Voice Training</h3>
-              <p className="text-sm text-muted-foreground">Improve clarity, rhythm, and delivery</p>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 py-4">
-                {['Learning', 'Performance', 'Mimic', 'Emotion'].map((mode) => (
-                  <Button key={mode} variant="outline" size="sm" className="text-xs">
-                    {mode}
+            <div className="space-y-4">
+              {!currentVoicePractice ? (
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mx-auto">
+                    <Mic className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold">Text → Voice Training</h3>
+                  <p className="text-sm text-muted-foreground">Improve clarity, rhythm, and delivery</p>
+                  
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-2">
+                    <span>Level {voiceLevel}</span>
+                    <span>•</span>
+                    <span>{completedVoiceIds.size} completed</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 py-2">
+                    {(['learning', 'performance', 'mimic', 'emotion'] as const).map((mode) => (
+                      <Button 
+                        key={mode} 
+                        variant={voiceMode === mode ? "default" : "outline"} 
+                        size="sm" 
+                        className="text-xs capitalize"
+                        onClick={() => setVoiceMode(mode)}
+                      >
+                        {mode}
+                      </Button>
+                    ))}
+                  </div>
+
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p><strong>Learning:</strong> Basic words & phrases</p>
+                    <p><strong>Performance:</strong> Clear delivery under time</p>
+                    <p><strong>Mimic:</strong> Repeat after system</p>
+                    <p><strong>Emotion:</strong> Tone-based delivery</p>
+                  </div>
+
+                  <Button onClick={startVoicePractice} size="lg" className="gap-2">
+                    <Play className="w-5 h-5" /> Start Practice
                   </Button>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary">Level {currentVoicePractice.level}</Badge>
+                    {isPlaying && (
+                      <div className="flex items-center gap-2">
+                        <Timer className="w-4 h-4" />
+                        <span className={cn("font-mono", timeLeft <= 5 && "text-red-500")}>{timeLeft}s</span>
+                      </div>
+                    )}
+                  </div>
 
-              <Card className="bg-muted/30">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Practice:</p>
-                  <p className="text-lg font-medium italic">
-                    "The quick brown fox jumps over the lazy dog."
-                  </p>
-                </CardContent>
-              </Card>
+                  <Card className="bg-muted/30">
+                    <CardContent className="p-6 text-center">
+                      <p className="text-xs text-muted-foreground mb-2 capitalize">{currentVoicePractice.mode} Mode</p>
+                      <p className="text-xl font-medium italic">"{currentVoicePractice.text}"</p>
+                      {currentVoicePractice.environment && (
+                        <p className="text-xs text-muted-foreground mt-2">🔊 Environment: {currentVoicePractice.environment}</p>
+                      )}
+                    </CardContent>
+                  </Card>
 
-              <Button size="lg" className="gap-2">
-                <Mic className="w-5 h-5" /> Start Practice
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Read clearly in under 10 seconds. Maintain steady pace.
-              </p>
+                  {voiceScore === null ? (
+                    <div className="flex justify-center gap-4">
+                      {!isRecording ? (
+                        <Button onClick={startRecording} size="lg" className="gap-2" disabled={!isPlaying}>
+                          <Mic className="w-5 h-5" /> Start Recording
+                        </Button>
+                      ) : (
+                        <Button onClick={stopRecording} size="lg" variant="destructive" className="gap-2 animate-pulse">
+                          <StopCircle className="w-5 h-5" /> Stop & Submit
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold">{voiceScore}/100</p>
+                        <p className="text-sm text-muted-foreground">
+                          {voiceScore >= 90 ? 'Excellent!' : voiceScore >= 80 ? 'Great job!' : voiceScore >= 70 ? 'Good effort!' : 'Keep practicing!'}
+                        </p>
+                      </div>
+                      <div className="flex justify-center">
+                        <Button onClick={() => { setCurrentVoicePractice(null); setVoiceScore(null); }} className="gap-2">
+                          <RefreshCw className="w-4 h-4" /> Next Practice
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* Imposter Game */}
           {activeMode === 'imposter' && (
-            <div className="space-y-4 text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mx-auto">
-                <Brain className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-lg font-bold">Guess the Imposter</h3>
-              <p className="text-sm text-muted-foreground">Find the element that doesn't belong</p>
-              
-              <div className="grid grid-cols-2 gap-3 py-4 max-w-xs mx-auto">
-                {imposterSets[0].items.map((item, i) => (
-                  <Button 
-                    key={i} 
-                    variant="outline" 
-                    className="h-16 text-lg hover:scale-105 transition-all"
-                    onClick={() => {
-                      if (i === imposterSets[0].imposter) {
-                        toast.success('🎯 Correct! You found the imposter!');
-                        setScore(s => s + 20);
-                      } else {
-                        toast.error('❌ Not the imposter. Try again!');
-                      }
-                    }}
-                  >
-                    {item}
+            <div className="space-y-4">
+              {!currentImposterSet ? (
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mx-auto">
+                    <Brain className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold">Guess the Imposter</h3>
+                  <p className="text-sm text-muted-foreground">Find the element that doesn't belong based on logic</p>
+                  
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <span>Level {imposterLevel}</span>
+                    <span>•</span>
+                    <span>{completedImposterIds.size}/{imposterSets.length} completed</span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p><strong>Level 1-2:</strong> No timer</p>
+                    <p><strong>Level 3+:</strong> Timer enabled</p>
+                    <p><strong>Level 4+:</strong> Hidden rules</p>
+                  </div>
+
+                  <Button onClick={startImposterGame} size="lg" className="gap-2">
+                    <Play className="w-5 h-5" /> START
                   </Button>
-                ))}
-              </div>
-              
-              <p className="text-xs text-muted-foreground">
-                One item breaks the functional rule. Identify it.
-              </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary">Level {currentImposterSet.level}</Badge>
+                    {imposterTimeLeft > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Timer className="w-4 h-4" />
+                        <span className={cn("font-mono", imposterTimeLeft <= 5 && "text-red-500")}>{imposterTimeLeft}s</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-center text-sm text-muted-foreground">
+                    One item breaks the rule. Identify the imposter.
+                  </p>
+
+                  {currentImposterSet.level >= 3 && !showImposterResult && (
+                    <Progress value={(imposterTimeLeft / (15 + currentImposterSet.level * 3)) * 100} className="h-2" />
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 py-4 max-w-sm mx-auto">
+                    {currentImposterSet.items.map((item, i) => (
+                      <Button 
+                        key={i} 
+                        variant={showImposterResult
+                          ? i === currentImposterSet.imposter
+                            ? "default"
+                            : imposterSelected === i
+                              ? "destructive"
+                              : "outline"
+                          : "outline"
+                        }
+                        className={cn(
+                          "h-16 text-lg transition-all",
+                          showImposterResult && i === currentImposterSet.imposter && "ring-2 ring-green-500",
+                          !showImposterResult && "hover:scale-105"
+                        )}
+                        onClick={() => selectImposter(i)}
+                        disabled={showImposterResult}
+                      >
+                        {item}
+                      </Button>
+                    ))}
+                  </div>
+
+                  {showImposterResult && (
+                    <div className="space-y-3">
+                      <p className="text-center text-sm">
+                        <strong>Rule:</strong> {currentImposterSet.rule}
+                      </p>
+                      <div className="flex justify-center">
+                        <Button onClick={() => setCurrentImposterSet(null)} className="gap-2">
+                          <RefreshCw className="w-4 h-4" /> Next Challenge
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -594,8 +992,8 @@ export default function FunPun() {
                 <Badge variant="secondary">{stressScore} pts</Badge>
               </div>
               
-              <div className="flex gap-2 justify-center">
-                {(['free', 'target', 'precision'] as const).map((mode) => (
+              <div className="flex flex-wrap gap-2 justify-center">
+                {(['free', 'target', 'precision', 'endurance'] as const).map((mode) => (
                   <Button 
                     key={mode} 
                     variant={stressMode === mode ? "default" : "outline"} 
@@ -608,19 +1006,22 @@ export default function FunPun() {
                 ))}
               </div>
 
-              {stressMode === 'target' && targetObject && (
-                <p className="text-center text-sm">
-                  Target: <span className="text-lg">{stressObjects.find(o => o.id === targetObject)?.emoji}</span>
-                </p>
-              )}
+              <div className="text-xs text-muted-foreground text-center">
+                {stressMode === 'free' && 'Free interaction - break anything!'}
+                {stressMode === 'target' && targetObject && (
+                  <span>Target: <span className="text-2xl">{stressObjects.find(o => o.id === targetObject)?.emoji}</span></span>
+                )}
+                {stressMode === 'precision' && <span>Actions left: {actionsLeft}</span>}
+                {stressMode === 'endurance' && <span>Time: {stressTimeLeft}s</span>}
+              </div>
 
-              <div className="grid grid-cols-3 gap-4 py-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 py-4">
                 {stressObjects.map((obj) => (
                   <button
                     key={obj.id}
                     onClick={() => handleBreakObject(obj.id)}
                     className={cn(
-                      "aspect-square rounded-xl bg-muted/30 flex items-center justify-center text-4xl transition-all",
+                      "aspect-square rounded-xl bg-muted/30 flex flex-col items-center justify-center text-3xl sm:text-4xl transition-all relative",
                       brokenObjects.has(obj.id) 
                         ? "opacity-30 scale-75" 
                         : "hover:scale-110 hover:bg-muted/50 active:scale-90",
@@ -629,6 +1030,7 @@ export default function FunPun() {
                     disabled={brokenObjects.has(obj.id)}
                   >
                     {brokenObjects.has(obj.id) ? '💥' : obj.emoji}
+                    <span className="text-[8px] text-muted-foreground mt-1">{obj.name}</span>
                   </button>
                 ))}
               </div>
@@ -638,42 +1040,110 @@ export default function FunPun() {
                   <RefreshCw className="w-4 h-4" /> Reset Room
                 </Button>
               </div>
-              
-              <p className="text-xs text-muted-foreground text-center">
-                {stressMode === 'free' ? 'Free interaction - break anything!' : 
-                 stressMode === 'target' ? 'Break only the marked target.' :
-                 'Limited actions - accuracy matters.'}
-              </p>
             </div>
           )}
 
           {/* Draw & Create */}
           {activeMode === 'draw' && (
-            <div className="space-y-4 text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center mx-auto">
-                <Paintbrush className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-lg font-bold">Draw & Create</h3>
-              <p className="text-sm text-muted-foreground">Creative problem-solving challenges</p>
-              
-              <Card className="bg-muted/30">
-                <CardContent className="p-4">
-                  <Badge className="mb-2">Level {drawChallenges[0].level}</Badge>
-                  <p className="text-lg font-medium">{drawChallenges[0].instruction}</p>
-                  <div className="flex justify-center gap-4 mt-3 text-xs text-muted-foreground">
-                    <span>⏱️ {drawChallenges[0].time}s</span>
-                    <span>🖌️ {drawChallenges[0].tools} tools</span>
+            <div className="space-y-4">
+              {!currentDrawChallenge ? (
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center mx-auto">
+                    <Paintbrush className="w-8 h-8 text-white" />
                   </div>
-                </CardContent>
-              </Card>
+                  <h3 className="text-lg font-bold">Draw & Create</h3>
+                  <p className="text-sm text-muted-foreground">Creative problem-solving challenges</p>
+                  
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <span>Level {drawLevel}</span>
+                    <span>•</span>
+                    <span>{completedDrawIds.size} completed</span>
+                  </div>
 
-              <div className="aspect-video bg-muted/20 rounded-xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
-                <p className="text-muted-foreground text-sm">Canvas Area</p>
-              </div>
+                  <Button onClick={startDrawChallenge} size="lg" className="gap-2">
+                    <Play className="w-5 h-5" /> Start Challenge
+                  </Button>
+                </div>
+              ) : showPreview ? (
+                <div className="text-center py-8 space-y-4">
+                  <p className="text-sm text-muted-foreground">Memorize this pattern:</p>
+                  <p className="text-6xl">{currentDrawChallenge.preview}</p>
+                  <p className="text-xs text-muted-foreground animate-pulse">Starting in 3 seconds...</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary">Level {currentDrawChallenge.level}</Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs">Undos: {undosLeft}</span>
+                      <Timer className="w-4 h-4" />
+                      <span className={cn("font-mono text-sm", drawTimeLeft <= 10 && "text-red-500")}>{drawTimeLeft}s</span>
+                    </div>
+                  </div>
 
-              <Button size="lg" className="gap-2">
-                <Play className="w-5 h-5" /> Start Drawing
-              </Button>
+                  <div className="bg-muted/30 rounded-lg p-2 text-center">
+                    <p className="text-sm font-medium">{currentDrawChallenge.instruction}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Tools: {currentDrawChallenge.tools} | 
+                      {currentDrawChallenge.colors && ` Colors: ${currentDrawChallenge.colors} |`}
+                      Time: {currentDrawChallenge.time}s
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 justify-center flex-wrap">
+                    <div className="flex gap-1">
+                      {['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00'].slice(0, currentDrawChallenge.colors || 5).map(color => (
+                        <button
+                          key={color}
+                          onClick={() => setDrawColor(color)}
+                          className={cn(
+                            "w-6 h-6 rounded-full border-2",
+                            drawColor === color ? "border-primary" : "border-transparent"
+                          )}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex gap-1">
+                      {[2, 4, 8].map(size => (
+                        <button
+                          key={size}
+                          onClick={() => setBrushSize(size)}
+                          className={cn(
+                            "w-8 h-8 rounded border flex items-center justify-center",
+                            brushSize === size ? "border-primary bg-primary/10" : "border-muted"
+                          )}
+                        >
+                          <div className="rounded-full bg-foreground" style={{ width: size * 2, height: size * 2 }} />
+                        </button>
+                      ))}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={undoDraw} disabled={undosLeft <= 0}>
+                      <Undo2 className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={clearCanvas}>
+                      <Eraser className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <canvas
+                    ref={canvasRef}
+                    width={300}
+                    height={200}
+                    className="border rounded-lg bg-white w-full max-w-sm mx-auto cursor-crosshair touch-none"
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                  />
+
+                  <div className="flex justify-center gap-2">
+                    <Button onClick={submitDrawing} className="gap-2">
+                      <Send className="w-4 h-4" /> Submit Drawing
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -689,6 +1159,11 @@ export default function FunPun() {
                   <p className="text-sm text-muted-foreground max-w-xs mx-auto">
                     Make decisions as different roles. Your choices have consequences.
                   </p>
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <span>Level {roleLevel}</span>
+                    <span>•</span>
+                    <span>{completedRoleIds.size} completed</span>
+                  </div>
                   <Button onClick={startRoleChallenge} size="lg" className="gap-2">
                     <Play className="w-5 h-5" /> START
                   </Button>
@@ -739,7 +1214,7 @@ export default function FunPun() {
 
                   {showConsequence && (
                     <div className="flex justify-center pt-4">
-                      <Button onClick={startRoleChallenge} className="gap-2">
+                      <Button onClick={() => setCurrentScenario(null)} className="gap-2">
                         <ArrowRight className="w-4 h-4" /> Next Scenario
                       </Button>
                     </div>
@@ -756,7 +1231,7 @@ export default function FunPun() {
                 <Calendar className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-lg font-bold">Daily Challenge</h3>
-              <p className="text-sm text-muted-foreground">One meaningful task per day</p>
+              <p className="text-sm text-muted-foreground">One meaningful task per day. Personal progress only.</p>
 
               <Card className={cn(
                 "bg-muted/30",
@@ -765,9 +1240,11 @@ export default function FunPun() {
                 <CardContent className="p-6">
                   <Badge className="mb-3 capitalize">{dailyChallenge.type}</Badge>
                   <p className="text-lg font-medium">{dailyChallenge.task}</p>
-                  <div className="flex justify-center gap-2 mt-4">
-                    <Star className="w-4 h-4 text-yellow-500" />
-                    <span className="text-sm">{dailyChallenge.points} points</span>
+                  <div className="flex justify-center gap-4 mt-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Star className="w-4 h-4 text-yellow-500" /> {dailyChallenge.points} pts
+                    </span>
+                    <span className="capitalize">{dailyChallenge.difficulty}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -784,44 +1261,11 @@ export default function FunPun() {
                   <Check className="w-5 h-5" /> Mark Complete
                 </Button>
               )}
-
-              <div className="pt-4">
-                <p className="text-sm font-medium">Current Streak: {streak} days 🔥</p>
-                <p className="text-xs text-muted-foreground">Consistency is rewarded with depth, not just points</p>
-              </div>
             </div>
           )}
 
         </CardContent>
       </Card>
-
-      {/* Stats Summary */}
-      <div className="grid grid-cols-4 gap-2">
-        <Card className="glass-card">
-          <CardContent className="p-2 text-center">
-            <p className="text-lg font-bold text-primary">{completedIds.size}</p>
-            <p className="text-[9px] text-muted-foreground">Completed</p>
-          </CardContent>
-        </Card>
-        <Card className="glass-card">
-          <CardContent className="p-2 text-center">
-            <p className="text-lg font-bold text-orange-500">{incorrectIds.size}</p>
-            <p className="text-[9px] text-muted-foreground">To Retry</p>
-          </CardContent>
-        </Card>
-        <Card className="glass-card">
-          <CardContent className="p-2 text-center">
-            <p className="text-lg font-bold text-green-500">{streak}</p>
-            <p className="text-[9px] text-muted-foreground">Streak</p>
-          </CardContent>
-        </Card>
-        <Card className="glass-card">
-          <CardContent className="p-2 text-center">
-            <p className="text-lg font-bold text-purple-500">Lv.{userLevel}</p>
-            <p className="text-[9px] text-muted-foreground">Level</p>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
