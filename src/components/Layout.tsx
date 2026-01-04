@@ -20,7 +20,7 @@ const menuItems = [
   { title: 'Home', url: '/', emoji: '🏠', desc: 'Social + Explore' },
   { title: 'Education', url: '/education', emoji: '📚', desc: 'Notes, Docs, Study Hub' },
   { title: 'Messages', url: '/chat', emoji: '💬', desc: 'Chat + VC + Groups' },
-  { title: 'Creativity', url: '/creativity', emoji: '🎨', desc: 'Quotes/Ideas/Moods' },
+  { title: 'FunPun', url: '/funpun', emoji: '🎮', desc: 'Games for Fresh Mind' },
   { title: 'Adventure', url: '/music-adventure', emoji: '🏔️', desc: 'Challenges + Discover + Travel' },
   { title: 'Marketplace', url: '/marketplace', emoji: '🛒', desc: 'Buy/Sell/Local Business' },
   { title: 'Settings', url: '/settings', emoji: '⚙️', desc: 'Controls + Privacy' },
