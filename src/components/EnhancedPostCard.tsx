@@ -74,6 +74,8 @@ export function EnhancedPostCard({
   const [isMuted, setIsMuted] = useState(globalVideoMuted);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
+  const [selectedReaction, setSelectedReaction] = useState<string | null>(null);
   
   // Get all media URLs
   const mediaUrls = post.media_urls?.length ? post.media_urls : (post.file_url ? [post.file_url] : []);
@@ -453,15 +455,50 @@ export function EnhancedPostCard({
           </DialogContent>
         </Dialog>
 
-        {/* Action buttons */}
-        <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/50 mt-auto">
+        {/* Action buttons with reactions */}
+        <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/50 mt-auto relative">
+          {/* Reactions popup */}
+          {showReactions && (
+            <div className="absolute bottom-12 left-2 bg-card/95 backdrop-blur-sm border border-border rounded-full px-2 py-1 flex gap-1 shadow-lg animate-scale-in z-10">
+              {[
+                { emoji: '👍', label: 'like' },
+                { emoji: '❤️', label: 'love' },
+                { emoji: '👎', label: 'dislike' },
+                { emoji: '😂', label: 'haha' },
+                { emoji: '😢', label: 'sad' },
+              ].map((reaction) => (
+                <button
+                  key={reaction.label}
+                  onClick={() => {
+                    setSelectedReaction(reaction.label);
+                    onToggleLike(post.id);
+                    setShowReactions(false);
+                  }}
+                  className="text-lg hover:scale-125 transition-transform p-1"
+                  title={reaction.label}
+                >
+                  {reaction.emoji}
+                </button>
+              ))}
+            </div>
+          )}
+          
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onToggleLike(post.id)}
+            onMouseEnter={() => setShowReactions(true)}
+            onMouseLeave={() => setTimeout(() => setShowReactions(false), 1000)}
             className={`flex-1 gap-1 h-8 ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
           >
-            <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
+            {isLiked ? (
+              selectedReaction === 'love' ? '❤️' : 
+              selectedReaction === 'dislike' ? '👎' :
+              selectedReaction === 'haha' ? '😂' :
+              selectedReaction === 'sad' ? '😢' : '👍'
+            ) : (
+              <Heart className="w-4 h-4" />
+            )}
             <span className="text-xs">{likesCount > 0 ? likesCount : 'Like'}</span>
           </Button>
           
