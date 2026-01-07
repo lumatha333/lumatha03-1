@@ -19,6 +19,7 @@ import {
 
 // Game modes configuration
 const gameModes = [
+  { id: 'stats', name: 'Stats', icon: Trophy, color: 'from-yellow-500 to-amber-500', desc: 'View your performance stats' },
   { id: 'random', name: 'Random Discovery', icon: Shuffle, color: 'from-violet-500 to-purple-600', desc: 'Random challenge from all sections' },
   { id: 'voice', name: 'Text → Voice', icon: Mic, color: 'from-blue-500 to-cyan-500', desc: 'Voice clarity & delivery training' },
   { id: 'imposter', name: 'Guess Imposter', icon: Brain, color: 'from-amber-500 to-orange-500', desc: 'Logic-based detection game' },
@@ -472,8 +473,10 @@ export default function FunPun() {
         if (drawHistoryRef.current.length > 10) drawHistoryRef.current.shift();
         
         const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
         ctx.beginPath();
-        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.moveTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
       }
     }
   };
@@ -485,7 +488,9 @@ export default function FunPun() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         const rect = canvas.getBoundingClientRect();
-        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        ctx.lineTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
         ctx.strokeStyle = drawColor;
         ctx.lineWidth = brushSize;
         ctx.lineCap = 'round';
@@ -495,6 +500,53 @@ export default function FunPun() {
   };
 
   const handleCanvasMouseUp = () => {
+    setIsDrawing(false);
+  };
+
+  // Touch event handlers for mobile drawing
+  const handleCanvasTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!drawPlaying) return;
+    e.preventDefault();
+    playSound('pencil');
+    setIsDrawing(true);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        drawHistoryRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        if (drawHistoryRef.current.length > 10) drawHistoryRef.current.shift();
+        
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        ctx.beginPath();
+        ctx.moveTo((touch.clientX - rect.left) * scaleX, (touch.clientY - rect.top) * scaleY);
+      }
+    }
+  };
+
+  const handleCanvasTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !drawPlaying) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        ctx.lineTo((touch.clientX - rect.left) * scaleX, (touch.clientY - rect.top) * scaleY);
+        ctx.strokeStyle = drawColor;
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+    }
+  };
+
+  const handleCanvasTouchEnd = () => {
     setIsDrawing(false);
   };
 
@@ -715,6 +767,204 @@ export default function FunPun() {
       {/* Active Game Mode Content */}
       <Card className="glass-card overflow-hidden min-h-[300px]">
         <CardContent className="p-4">
+          
+          {/* Stats Dashboard */}
+          {activeMode === 'stats' && (
+            <div className="space-y-4">
+              <div className="text-center py-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-500 to-amber-500 flex items-center justify-center mx-auto mb-3">
+                  <Trophy className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-lg font-bold">Performance Stats</h3>
+                <p className="text-sm text-muted-foreground">Track your progress across all games</p>
+              </div>
+
+              {/* Overall Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Card className="bg-gradient-to-br from-violet-500/10 to-purple-500/10 border-violet-500/20">
+                  <CardContent className="p-3 text-center">
+                    <Trophy className="w-6 h-6 mx-auto mb-1 text-violet-500" />
+                    <p className="text-2xl font-bold">{score}</p>
+                    <p className="text-[10px] text-muted-foreground">Total Points</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20">
+                  <CardContent className="p-3 text-center">
+                    <Zap className="w-6 h-6 mx-auto mb-1 text-amber-500" />
+                    <p className="text-2xl font-bold">{streak}</p>
+                    <p className="text-[10px] text-muted-foreground">Day Streak</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
+                  <CardContent className="p-3 text-center">
+                    <Check className="w-6 h-6 mx-auto mb-1 text-green-500" />
+                    <p className="text-2xl font-bold">{completedIds.size}</p>
+                    <p className="text-[10px] text-muted-foreground">Completed</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
+                  <CardContent className="p-3 text-center">
+                    <Star className="w-6 h-6 mx-auto mb-1 text-blue-500" />
+                    <p className="text-2xl font-bold">{userLevel}</p>
+                    <p className="text-[10px] text-muted-foreground">Current Level</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Game-specific Stats */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold">Game Progress</h4>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                        <Shuffle className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Random Discovery</p>
+                        <p className="text-[10px] text-muted-foreground">Level {userLevel}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">{completedIds.size}/{randomChallenges.length}</p>
+                      <Progress value={(completedIds.size / randomChallenges.length) * 100} className="w-16 h-1" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                        <Mic className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Voice Training</p>
+                        <p className="text-[10px] text-muted-foreground">Level {voiceLevel}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">{completedVoiceIds.size}/{voicePractices.length}</p>
+                      <Progress value={(completedVoiceIds.size / voicePractices.length) * 100} className="w-16 h-1" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+                        <Brain className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Guess Imposter</p>
+                        <p className="text-[10px] text-muted-foreground">Level {imposterLevel}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">{completedImposterIds.size}/{imposterSets.length}</p>
+                      <Progress value={(completedImposterIds.size / imposterSets.length) * 100} className="w-16 h-1" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                        <Paintbrush className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Draw & Create</p>
+                        <p className="text-[10px] text-muted-foreground">Level {drawLevel}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">{completedDrawIds.size}/{drawChallenges.length}</p>
+                      <Progress value={(completedDrawIds.size / drawChallenges.length) * 100} className="w-16 h-1" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center">
+                        <Users className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Role Decision</p>
+                        <p className="text-[10px] text-muted-foreground">Level {roleLevel}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">{completedRoleIds.size}/{roleScenarios.length}</p>
+                      <Progress value={(completedRoleIds.size / roleScenarios.length) * 100} className="w-16 h-1" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Achievements */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold">Achievements</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className={cn(
+                    "p-2 rounded-lg text-center border",
+                    score >= 100 ? "bg-yellow-500/10 border-yellow-500/30" : "bg-muted/20 border-muted"
+                  )}>
+                    <span className="text-xl">{score >= 100 ? '🏆' : '🔒'}</span>
+                    <p className="text-[9px] mt-1">100 Points</p>
+                  </div>
+                  <div className={cn(
+                    "p-2 rounded-lg text-center border",
+                    score >= 500 ? "bg-yellow-500/10 border-yellow-500/30" : "bg-muted/20 border-muted"
+                  )}>
+                    <span className="text-xl">{score >= 500 ? '⭐' : '🔒'}</span>
+                    <p className="text-[9px] mt-1">500 Points</p>
+                  </div>
+                  <div className={cn(
+                    "p-2 rounded-lg text-center border",
+                    score >= 1000 ? "bg-yellow-500/10 border-yellow-500/30" : "bg-muted/20 border-muted"
+                  )}>
+                    <span className="text-xl">{score >= 1000 ? '👑' : '🔒'}</span>
+                    <p className="text-[9px] mt-1">1000 Points</p>
+                  </div>
+                  <div className={cn(
+                    "p-2 rounded-lg text-center border",
+                    streak >= 7 ? "bg-green-500/10 border-green-500/30" : "bg-muted/20 border-muted"
+                  )}>
+                    <span className="text-xl">{streak >= 7 ? '🔥' : '🔒'}</span>
+                    <p className="text-[9px] mt-1">7 Day Streak</p>
+                  </div>
+                  <div className={cn(
+                    "p-2 rounded-lg text-center border",
+                    userLevel >= 3 ? "bg-blue-500/10 border-blue-500/30" : "bg-muted/20 border-muted"
+                  )}>
+                    <span className="text-xl">{userLevel >= 3 ? '🎯' : '🔒'}</span>
+                    <p className="text-[9px] mt-1">Level 3</p>
+                  </div>
+                  <div className={cn(
+                    "p-2 rounded-lg text-center border",
+                    userLevel >= 5 ? "bg-purple-500/10 border-purple-500/30" : "bg-muted/20 border-muted"
+                  )}>
+                    <span className="text-xl">{userLevel >= 5 ? '💎' : '🔒'}</span>
+                    <p className="text-[9px] mt-1">Master</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Reset Progress */}
+              <div className="pt-4 border-t border-border/50">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    if (confirm('Reset all progress? This cannot be undone.')) {
+                      Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+                      window.location.reload();
+                    }
+                  }}
+                >
+                  Reset All Progress
+                </Button>
+              </div>
+            </div>
+          )}
           
           {/* Random Discovery Mode */}
           {activeMode === 'random' && (
@@ -1135,6 +1385,9 @@ export default function FunPun() {
                     onMouseMove={handleCanvasMouseMove}
                     onMouseUp={handleCanvasMouseUp}
                     onMouseLeave={handleCanvasMouseUp}
+                    onTouchStart={handleCanvasTouchStart}
+                    onTouchMove={handleCanvasTouchMove}
+                    onTouchEnd={handleCanvasTouchEnd}
                   />
 
                   <div className="flex justify-center gap-2">

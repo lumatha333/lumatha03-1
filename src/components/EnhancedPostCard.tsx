@@ -455,50 +455,15 @@ export function EnhancedPostCard({
           </DialogContent>
         </Dialog>
 
-        {/* Action buttons with reactions */}
+        {/* Action buttons - Heart only */}
         <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/50 mt-auto relative">
-          {/* Reactions popup */}
-          {showReactions && (
-            <div className="absolute bottom-12 left-2 bg-card/95 backdrop-blur-sm border border-border rounded-full px-2 py-1 flex gap-1 shadow-lg animate-scale-in z-10">
-              {[
-                { emoji: '👍', label: 'like' },
-                { emoji: '❤️', label: 'love' },
-                { emoji: '👎', label: 'dislike' },
-                { emoji: '😂', label: 'haha' },
-                { emoji: '😢', label: 'sad' },
-              ].map((reaction) => (
-                <button
-                  key={reaction.label}
-                  onClick={() => {
-                    setSelectedReaction(reaction.label);
-                    onToggleLike(post.id);
-                    setShowReactions(false);
-                  }}
-                  className="text-lg hover:scale-125 transition-transform p-1"
-                  title={reaction.label}
-                >
-                  {reaction.emoji}
-                </button>
-              ))}
-            </div>
-          )}
-          
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onToggleLike(post.id)}
-            onMouseEnter={() => setShowReactions(true)}
-            onMouseLeave={() => setTimeout(() => setShowReactions(false), 1000)}
             className={`flex-1 gap-1 h-8 ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
           >
-            {isLiked ? (
-              selectedReaction === 'love' ? '❤️' : 
-              selectedReaction === 'dislike' ? '👎' :
-              selectedReaction === 'haha' ? '😂' :
-              selectedReaction === 'sad' ? '😢' : '👍'
-            ) : (
-              <Heart className="w-4 h-4" />
-            )}
+            <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
             <span className="text-xs">{likesCount > 0 ? likesCount : 'Like'}</span>
           </Button>
           
