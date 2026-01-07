@@ -16,6 +16,7 @@ import Private from '@/pages/Private';
 import Saved from '@/pages/Saved';
 import Create from '@/pages/Create';
 import FunPun from '@/pages/FunPun';
+import Notifications from '@/pages/Notifications';
 import NotFound from '@/pages/NotFound';
 
 export default function Index() {
@@ -40,6 +41,7 @@ export default function Index() {
               <Route path="/saved" element={<Saved />} />
               <Route path="/create" element={<Create />} />
               <Route path="/funpun" element={<FunPun />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>

@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Crown, Sun, Moon, Menu } from 'lucide-react';
@@ -7,7 +7,6 @@ import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import logo from '@/assets/logo.png';
-import { NotificationBell } from './NotificationBell';
 import { DesktopMessagesPanel } from './DesktopMessagesPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -94,6 +93,11 @@ function LayoutContent({ children }: LayoutProps) {
     return (saved as 'light' | 'dark') || 'dark';
   });
   const [isAuthPage, setIsAuthPage] = useState(false);
+  
+  // Scroll hide/show state for Facebook-like behavior
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const ticking = useRef(false);
 
   useEffect(() => {
     setIsAuthPage(location.pathname === '/auth');
@@ -103,6 +107,43 @@ function LayoutContent({ children }: LayoutProps) {
   useEffect(() => {
     if (isMobile) setOpen(false);
   }, [location.pathname, isMobile]);
+
+  // Facebook-style scroll behavior
+  const handleScroll = useCallback(() => {
+    const currentScrollY = window.scrollY;
+    const scrollDiff = currentScrollY - lastScrollY.current;
+    
+    // Only trigger on significant scroll (>5px) to prevent jitter
+    if (Math.abs(scrollDiff) < 5) return;
+    
+    if (currentScrollY < 50) {
+      // Always show at top
+      setHeaderVisible(true);
+    } else if (scrollDiff > 0 && currentScrollY > 50) {
+      // Scrolling down - hide header
+      setHeaderVisible(false);
+    } else if (scrollDiff < 0) {
+      // Scrolling up - show header
+      setHeaderVisible(true);
+    }
+    
+    lastScrollY.current = currentScrollY;
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (!ticking.current) {
+        window.requestAnimationFrame(() => {
+          handleScroll();
+          ticking.current = false;
+        });
+        ticking.current = true;
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [handleScroll]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -152,8 +193,20 @@ function LayoutContent({ children }: LayoutProps) {
     setOpen(false);
   };
 
+  // Check if we're in chat view (full screen, no header)
+  const isFullScreenPage = location.pathname.startsWith('/chat/') && location.pathname !== '/chat';
+
   if (isAuthPage) {
     return <>{children}</>;
+  }
+
+  if (isFullScreenPage) {
+    return (
+      <div className="min-h-screen w-full relative">
+        <BackgroundOrnaments />
+        {children}
+      </div>
+    );
   }
 
   return (
@@ -205,8 +258,12 @@ function LayoutContent({ children }: LayoutProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
-        {/* Header */}
-        <header className="sticky top-0 z-40 glass-card border-b border-border px-2 py-1.5">
+        {/* Header - Facebook-style hide/show on scroll */}
+        <header 
+          className={`sticky z-40 glass-card border-b border-border px-2 py-1.5 transition-all duration-300 ${
+            headerVisible ? 'top-0 opacity-100 translate-y-0' : '-top-16 opacity-0 -translate-y-full'
+          }`}
+        >
           <div className="flex items-center justify-between gap-2">
             {/* Left side - Mobile sidebar trigger + Logo centered on mobile */}
             <div className="flex items-center gap-2">
@@ -231,9 +288,8 @@ function LayoutContent({ children }: LayoutProps) {
               </Link>
             )}
 
-            {/* Right side - Notifications + Theme */}
+            {/* Right side - Theme toggle only (removed notifications - moved to bottom nav) */}
             <div className="flex items-center gap-1">
-              {user && <NotificationBell />}
               <Button 
                 variant="ghost" 
                 size="icon" 

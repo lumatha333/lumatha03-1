@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LazyImage } from '@/components/LazyImage';
 import { CommentsDialog } from '@/components/CommentsDialog';
+import { ShareDialog } from '@/components/ShareDialog';
 import { 
   Star, MoreVertical, Copy, Edit, Trash2, Heart, X, ChevronLeft, ChevronRight, 
   Play, MessageCircle, Share2, Download, UserPlus, UserMinus, VolumeX, Volume2,
@@ -71,6 +72,7 @@ export function EnhancedPostCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content || '');
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(globalVideoMuted);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -205,17 +207,8 @@ export function EnhancedPostCard({
     setCurrentMediaIndex((prev) => (prev - 1 + mediaUrls.length) % mediaUrls.length);
   };
 
-  const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: post.title, text: post.content || '', url: window.location.href });
-      } else {
-        navigator.clipboard.writeText(window.location.href);
-        toast.success("Link copied!");
-      }
-    } catch (err) {
-      console.error('Share failed:', err);
-    }
+  const handleShare = () => {
+    setShareOpen(true);
   };
 
   const toggleMute = (e: React.MouseEvent) => {
@@ -504,6 +497,15 @@ export function EnhancedPostCard({
         onOpenChange={setCommentsOpen}
         postId={post.id}
         postTitle={post.title}
+      />
+
+      {/* Share Dialog */}
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        postId={post.id}
+        postTitle={post.title}
+        postContent={post.content || undefined}
       />
     </>
   );
