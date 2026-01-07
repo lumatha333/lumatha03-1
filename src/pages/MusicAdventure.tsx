@@ -594,6 +594,10 @@ export default function MusicAdventure() {
   const [lovedPlaces, setLovedPlaces] = useState<Set<string>>(new Set());
   const [travelSearch, setTravelSearch] = useState('');
   
+  // Leaderboard States
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  
   // Points calculation
   const systemPoints = [...completedSystemChallenges].reduce((acc, id) => {
     const c = systemChallenges.find(ch => ch.id === id);
@@ -605,7 +609,8 @@ export default function MusicAdventure() {
 
   useEffect(() => {
     loadData();
-  }, [user]);
+    if (activeTab === 'ranking') loadLeaderboard();
+  }, [user, activeTab]);
 
   const loadData = async () => {
     if (!user) return;
@@ -634,6 +639,62 @@ export default function MusicAdventure() {
       .select('place_id')
       .eq('user_id', user.id);
     if (loveData) setLovedPlaces(new Set(loveData.map(l => l.place_id)));
+  };
+
+  // Load Leaderboard
+  const loadLeaderboard = async () => {
+    setLoadingLeaderboard(true);
+    try {
+      // Get all users with their visit counts
+      const { data: visitsData } = await supabase
+        .from('discover_visits')
+        .select('user_id');
+      
+      // Get all profiles
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name, avatar_url');
+      
+      if (!profiles) {
+        setLeaderboard([]);
+        return;
+      }
+
+      // Count visits per user
+      const visitCounts: Record<string, number> = {};
+      visitsData?.forEach(v => {
+        visitCounts[v.user_id] = (visitCounts[v.user_id] || 0) + 1;
+      });
+
+      // Get challenge completions from user_points table
+      const { data: pointsData } = await supabase
+        .from('user_points')
+        .select('user_id, total_points');
+
+      const pointsMap: Record<string, number> = {};
+      pointsData?.forEach(p => {
+        pointsMap[p.user_id] = p.total_points;
+      });
+
+      // Create leaderboard entries
+      const leaderboardData = profiles.map(profile => ({
+        id: profile.id,
+        name: profile.name,
+        avatar_url: profile.avatar_url,
+        discoverPoints: visitCounts[profile.id] || 0,
+        totalPoints: (pointsMap[profile.id] || 0) + (visitCounts[profile.id] || 0),
+        isCurrentUser: profile.id === user?.id
+      }))
+      .filter(entry => entry.totalPoints > 0)
+      .sort((a, b) => b.totalPoints - a.totalPoints)
+      .slice(0, 50);
+
+      setLeaderboard(leaderboardData);
+    } catch (error) {
+      console.error('Failed to load leaderboard:', error);
+    } finally {
+      setLoadingLeaderboard(false);
+    }
   };
 
   // Challenge Functions
@@ -819,6 +880,10 @@ export default function MusicAdventure() {
           <TabsTrigger value="travel" className="gap-1.5 flex-1 text-xs md:text-sm">
             <Map className="w-3.5 h-3.5 md:w-4 md:h-4" />
             Travel
+          </TabsTrigger>
+          <TabsTrigger value="ranking" className="gap-1.5 flex-1 text-xs md:text-sm">
+            <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            Ranking
           </TabsTrigger>
         </TabsList>
 
@@ -1163,6 +1228,115 @@ export default function MusicAdventure() {
               })}
             </div>
           </ScrollArea>
+        </TabsContent>
+
+        {/* RANKING TAB */}
+        <TabsContent value="ranking" className="space-y-4">
+          <Card className="glass-card">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-yellow-500" />
+                  Adventure Leaderboard
+                </h3>
+                <Button size="sm" variant="outline" onClick={loadLeaderboard} disabled={loadingLeaderboard}>
+                  {loadingLeaderboard ? 'Loading...' : 'Refresh'}
+                </Button>
+              </div>
+
+              {loadingLeaderboard ? (
+                <div className="text-center py-8 text-muted-foreground animate-pulse">
+                  Loading rankings...
+                </div>
+              ) : leaderboard.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No rankings yet. Complete challenges to appear here!
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {leaderboard.map((entry, index) => (
+                    <div 
+                      key={entry.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                        entry.isCurrentUser 
+                          ? 'bg-primary/10 border border-primary/30' 
+                          : 'bg-muted/30 hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        index === 0 ? 'bg-yellow-500 text-black' :
+                        index === 1 ? 'bg-gray-300 text-black' :
+                        index === 2 ? 'bg-amber-600 text-white' :
+                        'bg-muted text-foreground'
+                      }`}>
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                      </div>
+                      
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                        {entry.avatar_url ? (
+                          <img src={entry.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-lg font-bold">{entry.name?.charAt(0)?.toUpperCase()}</span>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate flex items-center gap-1">
+                          {entry.name}
+                          {entry.isCurrentUser && <span className="text-xs text-primary">(You)</span>}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {entry.discoverPoints} discover points
+                        </p>
+                      </div>
+                      
+                      <div className="text-right">
+                        <p className="font-bold text-primary">{entry.totalPoints}</p>
+                        <p className="text-[10px] text-muted-foreground">points</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Your Stats */}
+          <Card className="glass-card border-primary/20">
+            <CardContent className="p-4">
+              <h4 className="font-semibold mb-3">Your Adventure Stats</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center p-3 rounded-lg bg-yellow-500/10">
+                  <Trophy className="w-5 h-5 mx-auto mb-1 text-yellow-500" />
+                  <p className="text-lg font-bold">{totalPoints}</p>
+                  <p className="text-[10px] text-muted-foreground">Total Points</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-green-500/10">
+                  <CheckCircle className="w-5 h-5 mx-auto mb-1 text-green-500" />
+                  <p className="text-lg font-bold">{completedSystemChallenges.size}</p>
+                  <p className="text-[10px] text-muted-foreground">Challenges</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-blue-500/10">
+                  <MapPin className="w-5 h-5 mx-auto mb-1 text-blue-500" />
+                  <p className="text-lg font-bold">{visitedPlaces.size}</p>
+                  <p className="text-[10px] text-muted-foreground">Places Visited</p>
+                </div>
+              </div>
+              
+              {/* Rank badge */}
+              <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Your Rank</p>
+                <p className="text-2xl font-bold">
+                  #{leaderboard.findIndex(e => e.isCurrentUser) + 1 || '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {leaderboard.findIndex(e => e.isCurrentUser) === 0 ? '🎉 You are the top adventurer!' :
+                   leaderboard.findIndex(e => e.isCurrentUser) > 0 ? `${leaderboard[leaderboard.findIndex(e => e.isCurrentUser) - 1]?.totalPoints - totalPoints || 0} points to next rank` :
+                   'Complete challenges to rank up!'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
