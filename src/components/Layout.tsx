@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { BottomNavigation } from '@/components/BottomNavigation';
 import logo from '@/assets/logo.png';
 import { DesktopMessagesPanel } from './DesktopMessagesPanel';
 import { useAuth } from '@/contexts/AuthContext';
@@ -318,6 +319,14 @@ function LayoutContent({ children }: LayoutProps) {
             </aside>
           )}
         </div>
+
+        {/* Bottom Navigation - Mobile only */}
+        {isMobile && (
+          <BottomNavigation 
+            activeTab={location.pathname === '/' ? 'all' : ''} 
+            onTabChange={() => {}} 
+          />
+        )}
       </main>
     </div>
   );

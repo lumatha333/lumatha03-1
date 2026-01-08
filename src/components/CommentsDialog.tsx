@@ -4,20 +4,10 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { X, Send, Reply, MoreVertical, Edit, Trash2, Heart, ThumbsDown, Laugh, Frown, HeartHandshake } from 'lucide-react';
+import { X, Send, Reply, MoreVertical, Edit, Trash2, Heart } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-
-// Facebook-style reactions
-const REACTIONS = [
-  { type: 'like', icon: Heart, color: 'text-red-500', label: '❤️' },
-  { type: 'dislike', icon: ThumbsDown, color: 'text-blue-500', label: '👎' },
-  { type: 'haha', icon: Laugh, color: 'text-yellow-500', label: '😂' },
-  { type: 'sad', icon: Frown, color: 'text-purple-500', label: '😢' },
-  { type: 'love', icon: HeartHandshake, color: 'text-pink-500', label: '💖' },
-];
 
 interface Comment {
   id: string;
@@ -28,9 +18,8 @@ interface Comment {
     name: string;
     avatar_url: string | null;
   };
-  replies?: Comment[];
-  reactions?: Record<string, number>;
-  userReaction?: string | null;
+  likeCount: number;
+  userLiked: boolean;
 }
 
 interface CommentsDialogProps {
@@ -48,7 +37,6 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [loading, setLoading] = useState(true);
-  const [commentReactions, setCommentReactions] = useState<Record<string, { reactions: Record<string, number>; userReaction: string | null }>>({});
   const { user } = useAuth();
 
   useEffect(() => {
@@ -77,37 +65,24 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
           .eq('id', comment.user_id)
           .single();
         
+        // Fetch like count for this comment (using heart reaction only)
+        const { data: reactions } = await supabase
+          .from('comment_reactions')
+          .select('user_id, reaction')
+          .eq('comment_id', comment.id)
+          .eq('reaction', 'like');
+        
+        const likeCount = reactions?.length || 0;
+        const userLiked = user ? reactions?.some(r => r.user_id === user.id) : false;
+        
         commentsWithProfiles.push({
           ...comment,
           profiles: profile || undefined,
-          reactions: { like: 0, dislike: 0, haha: 0, sad: 0, love: 0 },
-          userReaction: null
+          likeCount,
+          userLiked
         });
       }
       setComments(commentsWithProfiles);
-      
-      // Fetch reactions from database
-      const reactionsMap: Record<string, { reactions: Record<string, number>; userReaction: string | null }> = {};
-      
-      for (const comment of commentsWithProfiles) {
-        const { data: reactions } = await supabase
-          .from('comment_reactions')
-          .select('reaction, user_id')
-          .eq('comment_id', comment.id);
-        
-        const counts: Record<string, number> = { like: 0, dislike: 0, haha: 0, sad: 0, love: 0 };
-        let userReaction: string | null = null;
-        
-        reactions?.forEach(r => {
-          counts[r.reaction] = (counts[r.reaction] || 0) + 1;
-          if (user && r.user_id === user.id) {
-            userReaction = r.reaction;
-          }
-        });
-        
-        reactionsMap[comment.id] = { reactions: counts, userReaction };
-      }
-      setCommentReactions(reactionsMap);
     } catch (error) {
       console.error('Error fetching comments:', error);
     } finally {
@@ -118,13 +93,7 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
   const addComment = async () => {
     if (!newComment.trim() || !user) return;
 
-    // Check user's comment count for this post
-    const existingCount = comments.filter(c => c.user_id === user.id).length;
-    if (existingCount >= 2) {
-      toast.error('You can only add 2 comments per post');
-      return;
-    }
-
+    // Check user's comment count for this post (unlimited now per spec)
     try {
       const { error } = await supabase.from('comments').insert({
         post_id: postId,
@@ -189,56 +158,42 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
     }
   };
 
-  const handleReaction = async (commentId: string, reactionType: string) => {
+  const toggleLike = async (commentId: string) => {
     if (!user) return;
     
-    const current = commentReactions[commentId] || { reactions: { like: 0, dislike: 0, haha: 0, sad: 0, love: 0 }, userReaction: null };
+    const comment = comments.find(c => c.id === commentId);
+    if (!comment) return;
     
     try {
-      if (current.userReaction === reactionType) {
-        // Remove reaction
+      if (comment.userLiked) {
+        // Remove like
         await supabase.from('comment_reactions').delete()
           .eq('comment_id', commentId)
-          .eq('user_id', user.id);
-      } else if (current.userReaction) {
-        // Update reaction
-        await supabase.from('comment_reactions')
-          .update({ reaction: reactionType })
-          .eq('comment_id', commentId)
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .eq('reaction', 'like');
+        
+        setComments(prev => prev.map(c => 
+          c.id === commentId 
+            ? { ...c, userLiked: false, likeCount: Math.max(0, c.likeCount - 1) }
+            : c
+        ));
       } else {
-        // Add new reaction
+        // Add like
         await supabase.from('comment_reactions').insert({
           comment_id: commentId,
           user_id: user.id,
-          reaction: reactionType
+          reaction: 'like'
         });
+        
+        setComments(prev => prev.map(c => 
+          c.id === commentId 
+            ? { ...c, userLiked: true, likeCount: c.likeCount + 1 }
+            : c
+        ));
       }
-      
-      // Update local state
-      setCommentReactions(prev => {
-        const newReactions = { ...current.reactions };
-        
-        if (current.userReaction) {
-          newReactions[current.userReaction] = Math.max(0, (newReactions[current.userReaction] || 0) - 1);
-        }
-        
-        if (current.userReaction === reactionType) {
-          return { ...prev, [commentId]: { reactions: newReactions, userReaction: null } };
-        }
-        
-        newReactions[reactionType] = (newReactions[reactionType] || 0) + 1;
-        return { ...prev, [commentId]: { reactions: newReactions, userReaction: reactionType } };
-      });
     } catch (error) {
-      console.error('Reaction error:', error);
+      console.error('Like error:', error);
     }
-  };
-
-  const getTotalReactions = (commentId: string) => {
-    const data = commentReactions[commentId];
-    if (!data) return 0;
-    return Object.values(data.reactions).reduce((sum, count) => sum + count, 0);
   };
 
   const formatTime = (date: string) => {
@@ -309,39 +264,18 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
                           <p className="text-xs">{comment.content}</p>
                         </div>
                         
-                        {/* Actions with Reactions */}
+                        {/* Actions - Heart reaction only */}
                         <div className="flex items-center gap-2 mt-1 ml-1 flex-wrap">
                           <span className="text-[9px] text-muted-foreground">{formatTime(comment.created_at)}</span>
                           
-                          {/* Reaction Popover */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button className="text-[10px] font-medium hover:underline flex items-center gap-0.5">
-                                {commentReactions[comment.id]?.userReaction ? (
-                                  <span>{REACTIONS.find(r => r.type === commentReactions[comment.id]?.userReaction)?.label}</span>
-                                ) : (
-                                  <Heart className="w-3 h-3" />
-                                )}
-                                {getTotalReactions(comment.id) > 0 && <span className="ml-0.5">{getTotalReactions(comment.id)}</span>}
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-1 glass-card" side="top">
-                              <div className="flex gap-0.5">
-                                {REACTIONS.map((reaction) => (
-                                  <button
-                                    key={reaction.type}
-                                    onClick={() => handleReaction(comment.id, reaction.type)}
-                                    className={`p-1.5 rounded-full hover:bg-muted transition-all hover:scale-125 ${
-                                      commentReactions[comment.id]?.userReaction === reaction.type ? 'bg-muted scale-110' : ''
-                                    }`}
-                                    title={reaction.type}
-                                  >
-                                    <span className="text-lg">{reaction.label}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            </PopoverContent>
-                          </Popover>
+                          {/* Heart reaction button */}
+                          <button 
+                            onClick={() => toggleLike(comment.id)}
+                            className={`text-[10px] font-medium hover:underline flex items-center gap-0.5 ${comment.userLiked ? 'text-red-500' : ''}`}
+                          >
+                            <Heart className={`w-3 h-3 ${comment.userLiked ? 'fill-current' : ''}`} />
+                            {comment.likeCount > 0 && <span className="ml-0.5">{comment.likeCount}</span>}
+                          </button>
                           
                           <button 
                             onClick={() => { setReplyingTo(comment.id); setReplyContent(''); }}
@@ -410,11 +344,6 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
               <Send className="w-4 h-4" />
             </Button>
           </div>
-          {user && (
-            <p className="text-[9px] text-muted-foreground mt-1">
-              {comments.filter(c => c.user_id === user.id).length}/2 comments used
-            </p>
-          )}
         </div>
       </DialogContent>
     </Dialog>
