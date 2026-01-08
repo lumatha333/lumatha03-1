@@ -8,17 +8,18 @@ import { useAuth } from '@/contexts/AuthContext';
 interface BottomNavigationProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  visible?: boolean;
 }
 
 const tabs = [
-  { id: 'all', icon: Home, label: 'Feed', path: '/' },
-  { id: 'private', icon: Lock, label: 'Private', path: null },
+  { id: 'feed', icon: Home, label: 'Feed', path: '/' },
   { id: 'create', icon: Plus, label: 'Create', path: '/create', isAction: true },
+  { id: 'private', icon: Lock, label: 'Private', path: '/private' },
   { id: 'notifications', icon: Bell, label: 'Alerts', path: '/notifications' },
   { id: 'profile', icon: User, label: 'Profile', path: null },
 ];
 
-export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
+export function BottomNavigation({ activeTab, onTabChange, visible = true }: BottomNavigationProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -72,7 +73,12 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass-card border-t border-border/50 safe-area-bottom">
+    <nav 
+      className={cn(
+        "fixed bottom-0 left-0 right-0 z-50 glass-card border-t border-border/50 safe-area-bottom transition-all duration-300",
+        visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"
+      )}
+    >
       <div className="flex justify-around items-center h-14 sm:h-16 max-w-lg mx-auto px-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -83,8 +89,8 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
           if (isCreate) {
             return (
               <Link key={tab.id} to="/create" className="relative -mt-5 sm:-mt-6">
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95">
-                  <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95 ring-4 ring-background">
+                  <Icon className="w-6 h-6 sm:w-7 sm:h-7 text-primary-foreground" />
                 </div>
               </Link>
             );
@@ -95,16 +101,16 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
               key={tab.id}
               onClick={() => handleTabClick(tab)}
               className={cn(
-                "flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 sm:px-3 rounded-lg transition-all min-w-[48px] sm:min-w-[56px] relative",
+                "flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 sm:px-4 rounded-lg transition-all min-w-[52px] sm:min-w-[60px] relative",
                 active 
                   ? "text-primary bg-primary/10" 
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
               )}
             >
               <div className="relative">
-                <Icon className={cn("w-5 h-5 sm:w-5 sm:h-5 transition-transform", active && "scale-110")} />
+                <Icon className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-transform", active && "scale-110")} />
                 {showBadge && (
-                  <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[8px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5">
+                  <span className="absolute -top-1 -right-1.5 bg-destructive text-destructive-foreground text-[8px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-0.5 animate-pulse">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}

@@ -20,39 +20,18 @@ export default function Marketplace() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const listings = [
-    { id: 1, title: 'iPhone 14 Pro', price: 'Rs. 180,000', location: 'Tulsipur', category: 'Electronics', image: '📱', seller: 'Ram B.', sellerId: 'user1', phone: '+977-9800000001', verified: true, avatar: null },
-    { id: 2, title: 'Honda Shine 125cc', price: 'Rs. 95,000', location: 'Dang', category: 'Vehicles', image: '🏍️', seller: 'Shyam K.', sellerId: 'user2', phone: '+977-9800000002', verified: true, avatar: null },
-    { id: 3, title: 'Laptop Dell XPS', price: 'Rs. 250,000', location: 'Urahari', category: 'Electronics', image: '💻', seller: 'Hari P.', sellerId: 'user3', phone: '+977-9800000003', verified: false, avatar: null },
-    { id: 4, title: 'Study Table', price: 'Rs. 8,500', location: 'Tulsipur', category: 'Furniture', image: '🪑', seller: 'Gita M.', sellerId: 'user4', phone: '+977-9800000004', verified: true, avatar: null },
-    { id: 5, title: 'DSLR Camera', price: 'Rs. 85,000', location: 'Dang', category: 'Electronics', image: '📷', seller: 'Amit S.', sellerId: 'user5', phone: '+977-9800000005', verified: true, avatar: null },
-    { id: 6, title: 'Mountain Bike', price: 'Rs. 35,000', location: 'Urahari', category: 'Sports', image: '🚴', seller: 'Sita R.', sellerId: 'user6', phone: '+977-9800000006', verified: false, avatar: null },
-  ];
+  // Empty listings - removed all placeholder posts as requested
+  const listings: any[] = [];
+  const jobs: any[] = [];
+  const rentals: any[] = [];
+  const businesses: any[] = [];
+  const ngos: any[] = [];
 
-  const jobs = [
-    { id: 1, title: 'Web Developer', company: 'Tech Solutions', location: 'Tulsipur', type: 'Full-time', salary: 'Rs. 50,000/mo', contact: '+977-9800000010', poster: 'Tech Solutions HR', posterId: 'company1' },
-    { id: 2, title: 'Graphic Designer', company: 'Creative Studio', location: 'Dang', type: 'Part-time', salary: 'Rs. 25,000/mo', contact: '+977-9800000011', poster: 'Creative Studio', posterId: 'company2' },
-    { id: 3, title: 'Teacher (Math)', company: 'ABC School', location: 'Urahari', type: 'Full-time', salary: 'Rs. 30,000/mo', contact: '+977-9800000012', poster: 'ABC School Admin', posterId: 'company3' },
-  ];
-
-  const rentals = [
-    { id: 1, title: '2BHK Apartment', price: 'Rs. 15,000/mo', location: 'Tulsipur', type: 'Apartment', image: '🏠', contact: '+977-9800000020', owner: 'Property Owner', ownerId: 'owner1' },
-    { id: 2, title: 'Shop Space', price: 'Rs. 25,000/mo', location: 'Dang', type: 'Commercial', image: '🏪', contact: '+977-9800000021', owner: 'Shop Owner', ownerId: 'owner2' },
-    { id: 3, title: 'Single Room', price: 'Rs. 5,000/mo', location: 'Urahari', type: 'Room', image: '🛏️', contact: '+977-9800000022', owner: 'Room Provider', ownerId: 'owner3' },
-  ];
-
-  const businesses = [
-    { id: 1, name: 'Himalayan Restaurant', category: 'Food', rating: 4.5, location: 'Tulsipur', image: '🍽️', phone: '+977-9800000030', owner: 'Restaurant Owner', ownerId: 'biz1' },
-    { id: 2, name: 'Tech Repair Shop', category: 'Services', rating: 4.8, location: 'Dang', image: '🔧', phone: '+977-9800000031', owner: 'Tech Expert', ownerId: 'biz2' },
-    { id: 3, name: 'Fashion Store', category: 'Clothing', rating: 4.2, location: 'Urahari', image: '👗', phone: '+977-9800000032', owner: 'Fashion Expert', ownerId: 'biz3' },
-    { id: 4, name: 'Fitness Gym', category: 'Health', rating: 4.6, location: 'Tulsipur', image: '💪', phone: '+977-9800000033', owner: 'Gym Trainer', ownerId: 'biz4' },
-  ];
-
-  const categories = ['All', 'Electronics', 'Vehicles', 'Furniture', 'Sports', 'Clothing'];
+  const categories = ['All', 'Electronics', 'Vehicles', 'Furniture', 'Sports', 'Clothing', 'Books', 'Services'];
 
   const filteredListings = listings.filter(item => 
     (selectedCategory === 'All' || item.category === selectedCategory) &&
-    (item.title.toLowerCase().includes(searchQuery.toLowerCase()) || item.category.toLowerCase().includes(searchQuery.toLowerCase()))
+    (item.title?.toLowerCase().includes(searchQuery.toLowerCase()) || item.category?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const handleContact = (phone: string, name: string) => {
@@ -104,11 +83,12 @@ export default function Marketplace() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="glass-card w-full grid grid-cols-4 h-auto p-1">
-          <TabsTrigger value="buy-sell" className="gap-1 text-xs py-2"><ShoppingBag className="w-3.5 h-3.5" /><span className="hidden sm:inline">Buy/Sell</span></TabsTrigger>
-          <TabsTrigger value="jobs" className="gap-1 text-xs py-2"><Briefcase className="w-3.5 h-3.5" />Jobs</TabsTrigger>
-          <TabsTrigger value="rentals" className="gap-1 text-xs py-2"><Home className="w-3.5 h-3.5" />Rent</TabsTrigger>
-          <TabsTrigger value="business" className="gap-1 text-xs py-2"><Store className="w-3.5 h-3.5" /><span className="hidden sm:inline">Local</span></TabsTrigger>
+        <TabsList className="glass-card w-full grid grid-cols-5 h-auto p-1">
+          <TabsTrigger value="buy-sell" className="gap-1 text-[10px] sm:text-xs py-2"><ShoppingBag className="w-3.5 h-3.5" /><span className="hidden xs:inline">Buy/Sell</span></TabsTrigger>
+          <TabsTrigger value="jobs" className="gap-1 text-[10px] sm:text-xs py-2"><Briefcase className="w-3.5 h-3.5" /><span className="hidden xs:inline">Jobs</span></TabsTrigger>
+          <TabsTrigger value="rentals" className="gap-1 text-[10px] sm:text-xs py-2"><Home className="w-3.5 h-3.5" /><span className="hidden xs:inline">Rent</span></TabsTrigger>
+          <TabsTrigger value="business" className="gap-1 text-[10px] sm:text-xs py-2"><Store className="w-3.5 h-3.5" /><span className="hidden xs:inline">Biz</span></TabsTrigger>
+          <TabsTrigger value="ngos" className="gap-1 text-[10px] sm:text-xs py-2"><Heart className="w-3.5 h-3.5" /><span className="hidden xs:inline">NGOs</span></TabsTrigger>
         </TabsList>
 
         <TabsContent value="buy-sell" className="space-y-4 mt-4">
@@ -279,6 +259,56 @@ export default function Marketplace() {
               </CardContent>
             </Card>
           ))}
+          
+          {businesses.length === 0 && (
+            <Card className="glass-card col-span-full">
+              <CardContent className="py-12 text-center">
+                <Store className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">No businesses listed yet</p>
+                <p className="text-sm text-muted-foreground mt-1">Be the first to list your business!</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* NGOs Tab */}
+        <TabsContent value="ngos" className="space-y-3 mt-4">
+          {ngos.length === 0 ? (
+            <Card className="glass-card border-border">
+              <CardContent className="py-12 text-center">
+                <Heart className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">No NGOs listed yet</p>
+                <p className="text-sm text-muted-foreground mt-1">Register your NGO to help the community!</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {ngos.map((ngo: any) => (
+                <Card key={ngo.id} className="glass-card hover-lift">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3 p-2 mb-2 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                      <Avatar className="w-7 h-7">
+                        <AvatarFallback className="bg-primary/20 text-[10px]">{ngo.name?.[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{ngo.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{ngo.category}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{ngo.description}</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="flex-1 h-8 text-xs" onClick={() => handleContact(ngo.phone, ngo.name)}>
+                        <Phone className="w-3 h-3 mr-1" />Contact
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1 h-8 text-xs">
+                        <Heart className="w-3 h-3 mr-1" />Support
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
