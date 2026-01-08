@@ -6,21 +6,27 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PostCard } from '@/components/PostCard';
+import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { LazyImage } from '@/components/LazyImage';
-import { ArrowLeft, UserPlus, UserMinus, Grid3x3, LayoutGrid, Settings } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { 
+  ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
+  MapPin, Calendar, Phone, Globe, Briefcase, Star, Trophy, Eye
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'] & { profiles?: Profile };
+type Document = Database['public']['Tables']['documents']['Row'];
 
 export default function Profile() {
   const { userId } = useParams();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, profile: currentProfile } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
@@ -28,6 +34,8 @@ export default function Profile() {
   const [likes, setLikes] = useState<{ post_id: string }[]>([]);
   const [likesCount, setLikesCount] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [adventurePoints, setAdventurePoints] = useState({ challenges: 0, discovery: 0, explore: 0, total: 0 });
 
   useEffect(() => {
     if (userId) {
@@ -55,6 +63,32 @@ export default function Profile() {
         .order('created_at', { ascending: false });
 
       setPosts(postsData || []);
+
+      // Fetch user's documents
+      const { data: docsData } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('visibility', 'public')
+        .order('created_at', { ascending: false });
+
+      setDocuments(docsData || []);
+
+      // Fetch adventure points
+      const { data: userPoints } = await supabase
+        .from('user_points')
+        .select('total_points')
+        .eq('user_id', userId)
+        .single();
+
+      if (userPoints) {
+        setAdventurePoints({
+          challenges: Math.floor(userPoints.total_points * 0.4),
+          discovery: Math.floor(userPoints.total_points * 0.35),
+          explore: Math.floor(userPoints.total_points * 0.25),
+          total: userPoints.total_points
+        });
+      }
 
       // Fetch likes count for each post
       if (postsData) {
@@ -210,104 +244,174 @@ export default function Profile() {
   }
 
   const isOwnProfile = currentUser?.id === userId;
-  const mediaPosts = posts.filter(post => post.file_url && (post.file_type === 'image' || post.file_type?.startsWith('image/')));
+  const mediaPosts = posts.filter(post => post.file_url || (post.media_urls && post.media_urls.length > 0));
+
+  const getLevel = (points: number) => {
+    if (points >= 5000) return { level: 5, title: 'Legend', stars: 5 };
+    if (points >= 2000) return { level: 4, title: 'Expert', stars: 4 };
+    if (points >= 1000) return { level: 3, title: 'Advanced', stars: 3 };
+    if (points >= 500) return { level: 2, title: 'Intermediate', stars: 2 };
+    return { level: 1, title: 'Beginner', stars: 1 };
+  };
+
+  const levelInfo = getLevel(adventurePoints.total);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 p-4">
+    <div className="max-w-3xl mx-auto space-y-4 p-3 pb-24">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2">
-          <ArrowLeft className="w-4 h-4" />
-          Back
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5 h-8">
+          <ArrowLeft className="w-4 h-4" /> Back
         </Button>
         {isOwnProfile && (
-          <Button variant="ghost" onClick={() => navigate('/settings')} className="gap-2">
-            <Settings className="w-4 h-4" />
-            Settings
+          <Button variant="ghost" size="sm" onClick={() => navigate('/settings')} className="gap-1.5 h-8">
+            <Settings className="w-4 h-4" /> Settings
           </Button>
         )}
       </div>
 
-      <Card className="glass-card border-border">
-        <CardContent className="p-6">
-          <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
-            <Avatar className="w-32 h-32 border-4 border-primary/20">
-              <AvatarImage src={profile.avatar_url || undefined} />
-              <AvatarFallback className="text-3xl">{profile.name?.[0] || 'U'}</AvatarFallback>
-            </Avatar>
+      {/* Profile Header Card */}
+      <Card className="glass-card border-border overflow-hidden">
+        <CardContent className="p-4">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+            {/* Avatar - Tap to view full size */}
+            <div className="relative">
+              <Avatar 
+                className="w-24 h-24 sm:w-28 sm:h-28 border-4 border-primary/20 cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setAvatarOpen(true)}
+              >
+                <AvatarImage src={profile.avatar_url || undefined} />
+                <AvatarFallback className="text-2xl bg-gradient-to-br from-primary to-primary/60 text-primary-foreground">
+                  {profile.name?.[0] || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              {!isOwnProfile && currentUser && (
+                <Button
+                  size="icon"
+                  onClick={handleFollow}
+                  variant={isFollowing ? "outline" : "default"}
+                  className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-lg"
+                >
+                  {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                </Button>
+              )}
+            </div>
             
-            <div className="flex-1 w-full space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <h1 className="text-2xl md:text-3xl font-bold text-center md:text-left">{profile.name}</h1>
-                {!isOwnProfile && currentUser && (
-                  <Button
-                    onClick={handleFollow}
-                    variant={isFollowing ? "outline" : "default"}
-                    className="gap-2"
-                  >
-                    {isFollowing ? (
-                      <>
-                        <UserMinus className="w-4 h-4" />
-                        Unfollow
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="w-4 h-4" />
-                        Follow
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-
-              <div className="flex gap-8 justify-center md:justify-start text-center">
+            <div className="flex-1 text-center sm:text-left space-y-2">
+              <h1 className="text-xl font-bold">{profile.name}</h1>
+              
+              {/* Stats Row */}
+              <div className="flex gap-6 justify-center sm:justify-start text-center">
                 <div>
-                  <div className="font-bold text-2xl">{posts.length}</div>
-                  <div className="text-sm text-muted-foreground">Posts</div>
+                  <div className="font-bold text-lg">{posts.length}</div>
+                  <div className="text-[10px] text-muted-foreground">Posts</div>
                 </div>
-                <div className="cursor-pointer hover:opacity-80 transition-opacity">
-                  <div className="font-bold text-2xl">{followersCount}</div>
-                  <div className="text-sm text-muted-foreground">Followers</div>
+                <div className="cursor-pointer hover:opacity-80">
+                  <div className="font-bold text-lg">{followersCount}</div>
+                  <div className="text-[10px] text-muted-foreground">Followers</div>
                 </div>
-                <div className="cursor-pointer hover:opacity-80 transition-opacity">
-                  <div className="font-bold text-2xl">{followingCount}</div>
-                  <div className="text-sm text-muted-foreground">Following</div>
+                <div className="cursor-pointer hover:opacity-80">
+                  <div className="font-bold text-lg">{followingCount}</div>
+                  <div className="text-[10px] text-muted-foreground">Following</div>
                 </div>
               </div>
 
               {profile.bio && (
-                <div className="text-center md:text-left">
-                  <p className="text-muted-foreground whitespace-pre-wrap">{profile.bio}</p>
-                </div>
+                <p className="text-sm text-muted-foreground">{profile.bio}</p>
               )}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="posts" className="w-full">
-        <TabsList className="glass-card w-full justify-start">
-          <TabsTrigger value="posts" className="gap-2 flex-1 md:flex-none">
-            <LayoutGrid className="w-4 h-4" />
-            Posts
+      {/* Full Screen Avatar Dialog */}
+      <Dialog open={avatarOpen} onOpenChange={setAvatarOpen}>
+        <DialogContent className="max-w-sm p-0 bg-black/95 border-none">
+          <img 
+            src={profile.avatar_url || '/placeholder.svg'} 
+            alt={profile.name} 
+            className="w-full h-auto"
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Profile Tabs with Icons */}
+      <Tabs defaultValue="info" className="w-full">
+        <TabsList className="glass-card w-full grid grid-cols-5 h-auto p-0.5">
+          <TabsTrigger value="info" className="flex flex-col gap-0.5 py-2 text-[10px]">
+            <User className="w-4 h-4" /> Info
           </TabsTrigger>
-          <TabsTrigger value="media" className="gap-2 flex-1 md:flex-none">
-            <Grid3x3 className="w-4 h-4" />
-            Media
+          <TabsTrigger value="media" className="flex flex-col gap-0.5 py-2 text-[10px]">
+            <Image className="w-4 h-4" /> Media
+          </TabsTrigger>
+          <TabsTrigger value="docs" className="flex flex-col gap-0.5 py-2 text-[10px]">
+            <FileText className="w-4 h-4" /> Docs
+          </TabsTrigger>
+          <TabsTrigger value="adventure" className="flex flex-col gap-0.5 py-2 text-[10px]">
+            <Mountain className="w-4 h-4" /> Adventure
+          </TabsTrigger>
+          <TabsTrigger value="marketplace" className="flex flex-col gap-0.5 py-2 text-[10px]">
+            <ShoppingBag className="w-4 h-4" /> Market
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="posts" className="space-y-4 mt-6">
-          {posts.length === 0 ? (
+        {/* INFO TAB */}
+        <TabsContent value="info" className="space-y-3 mt-4">
+          <Card className="glass-card border-border">
+            <CardContent className="p-4 space-y-3">
+              <h3 className="font-semibold text-sm mb-3">Profile Information</h3>
+              
+              {profile.location && (
+                <div className="flex items-center gap-3 text-sm">
+                  <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span>{profile.location}</span>
+                </div>
+              )}
+              
+              {profile.country && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span>{profile.country}</span>
+                </div>
+              )}
+              
+              {profile.age_group && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span>Age: {profile.age_group}</span>
+                </div>
+              )}
+              
+              {profile.website && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    {profile.website}
+                  </a>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-3 text-sm">
+                <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span>Joined {new Date(profile.created_at || '').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* MEDIA TAB */}
+        <TabsContent value="media" className="space-y-3 mt-4">
+          {mediaPosts.length === 0 ? (
             <Card className="glass-card border-border">
-              <CardContent className="py-16 text-center">
-                <LayoutGrid className="w-16 h-16 mx-auto text-muted-foreground mb-4 opacity-50" />
-                <p className="text-muted-foreground text-lg">No public posts yet</p>
+              <CardContent className="py-12 text-center">
+                <Image className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">No media posts yet</p>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {posts.map((post) => (
-                <PostCard
+            <div className="space-y-4">
+              {mediaPosts.map((post) => (
+                <EnhancedPostCard
                   key={post.id}
                   post={post}
                   isSaved={saved.includes(post.id)}
@@ -322,32 +426,127 @@ export default function Profile() {
           )}
         </TabsContent>
 
-        <TabsContent value="media" className="space-y-4 mt-6">
-          {mediaPosts.length === 0 ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-16 text-center">
-                <Grid3x3 className="w-16 h-16 mx-auto text-muted-foreground mb-4 opacity-50" />
-                <p className="text-muted-foreground text-lg">No media posts yet</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 md:gap-2">
-              {mediaPosts.map((post) => (
-                <div key={post.id} className="aspect-square group relative overflow-hidden rounded-md cursor-pointer hover-lift">
-                  <LazyImage
-                    src={post.file_url || ''}
-                    alt={post.title}
-                    className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                    <div className="text-white text-center space-y-1">
-                      <p className="font-semibold text-xs md:text-sm line-clamp-2 px-2">{post.title}</p>
+        {/* EDUCATION DOCS TAB */}
+        <TabsContent value="docs" className="space-y-3 mt-4">
+          <Card className="glass-card border-border">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-sm">Documents</h3>
+                <span className="text-xs text-muted-foreground">{documents.length} documents</span>
+              </div>
+              
+              {documents.length === 0 ? (
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                  <p className="text-muted-foreground text-sm">No public documents</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {documents.map((doc) => (
+                    <div 
+                      key={doc.id}
+                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => window.open(doc.file_url, '_blank')}
+                    >
+                      <FileText className="w-8 h-8 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{doc.title}</p>
+                        <p className="text-[10px] text-muted-foreground">{doc.file_type || 'Document'}</p>
+                      </div>
+                      <Eye className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ADVENTURE TAB */}
+        <TabsContent value="adventure" className="space-y-3 mt-4">
+          <Card className="glass-card border-border">
+            <CardContent className="p-4">
+              {/* Level & Stars */}
+              <div className="text-center mb-6">
+                <div className="flex justify-center gap-1 mb-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star 
+                      key={i} 
+                      className={`w-5 h-5 ${i < levelInfo.stars ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'}`} 
+                    />
+                  ))}
+                </div>
+                <h3 className="text-xl font-bold">{levelInfo.title}</h3>
+                <p className="text-xs text-muted-foreground">Level {levelInfo.level}</p>
+              </div>
+
+              {/* Points Breakdown */}
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="text-center p-3 rounded-lg bg-blue-500/10">
+                  <Trophy className="w-5 h-5 mx-auto text-blue-500 mb-1" />
+                  <p className="font-bold">{adventurePoints.challenges}</p>
+                  <p className="text-[9px] text-muted-foreground">Challenges</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-green-500/10">
+                  <Mountain className="w-5 h-5 mx-auto text-green-500 mb-1" />
+                  <p className="font-bold">{adventurePoints.discovery}</p>
+                  <p className="text-[9px] text-muted-foreground">Discovery</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-purple-500/10">
+                  <Globe className="w-5 h-5 mx-auto text-purple-500 mb-1" />
+                  <p className="font-bold">{adventurePoints.explore}</p>
+                  <p className="text-[9px] text-muted-foreground">Explore</p>
+                </div>
+              </div>
+
+              {/* Total Points */}
+              <div className="text-center p-4 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10">
+                <p className="text-3xl font-bold gradient-text">{adventurePoints.total}</p>
+                <p className="text-xs text-muted-foreground">Total Adventure Points</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* MARKETPLACE TAB */}
+        <TabsContent value="marketplace" className="space-y-3 mt-4">
+          <Card className="glass-card border-border">
+            <CardContent className="p-4">
+              <h3 className="font-semibold text-sm mb-4">Marketplace Listings</h3>
+              
+              {/* Categories */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { icon: '🛒', label: 'Sell / Buy', count: 0 },
+                  { icon: '🏠', label: 'Rent', count: 0 },
+                  { icon: '💼', label: 'Business', count: 0 },
+                  { icon: '💚', label: 'NGOs', count: 0 },
+                  { icon: '👔', label: 'Jobs', count: 0 },
+                ].map((category) => (
+                  <div 
+                    key={category.label}
+                    className="flex items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
+                  >
+                    <span className="text-xl">{category.icon}</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-medium">{category.label}</p>
+                      <p className="text-[10px] text-muted-foreground">{category.count} listings</p>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+
+              <div className="text-center py-8 mt-4">
+                <ShoppingBag className="w-10 h-10 mx-auto text-muted-foreground/50 mb-2" />
+                <p className="text-sm text-muted-foreground">No marketplace listings yet</p>
+                {isOwnProfile && (
+                  <Button size="sm" variant="outline" className="mt-3" onClick={() => navigate('/marketplace')}>
+                    Create Listing
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
