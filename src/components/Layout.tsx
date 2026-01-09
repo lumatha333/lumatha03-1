@@ -302,8 +302,8 @@ function LayoutContent({ children }: LayoutProps) {
             </div>
           </div>
           
-          {/* Sub Navigation - Below header, hides/shows with header */}
-          <SubNavigation visible={headerVisible} />
+          {/* Sub Navigation - Only show on Home section, hides/shows with header */}
+          {location.pathname === '/' && <SubNavigation visible={headerVisible} />}
         </header>
 
         {/* Content Area with Messages Panel on desktop (Home only) */}

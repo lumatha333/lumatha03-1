@@ -9,10 +9,11 @@ interface SubNavigationProps {
   visible?: boolean;
 }
 
+// Order: Feed, Private, Create, Alerts, Profile
 const tabs = [
   { id: 'feed', icon: Home, label: 'Feed', path: '/' },
-  { id: 'create', icon: Plus, label: 'Create', path: '/create' },
   { id: 'private', icon: Lock, label: 'Private', path: '/private' },
+  { id: 'create', icon: Plus, label: 'Create', path: '/create' },
   { id: 'notifications', icon: Bell, label: 'Alerts', path: '/notifications' },
   { id: 'profile', icon: User, label: 'Profile', path: null },
 ];

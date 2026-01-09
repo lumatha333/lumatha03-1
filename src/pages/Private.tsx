@@ -1,430 +1,219 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
+import { Lock, Bookmark } from 'lucide-react';
+import { Database } from '@/integrations/supabase/types';
+import { EnhancedPostCard } from '@/components/EnhancedPostCard';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { 
-  Lock, Eye, EyeOff, KeyRound, MessageCircle, Search, 
-  Heart, Archive, Shield, Users, Plus 
-} from 'lucide-react';
+
+type Post = Database['public']['Tables']['posts']['Row'];
+type Profile = Database['public']['Tables']['profiles']['Row'];
+type PostWithProfile = Post & { profiles?: Profile };
 
 export default function Private() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('private-chat');
-  const [privatePassword, setPrivatePassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [enteredPassword, setEnteredPassword] = useState('');
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [hasPassword, setHasPassword] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [privateChats, setPrivateChats] = useState<any[]>([]);
-  const [archivedChats, setArchivedChats] = useState<any[]>([]);
-  const [following, setFollowing] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [setupDialogOpen, setSetupDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('own');
+  const [posts, setPosts] = useState<PostWithProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    if (!user) return;
-    
-    // Check if user has private chat password
-    const storedPassword = localStorage.getItem(`private_chat_password_${user.id}`);
-    setHasPassword(!!storedPassword);
-    
-    fetchPrivateChats();
-    fetchArchivedChats();
-    fetchFollowing();
-  }, [user]);
+    if (user) fetchPosts();
+  }, [activeTab, user]);
 
-  const fetchPrivateChats = async () => {
+  const fetchPosts = async () => {
     if (!user) return;
-    const privateList = JSON.parse(localStorage.getItem(`private_chats_${user.id}`) || '[]');
-    
-    if (privateList.length > 0) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, name, avatar_url')
-        .in('id', privateList);
-      setPrivateChats(data || []);
+    setLoading(true);
+
+    try {
+      let postsData: PostWithProfile[] = [];
+
+      if (activeTab === 'own') {
+        // Fetch user's own private posts
+        const { data } = await supabase
+          .from('posts')
+          .select('*, profiles(*)')
+          .eq('user_id', user.id)
+          .eq('visibility', 'private')
+          .order('created_at', { ascending: false });
+        postsData = data || [];
+      } else if (activeTab === 'saved') {
+        // Fetch saved posts
+        const { data: savedData } = await supabase
+          .from('saved')
+          .select('post_id')
+          .eq('user_id', user.id);
+        
+        const savedPostIds = savedData?.map(s => s.post_id) || [];
+        if (savedPostIds.length > 0) {
+          const { data } = await supabase
+            .from('posts')
+            .select('*, profiles(*)')
+            .in('id', savedPostIds)
+            .order('created_at', { ascending: false });
+          postsData = data || [];
+        }
+      }
+
+      setPosts(postsData);
+
+      // Fetch user's saved and liked posts
+      const [savedResult, likedResult] = await Promise.all([
+        supabase.from('saved').select('post_id').eq('user_id', user.id),
+        supabase.from('likes').select('post_id').eq('user_id', user.id)
+      ]);
+
+      setSavedPosts(new Set(savedResult.data?.map(s => s.post_id) || []));
+      setLikedPosts(new Set(likedResult.data?.map(l => l.post_id) || []));
+
+      // Fetch like counts
+      if (postsData.length > 0) {
+        const postIds = postsData.map(p => p.id);
+        const { data: allLikes } = await supabase.from('likes').select('post_id').in('post_id', postIds);
+        const counts: Record<string, number> = {};
+        postIds.forEach(id => { counts[id] = 0; });
+        allLikes?.forEach(like => { counts[like.post_id] = (counts[like.post_id] || 0) + 1; });
+        setLikeCounts(counts);
+      }
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchArchivedChats = async () => {
+  const toggleSave = async (postId: string) => {
     if (!user) return;
-    const archivedList = JSON.parse(localStorage.getItem(`archived_chats_${user.id}`) || '[]');
-    
-    if (archivedList.length > 0) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, name, avatar_url')
-        .in('id', archivedList);
-      setArchivedChats(data || []);
-    }
-  };
-
-  const fetchFollowing = async () => {
-    if (!user) return;
-    
-    const { data } = await supabase
-      .from('follows')
-      .select(`
-        following_id,
-        profiles!follows_following_id_fkey(id, name, avatar_url, bio)
-      `)
-      .eq('follower_id', user.id);
-    
-    setFollowing(data?.map(f => f.profiles).filter(Boolean) || []);
-  };
-
-  const handleSetupPassword = () => {
-    if (!privatePassword || privatePassword.length < 4) {
-      toast.error('Password must be at least 4 characters');
-      return;
-    }
-    if (privatePassword !== confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-    
-    localStorage.setItem(`private_chat_password_${user?.id}`, privatePassword);
-    setHasPassword(true);
-    setIsUnlocked(true);
-    setSetupDialogOpen(false);
-    setPrivatePassword('');
-    setConfirmPassword('');
-    toast.success('Private chat password set!');
-  };
-
-  const handleUnlock = () => {
-    const storedPassword = localStorage.getItem(`private_chat_password_${user?.id}`);
-    if (enteredPassword === storedPassword) {
-      setIsUnlocked(true);
-      setEnteredPassword('');
-      toast.success('Private chat unlocked!');
+    const isSaved = savedPosts.has(postId);
+    if (isSaved) {
+      await supabase.from('saved').delete().eq('post_id', postId).eq('user_id', user.id);
+      setSavedPosts(prev => { const next = new Set(prev); next.delete(postId); return next; });
+      toast.success('Removed from saved');
     } else {
-      toast.error('Incorrect password');
+      await supabase.from('saved').insert({ post_id: postId, user_id: user.id });
+      setSavedPosts(prev => new Set(prev).add(postId));
+      toast.success('Saved!');
     }
   };
 
-  const addToPrivateChat = (userId: string) => {
-    const privateList = JSON.parse(localStorage.getItem(`private_chats_${user?.id}`) || '[]');
-    if (!privateList.includes(userId)) {
-      privateList.push(userId);
-      localStorage.setItem(`private_chats_${user?.id}`, JSON.stringify(privateList));
-      fetchPrivateChats();
-      toast.success('Added to private chats');
+  const toggleLike = async (postId: string) => {
+    if (!user) return;
+    const isLiked = likedPosts.has(postId);
+    if (isLiked) {
+      await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', user.id);
+      setLikedPosts(prev => { const next = new Set(prev); next.delete(postId); return next; });
+      setLikeCounts(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 1) - 1) }));
+    } else {
+      const { error } = await supabase.from('likes').insert({ post_id: postId, user_id: user.id });
+      if (!error) {
+        setLikedPosts(prev => new Set(prev).add(postId));
+        setLikeCounts(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+      }
     }
   };
 
-  const removeFromArchive = (userId: string) => {
-    const archivedList = JSON.parse(localStorage.getItem(`archived_chats_${user?.id}`) || '[]');
-    const newList = archivedList.filter((id: string) => id !== userId);
-    localStorage.setItem(`archived_chats_${user?.id}`, JSON.stringify(newList));
-    fetchArchivedChats();
-    toast.success('Removed from archive');
+  const deletePost = async (postId: string) => {
+    await supabase.from('posts').delete().eq('id', postId);
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    toast.success('Post deleted');
   };
 
-  const filteredFollowing = following.filter(f => 
-    f?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  if (!user) {
+    return (
+      <div className="space-y-4 pb-20">
+        <Skeleton className="h-12 w-full rounded-xl" />
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-64 w-full rounded-xl" />)}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4 pb-20">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-          <Lock className="w-5 h-5 text-primary" /> Private Zone
-        </h1>
+    <div className="space-y-3 pb-20">
+      <div className="flex items-center gap-2 mb-4">
+        <Lock className="w-5 h-5 text-primary" />
+        <h1 className="text-lg font-bold">Private Zone</h1>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
-          <TabsTrigger value="private-chat" className="gap-1 text-[10px] sm:text-xs py-2">
-            <Shield className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">Private</span> Chat
+        <TabsList className="glass-card w-full grid grid-cols-2 h-auto p-0.5">
+          <TabsTrigger value="own" className="gap-1.5 text-xs py-2">
+            <Lock className="w-3.5 h-3.5" />
+            Own Posts
           </TabsTrigger>
-          <TabsTrigger value="archive" className="gap-1 text-[10px] sm:text-xs py-2">
-            <Archive className="w-3.5 h-3.5" />
-            Archive
-          </TabsTrigger>
-          <TabsTrigger value="following" className="gap-1 text-[10px] sm:text-xs py-2">
-            <Users className="w-3.5 h-3.5" />
-            Following
+          <TabsTrigger value="saved" className="gap-1.5 text-xs py-2">
+            <Bookmark className="w-3.5 h-3.5" />
+            Saved
           </TabsTrigger>
         </TabsList>
 
-        {/* Private Chat Tab */}
-        <TabsContent value="private-chat" className="space-y-3 mt-4">
-          {!hasPassword ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
-                  <KeyRound className="w-8 h-8 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Set Up Private Chat</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Create a password to protect your private conversations
-                  </p>
-                </div>
-                <Dialog open={setupDialogOpen} onOpenChange={setSetupDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="gap-2">
-                      <Lock className="w-4 h-4" /> Create Password
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="glass-card max-w-sm mx-4">
-                    <DialogHeader>
-                      <DialogTitle className="text-center">Create Private Chat Password</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 mt-4">
-                      <div className="space-y-2">
-                        <Label>Password</Label>
-                        <div className="relative">
-                          <Input
-                            type={showPassword ? 'text' : 'password'}
-                            value={privatePassword}
-                            onChange={(e) => setPrivatePassword(e.target.value)}
-                            placeholder="Enter password"
-                            className="glass-card pr-10"
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="absolute right-0 top-0 h-full w-10"
-                            onClick={() => setShowPassword(!showPassword)}
-                          >
-                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Confirm Password</Label>
-                        <Input
-                          type="password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Confirm password"
-                          className="glass-card"
-                        />
-                      </div>
-                      <Button onClick={handleSetupPassword} className="w-full">
-                        Set Password
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </CardContent>
-            </Card>
-          ) : !isUnlocked ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-8 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto animate-pulse">
-                  <Lock className="w-8 h-8 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Private Chat Locked</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Enter your password to access private conversations
-                  </p>
-                </div>
-                <div className="max-w-xs mx-auto space-y-3">
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? 'text' : 'password'}
-                      value={enteredPassword}
-                      onChange={(e) => setEnteredPassword(e.target.value)}
-                      placeholder="Enter password"
-                      className="glass-card pr-10"
-                      onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-0 h-full w-10"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </Button>
-                  </div>
-                  <Button onClick={handleUnlock} className="w-full gap-2">
-                    <KeyRound className="w-4 h-4" /> Unlock
-                  </Button>
-                </div>
+        <TabsContent value="own" className="space-y-3 mt-3">
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-64 w-full rounded-xl" />)}
+            </div>
+          ) : posts.length === 0 ? (
+            <Card className="glass-card">
+              <CardContent className="py-12 text-center">
+                <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">No private posts yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Create a post with visibility set to "Private"</p>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-green-500" /> Private chat unlocked
-                </p>
-                <Button variant="ghost" size="sm" onClick={() => setIsUnlocked(false)}>
-                  <Lock className="w-4 h-4" />
-                </Button>
-              </div>
-              
-              {privateChats.length === 0 ? (
-                <Card className="glass-card border-border">
-                  <CardContent className="py-8 text-center">
-                    <Shield className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                    <p className="text-muted-foreground">No private chats yet</p>
-                    <p className="text-sm text-muted-foreground mt-1">Add chats from the Following tab</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-2">
-                    {privateChats.map((chat) => (
-                      <Card 
-                        key={chat.id} 
-                        className="glass-card border-border cursor-pointer hover:bg-muted/30 transition-colors"
-                        onClick={() => navigate(`/chat/${chat.id}`)}
-                      >
-                        <CardContent className="p-3 flex items-center gap-3">
-                          <Avatar className="w-12 h-12">
-                            <AvatarImage src={chat.avatar_url} />
-                            <AvatarFallback>{chat.name?.[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate">{chat.name}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Lock className="w-3 h-3" /> Private conversation
-                            </p>
-                          </div>
-                          <MessageCircle className="w-5 h-5 text-primary" />
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
+              {posts.map((post) => (
+                <EnhancedPostCard
+                  key={post.id}
+                  post={post}
+                  isSaved={savedPosts.has(post.id)}
+                  isLiked={likedPosts.has(post.id)}
+                  likesCount={likeCounts[post.id] || 0}
+                  currentUserId={user.id}
+                  onToggleSave={() => toggleSave(post.id)}
+                  onToggleLike={() => toggleLike(post.id)}
+                  onDelete={() => deletePost(post.id)}
+                  onUpdate={fetchPosts}
+                />
+              ))}
             </div>
           )}
         </TabsContent>
 
-        {/* Archive Tab */}
-        <TabsContent value="archive" className="space-y-3 mt-4">
-          {archivedChats.length === 0 ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-8 text-center">
-                <Archive className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">No archived chats</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Archive chats from the chat options menu
-                </p>
+        <TabsContent value="saved" className="space-y-3 mt-3">
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-64 w-full rounded-xl" />)}
+            </div>
+          ) : posts.length === 0 ? (
+            <Card className="glass-card">
+              <CardContent className="py-12 text-center">
+                <Bookmark className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">No saved posts yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Bookmark posts to save them here</p>
               </CardContent>
             </Card>
           ) : (
-            <ScrollArea className="h-[400px]">
-              <div className="space-y-2">
-                {archivedChats.map((chat) => (
-                  <Card key={chat.id} className="glass-card border-border">
-                    <CardContent className="p-3 flex items-center gap-3">
-                      <Avatar className="w-12 h-12">
-                        <AvatarImage src={chat.avatar_url} />
-                        <AvatarFallback>{chat.name?.[0]}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate">{chat.name}</p>
-                        <p className="text-xs text-muted-foreground">Archived</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => navigate(`/chat/${chat.id}`)}
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => removeFromArchive(chat.id)}
-                        >
-                          Unarchive
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </TabsContent>
-
-        {/* Following Tab */}
-        <TabsContent value="following" className="space-y-3 mt-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search following..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 glass-card"
-            />
-          </div>
-          
-          {filteredFollowing.length === 0 ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-8 text-center">
-                <Users className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">
-                  {searchQuery ? 'No users found' : 'Not following anyone yet'}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <ScrollArea className="h-[400px]">
-              <div className="space-y-2">
-                {filteredFollowing.map((followedUser) => (
-                  <Card key={followedUser.id} className="glass-card border-border">
-                    <CardContent className="p-3 flex items-center gap-3">
-                      <Avatar 
-                        className="w-12 h-12 cursor-pointer"
-                        onClick={() => navigate(`/profile/${followedUser.id}`)}
-                      >
-                        <AvatarImage src={followedUser.avatar_url} />
-                        <AvatarFallback>{followedUser.name?.[0]}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold truncate">{followedUser.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {followedUser.bio || 'No bio'}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => navigate(`/chat/${followedUser.id}`)}
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </Button>
-                        {hasPassword && isUnlocked && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => addToPrivateChat(followedUser.id)}
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
+            <div className="space-y-3">
+              {posts.map((post) => (
+                <EnhancedPostCard
+                  key={post.id}
+                  post={post}
+                  isSaved={savedPosts.has(post.id)}
+                  isLiked={likedPosts.has(post.id)}
+                  likesCount={likeCounts[post.id] || 0}
+                  currentUserId={user.id}
+                  onToggleSave={() => toggleSave(post.id)}
+                  onToggleLike={() => toggleLike(post.id)}
+                  onDelete={() => deletePost(post.id)}
+                  onUpdate={fetchPosts}
+                />
+              ))}
+            </div>
           )}
         </TabsContent>
       </Tabs>
