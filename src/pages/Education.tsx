@@ -76,7 +76,7 @@ export default function Education() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [uploading, setUploading] = useState(false);
-  const [docTab, setDocTab] = useState<'my' | 'public'>('my');
+  const [docTab, setDocTab] = useState<'my' | 'public'>('public');
 
   const [todos, setTodos] = useState<CategorizedTodo[]>([]);
   const [newTodo, setNewTodo] = useState('');
