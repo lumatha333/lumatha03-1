@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Crown, Sun, Moon, Menu } from 'lucide-react';
+import { Crown, Sun, Moon, Menu, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
@@ -52,12 +52,8 @@ function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => b
       </SheetTrigger>
       <SheetContent side="left" className="w-[280px] p-0 glass-card border-r border-primary/20">
         <div className="flex items-center gap-3 p-4 border-b border-border">
-          <img 
-            src={logo} 
-            alt="Crown of Creation" 
-            className="w-8 h-8 animate-pulse-glow" 
-          />
-          <span className="text-lg font-bold gradient-text">Crown Of Creation</span>
+          <Crown className="w-7 h-7 text-primary animate-pulse" />
+          <span className="text-lg font-bold gradient-text">Zenpeace</span>
         </div>
         <nav className="p-2 space-y-1">
           {menuItems.map((item) => (
@@ -90,7 +86,7 @@ function LayoutContent({ children }: LayoutProps) {
   const { user } = useAuth();
   const isMobile = useIsMobile();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('coc_theme');
+    const saved = localStorage.getItem('zenpeace_theme');
     return (saved as 'light' | 'dark') || 'dark';
   });
   const [isAuthPage, setIsAuthPage] = useState(false);
@@ -172,7 +168,7 @@ function LayoutContent({ children }: LayoutProps) {
       document.documentElement.classList.remove('light');
       document.body.classList.remove('light');
     }
-    localStorage.setItem('coc_theme', theme);
+    localStorage.setItem('zenpeace_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -194,8 +190,19 @@ function LayoutContent({ children }: LayoutProps) {
     setOpen(false);
   };
 
+  const handleBack = () => {
+    navigate('/');
+  };
+
   // Check if we're in chat view (full screen, no header)
   const isFullScreenPage = location.pathname.startsWith('/chat/') && location.pathname !== '/chat';
+  
+  // Check if we're on home page - only show SubNavigation there
+  const isHomePage = location.pathname === '/';
+  
+  // Check if we're in a subsection that needs back button
+  const isSubSection = ['/create', '/private', '/notifications'].includes(location.pathname) || 
+                       location.pathname.startsWith('/profile/');
 
   if (isAuthPage) {
     return <>{children}</>;
@@ -219,13 +226,8 @@ function LayoutContent({ children }: LayoutProps) {
         <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen w-72 xl:w-80 shrink-0">
           <SidebarContent className="glass-card">
             <div className="flex items-center gap-2 p-3 border-b border-border">
-              <img 
-                src={logo} 
-                alt="Crown of Creation" 
-                className="w-7 h-7 animate-pulse-glow cursor-pointer transition-transform hover:scale-110" 
-                onClick={handleLogoClick} 
-              />
-              <span className="text-sm font-bold gradient-text">Crown Of Creation</span>
+              <Crown className="w-6 h-6 text-primary animate-pulse" />
+              <span className="text-sm font-bold gradient-text">Zenpeace</span>
             </div>
 
             <SidebarGroup>
@@ -266,17 +268,21 @@ function LayoutContent({ children }: LayoutProps) {
           }`}
         >
           <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-            {/* Left side - Mobile sidebar trigger + Logo centered on mobile */}
+            {/* Left side - Back button or Mobile sidebar */}
             <div className="flex items-center gap-2">
-              {isMobile && (
+              {isMobile && isSubSection ? (
+                <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8">
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              ) : isMobile ? (
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
-              )}
+              ) : null}
               
               {/* Desktop: Logo on left */}
               {!isMobile && (
                 <Link to="/" className="flex items-center gap-2" onClick={handleLogoClick}>
                   <Crown className="w-5 h-5 text-primary" />
-                  <span className="font-bold text-sm gradient-text">Crown of Creation</span>
+                  <span className="font-bold text-sm gradient-text">Zenpeace</span>
                 </Link>
               )}
             </div>
@@ -285,11 +291,11 @@ function LayoutContent({ children }: LayoutProps) {
             {isMobile && (
               <Link to="/" className="flex items-center gap-1.5 absolute left-1/2 -translate-x-1/2" onClick={handleLogoClick}>
                 <Crown className="w-4 h-4 text-primary" />
-                <span className="font-bold text-xs gradient-text whitespace-nowrap">Crown of Creation</span>
+                <span className="font-bold text-xs gradient-text whitespace-nowrap">Zenpeace</span>
               </Link>
             )}
 
-            {/* Right side - Theme toggle only (removed notifications - moved to sub nav) */}
+            {/* Right side - Theme toggle only */}
             <div className="flex items-center gap-1">
               <Button 
                 variant="ghost" 
@@ -303,7 +309,7 @@ function LayoutContent({ children }: LayoutProps) {
           </div>
           
           {/* Sub Navigation - Only show on Home section, hides/shows with header */}
-          {location.pathname === '/' && <SubNavigation visible={headerVisible} />}
+          {isHomePage && <SubNavigation visible={headerVisible} />}
         </header>
 
         {/* Content Area with Messages Panel on desktop (Home only) */}
@@ -316,7 +322,7 @@ function LayoutContent({ children }: LayoutProps) {
           </div>
 
           {/* Desktop Messages Panel - Only on Home page, extended for ultra-wide */}
-          {!isMobile && location.pathname === '/' && (
+          {!isMobile && isHomePage && (
             <aside className="hidden lg:flex w-[400px] xl:w-[440px] border-l border-border flex-col overflow-hidden shrink-0">
               <DesktopMessagesPanel />
             </aside>
