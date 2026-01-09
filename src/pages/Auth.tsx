@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Eye, EyeOff, LogIn, UserPlus, Globe, Calendar, Crown, Search, Laptop, Smartphone } from 'lucide-react';
+import { Eye, EyeOff, LogIn, UserPlus, Globe, Calendar, Crown, Search, Laptop, Smartphone, Tablet, Check, X, Info } from 'lucide-react';
 
 // Complete world countries list
 const ALL_COUNTRIES = [
@@ -220,12 +220,12 @@ const AGE_GROUPS = [
 export default function Auth() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [country, setCountry] = useState('Nepal');
   const [ageGroup, setAgeGroup] = useState('18-25');
-  const [deviceType, setDeviceType] = useState<'laptop' | 'mobile'>('mobile');
+  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
@@ -238,19 +238,34 @@ export default function Auth() {
 
   const selectedCountryFlag = ALL_COUNTRIES.find(c => c.name === country)?.flag || '🌍';
 
+  // Password validation
+  const passwordChecks = useMemo(() => ({
+    minLength: password.length >= 8,
+    hasNumber: /\d/.test(password),
+    hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+  }), [password]);
+
+  const isPasswordValid = passwordChecks.minLength && passwordChecks.hasNumber && passwordChecks.hasSpecial;
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isLogin && !isPasswordValid) {
+      toast.error('Please create a stronger password');
+      return;
+    }
+    
     setLoading(true);
 
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success('Welcome back!');
+        toast.success('Welcome back to Zenpeace!');
         navigate('/');
       } else {
-        if (!name.trim()) {
-          toast.error('Please enter your name');
+        if (!username.trim()) {
+          toast.error('Please enter a username');
           setLoading(false);
           return;
         }
@@ -261,7 +276,7 @@ export default function Auth() {
           password,
           options: {
             emailRedirectTo: redirectUrl,
-            data: { name, country, age_group: ageGroup, device_type: deviceType }
+            data: { name: username, country, age_group: ageGroup, device_type: deviceType }
           }
         });
         
@@ -271,15 +286,15 @@ export default function Auth() {
         if (data.user) {
           await supabase.from('profiles').upsert({
             id: data.user.id,
-            name: name.trim(),
+            name: username.trim(),
             country,
             age_group: ageGroup
           });
           // Store device preference
-          localStorage.setItem('coc_device_type', deviceType);
+          localStorage.setItem('zenpeace_device_type', deviceType);
         }
 
-        toast.success('Account created successfully!');
+        toast.success('Welcome to Zenpeace! Account created.');
         navigate('/');
       }
     } catch (error: any) {
@@ -295,125 +310,120 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
-      <Card className="w-full max-w-md glass-card border-border shadow-2xl">
-        <CardHeader className="text-center space-y-2 pb-4">
-          <div className="mx-auto w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-2 shadow-lg">
-            {isLogin ? <LogIn className="w-7 h-7 text-primary-foreground" /> : <UserPlus className="w-7 h-7 text-primary-foreground" />}
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-primary/5 via-background to-primary/10 overflow-hidden relative">
+      {/* Colorful Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-10 left-10 w-72 h-72 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-gradient-to-br from-pink-500/15 to-orange-500/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-gradient-to-br from-green-500/10 to-teal-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+      </div>
+
+      <Card className="w-full max-w-lg glass-card border-border shadow-2xl relative z-10">
+        <CardHeader className="text-center space-y-3 pb-4">
+          <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-primary via-primary/80 to-primary/60 flex items-center justify-center mb-2 shadow-xl animate-pulse">
+            <Crown className="w-8 h-8 text-primary-foreground" />
           </div>
-          <CardTitle className="text-xl font-black gradient-text">
-            {isLogin ? 'Welcome Back' : 'Join Crown of Creation'}
+          <CardTitle className="text-2xl font-black">
+            <span className="bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
+              {isLogin ? 'Welcome to Zenpeace' : 'Join Zenpeace'}
+            </span>
           </CardTitle>
-          <CardDescription className="text-xs">
-            {isLogin ? 'Login to continue your journey' : 'Create your account to get started'}
+          <CardDescription className="text-sm">
+            {isLogin ? 'Login to continue your peaceful journey' : 'Create your account and find your peace'}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
-          <form onSubmit={handleAuth} className="space-y-3">
+          <form onSubmit={handleAuth} className="space-y-4">
             {!isLogin && (
               <div className="space-y-1.5">
-                <Label htmlFor="name" className="flex items-center gap-2 text-xs">
-                  <span>👤</span> Full Name
+                <Label htmlFor="username" className="flex items-center gap-2 text-sm font-medium">
+                  <span>👤</span> Username
                 </Label>
                 <Input
-                  id="name"
-                  placeholder="Enter your full name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="glass-card border-border h-9"
+                  id="username"
+                  placeholder="Choose a unique username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="glass-card border-border h-10"
                   required={!isLogin}
                 />
+                <p className="text-[10px] text-muted-foreground">This will be visible to other users</p>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="flex items-center gap-2 text-xs">
-                <span>📧</span> Email
+              <Label htmlFor="email" className="flex items-center gap-2 text-sm font-medium">
+                <span>📧</span> Email or Phone Number
               </Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="your@email.com"
+                placeholder="your@email.com or +977 98..."
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="glass-card border-border h-9"
+                className="glass-card border-border h-10"
                 required
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="flex items-center gap-2 text-xs">
+              <Label htmlFor="password" className="flex items-center gap-2 text-sm font-medium">
                 <span>🔒</span> Password
               </Label>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
+                  placeholder="Create a strong password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="glass-card border-border pr-10 h-9"
+                  className="glass-card border-border pr-10 h-10"
                   required
-                  minLength={6}
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
                   onClick={() => setShowPassword(!showPassword)}
                 >
-                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </Button>
               </div>
+              
+              {/* Password Requirements - Only show for signup */}
+              {!isLogin && password.length > 0 && (
+                <div className="mt-2 p-3 rounded-lg bg-muted/30 space-y-1.5">
+                  <p className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                    <Info className="w-3 h-3" /> Password requirements:
+                  </p>
+                  <div className="grid grid-cols-1 gap-1">
+                    <div className={`flex items-center gap-2 text-[11px] ${passwordChecks.minLength ? 'text-green-500' : 'text-muted-foreground'}`}>
+                      {passwordChecks.minLength ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      At least 8 characters
+                    </div>
+                    <div className={`flex items-center gap-2 text-[11px] ${passwordChecks.hasNumber ? 'text-green-500' : 'text-muted-foreground'}`}>
+                      {passwordChecks.hasNumber ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      At least one number (0-9)
+                    </div>
+                    <div className={`flex items-center gap-2 text-[11px] ${passwordChecks.hasSpecial ? 'text-green-500' : 'text-muted-foreground'}`}>
+                      {passwordChecks.hasSpecial ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      At least one special character (!@#$%...)
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {!isLogin && (
               <>
-                {/* Country with search */}
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-2 text-xs">
-                    <Globe className="w-3.5 h-3.5 text-primary" /> Select Your Country
-                  </Label>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input
-                      placeholder="Search country..."
-                      value={countrySearch}
-                      onChange={(e) => setCountrySearch(e.target.value)}
-                      className="glass-card border-border pl-8 h-8 text-xs mb-1"
-                    />
-                  </div>
-                  <Select value={country} onValueChange={setCountry}>
-                    <SelectTrigger className="glass-card border-border h-9">
-                      <SelectValue>
-                        <span className="flex items-center gap-2">
-                          <span>{selectedCountryFlag}</span>
-                          <span>{country}</span>
-                        </span>
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="glass-card border-border max-h-48">
-                      {filteredCountries.map((c) => (
-                        <SelectItem key={c.name} value={c.name}>
-                          <span className="flex items-center gap-2">
-                            <span>{c.flag}</span>
-                            <span>{c.name}</span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[10px] text-muted-foreground">Used to show regional content</p>
-                </div>
-
                 {/* Age Group */}
                 <div className="space-y-1.5">
-                  <Label className="flex items-center gap-2 text-xs">
-                    <Calendar className="w-3.5 h-3.5 text-primary" /> Select Your Age Group
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <Calendar className="w-4 h-4 text-primary" /> Select Age Group
                   </Label>
                   <Select value={ageGroup} onValueChange={setAgeGroup}>
-                    <SelectTrigger className="glass-card border-border h-9">
+                    <SelectTrigger className="glass-card border-border h-10">
                       <SelectValue placeholder="Select age group" />
                     </SelectTrigger>
                     <SelectContent className="glass-card border-border">
@@ -424,21 +434,63 @@ export default function Auth() {
                   </Select>
                 </div>
 
+                {/* Country with search */}
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <Globe className="w-4 h-4 text-primary" /> Select Your Country
+                  </Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search country..."
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      className="glass-card border-border pl-9 h-9 text-sm mb-1.5"
+                    />
+                  </div>
+                  <Select value={country} onValueChange={setCountry}>
+                    <SelectTrigger className="glass-card border-border h-10">
+                      <SelectValue>
+                        <span className="flex items-center gap-2">
+                          <span className="text-lg">{selectedCountryFlag}</span>
+                          <span>{country}</span>
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="glass-card border-border max-h-52">
+                      {filteredCountries.map((c) => (
+                        <SelectItem key={c.name} value={c.name}>
+                          <span className="flex items-center gap-2">
+                            <span className="text-lg">{c.flag}</span>
+                            <span>{c.name}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">Used to show regional content and connect with nearby users</p>
+                </div>
+
                 {/* Device Type */}
                 <div className="space-y-1.5">
-                  <Label className="flex items-center gap-2 text-xs">
-                    <Laptop className="w-3.5 h-3.5 text-primary" /> Primary Device
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <Laptop className="w-4 h-4 text-primary" /> Primary Device
                   </Label>
-                  <RadioGroup value={deviceType} onValueChange={(v) => setDeviceType(v as 'laptop' | 'mobile')} className="flex gap-2">
-                    <label className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${deviceType === 'laptop' ? 'border-primary bg-primary/10' : 'border-border'}`}>
-                      <RadioGroupItem value="laptop" className="sr-only" />
-                      <Laptop className="w-4 h-4" />
-                      <span className="text-xs">Laptop</span>
-                    </label>
-                    <label className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${deviceType === 'mobile' ? 'border-primary bg-primary/10' : 'border-border'}`}>
+                  <RadioGroup value={deviceType} onValueChange={(v) => setDeviceType(v as 'mobile' | 'tablet' | 'desktop')} className="grid grid-cols-3 gap-2">
+                    <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border cursor-pointer transition-all ${deviceType === 'mobile' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}>
                       <RadioGroupItem value="mobile" className="sr-only" />
-                      <Smartphone className="w-4 h-4" />
+                      <Smartphone className="w-5 h-5" />
                       <span className="text-xs">Mobile</span>
+                    </label>
+                    <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border cursor-pointer transition-all ${deviceType === 'tablet' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}>
+                      <RadioGroupItem value="tablet" className="sr-only" />
+                      <Tablet className="w-5 h-5" />
+                      <span className="text-xs">Tablet</span>
+                    </label>
+                    <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border cursor-pointer transition-all ${deviceType === 'desktop' ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}>
+                      <RadioGroupItem value="desktop" className="sr-only" />
+                      <Laptop className="w-5 h-5" />
+                      <span className="text-xs">Desktop</span>
                     </label>
                   </RadioGroup>
                 </div>
@@ -447,23 +499,26 @@ export default function Auth() {
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg h-10"
-              disabled={loading}
+              className="w-full bg-gradient-to-r from-primary via-primary/90 to-purple-600 hover:from-primary/90 hover:to-purple-500 shadow-lg h-11 text-base font-semibold"
+              disabled={loading || (!isLogin && !isPasswordValid)}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
                   <span className="animate-spin">⏳</span> Please wait...
                 </span>
               ) : (
-                isLogin ? 'Sign In' : 'Create Account'
+                <span className="flex items-center gap-2">
+                  {isLogin ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                  {isLogin ? 'Sign In' : 'Create Account'}
+                </span>
               )}
             </Button>
 
-            <div className="text-center pt-3 border-t border-border/50">
+            <div className="text-center pt-4 border-t border-border/50">
               <button
                 type="button"
                 onClick={() => setIsLogin(!isLogin)}
-                className="text-primary hover:underline text-xs font-medium"
+                className="text-primary hover:underline text-sm font-medium"
               >
                 {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
               </button>

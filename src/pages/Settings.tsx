@@ -10,8 +10,31 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Upload, LogOut, Moon, Sun, User, Bell, Shield, Palette, HelpCircle, ChevronRight, Globe } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Upload, LogOut, Moon, Sun, User, Bell, Shield, Palette, HelpCircle, ChevronRight, Globe, Phone, Mail, GraduationCap, Calendar, Crown, Lock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+
+const LANGUAGES = [
+  { code: 'en', name: 'English', flag: '🇺🇸' },
+  { code: 'ne', name: 'नेपाली (Nepali)', flag: '🇳🇵' },
+  { code: 'hi', name: 'हिन्दी (Hindi)', flag: '🇮🇳' },
+  { code: 'es', name: 'Español (Spanish)', flag: '🇪🇸' },
+  { code: 'fr', name: 'Français (French)', flag: '🇫🇷' },
+  { code: 'de', name: 'Deutsch (German)', flag: '🇩🇪' },
+  { code: 'pt', name: 'Português (Portuguese)', flag: '🇵🇹' },
+  { code: 'ja', name: '日本語 (Japanese)', flag: '🇯🇵' },
+  { code: 'ko', name: '한국어 (Korean)', flag: '🇰🇷' },
+  { code: 'zh', name: '中文 (Chinese)', flag: '🇨🇳' },
+];
+
+const AGE_CATEGORIES = [
+  '13-17 years (Teen)',
+  '18-25 years (Young Adult)',
+  '26-35 years (Adult)',
+  '36-45 years (Middle Age)',
+  '46-55 years (Mature)',
+  '56+ years (Senior)',
+];
 
 export default function Settings() {
   const { user, profile: userProfile, logout } = useAuth();
@@ -20,11 +43,20 @@ export default function Settings() {
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
   const [website, setWebsite] = useState('');
+  const [ageCategory, setAgeCategory] = useState('');
+  const [qualification, setQualification] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [language, setLanguage] = useState('en');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // Privacy - track last name/region change
+  const [lastNameChange, setLastNameChange] = useState<string | null>(null);
+  const canChangeName = !lastNameChange || (Date.now() - new Date(lastNameChange).getTime()) > 17 * 24 * 60 * 60 * 1000;
   
   // Notification settings
   const [notifications, setNotifications] = useState({
@@ -40,13 +72,21 @@ export default function Settings() {
       setBio(userProfile.bio || '');
       setLocation(userProfile.location || '');
       setWebsite(userProfile.website || '');
+      setAgeCategory(userProfile.age_group || '');
       setAvatarPreview(userProfile.avatar_url || '');
     }
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' || 'dark';
+    if (user?.email) {
+      setEmail(user.email);
+    }
+    const savedTheme = localStorage.getItem('zenpeace_theme') as 'light' | 'dark' || 'dark';
+    const savedLang = localStorage.getItem('zenpeace_language') || 'en';
+    const savedLastChange = localStorage.getItem('zenpeace_last_name_change');
     setTheme(savedTheme);
+    setLanguage(savedLang);
+    setLastNameChange(savedLastChange);
     if (savedTheme === 'light') document.body.classList.add('light');
     setLoading(false);
-  }, [userProfile]);
+  }, [userProfile, user]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -82,10 +122,15 @@ export default function Settings() {
       }
       
       const { error } = await supabase.from('profiles').update({ 
-        name, bio, location, website, avatar_url: newAvatarUrl 
+        name, bio, location, website, avatar_url: newAvatarUrl, age_group: ageCategory
       }).eq('id', user.id);
       
       if (error) throw error;
+      
+      // Track name change for 17-day rule
+      localStorage.setItem('zenpeace_last_name_change', new Date().toISOString());
+      setLastNameChange(new Date().toISOString());
+      
       toast.success('Profile updated!');
       setAvatarFile(null);
     } catch (error) {
@@ -97,9 +142,15 @@ export default function Settings() {
 
   const handleThemeChange = (newTheme: 'dark' | 'light') => {
     setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
+    localStorage.setItem('zenpeace_theme', newTheme);
     if (newTheme === 'light') document.body.classList.add('light');
     else document.body.classList.remove('light');
+  };
+
+  const handleLanguageChange = (lang: string) => {
+    setLanguage(lang);
+    localStorage.setItem('zenpeace_language', lang);
+    toast.success(`Language changed to ${LANGUAGES.find(l => l.code === lang)?.name}`);
   };
 
   const handleLogout = async () => {
@@ -110,13 +161,6 @@ export default function Settings() {
   if (loading) {
     return <div className="text-center py-12">Loading...</div>;
   }
-
-  const settingsSections = [
-    { icon: Bell, label: 'Notifications', desc: 'Manage alerts' },
-    { icon: Shield, label: 'Privacy', desc: 'Account security' },
-    { icon: Globe, label: 'Language', desc: 'English' },
-    { icon: HelpCircle, label: 'Help & Support', desc: 'FAQ, Contact' },
-  ];
 
   return (
     <div className="space-y-4 pb-20 max-w-2xl mx-auto">
@@ -145,18 +189,25 @@ export default function Settings() {
               <Button variant="outline" size="sm" onClick={() => navigate(`/profile/${user?.id}`)} className="gap-1.5">
                 <User className="w-3.5 h-3.5" /> View Profile
               </Button>
-              {avatarFile && (
-                <p className="text-[10px] text-muted-foreground mt-1 truncate">
-                  {avatarFile.name} ({(avatarFile.size / (1024 * 1024)).toFixed(1)}MB)
-                </p>
-              )}
             </div>
           </div>
 
           <div className="grid gap-3">
             <div>
-              <Label className="text-xs">Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} className="glass-card h-9" />
+              <Label className="text-xs flex items-center gap-1">
+                Name
+                {!canChangeName && (
+                  <span className="text-destructive text-[10px] flex items-center gap-0.5">
+                    <Lock className="w-2.5 h-2.5" /> (17-day lock)
+                  </span>
+                )}
+              </Label>
+              <Input 
+                value={name} 
+                onChange={(e) => setName(e.target.value)} 
+                className="glass-card h-9" 
+                disabled={!canChangeName}
+              />
             </div>
             <div>
               <Label className="text-xs">Bio</Label>
@@ -168,9 +219,38 @@ export default function Settings() {
                 <Input value={location} onChange={(e) => setLocation(e.target.value)} className="glass-card h-9" placeholder="City" />
               </div>
               <div>
-                <Label className="text-xs">Website</Label>
-                <Input value={website} onChange={(e) => setWebsite(e.target.value)} className="glass-card h-9" placeholder="URL" />
+                <Label className="text-xs">Age Category</Label>
+                <Select value={ageCategory} onValueChange={setAgeCategory}>
+                  <SelectTrigger className="glass-card h-9">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AGE_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs flex items-center gap-1">
+                  <GraduationCap className="w-3 h-3" /> Qualification
+                </Label>
+                <Input value={qualification} onChange={(e) => setQualification(e.target.value)} className="glass-card h-9" placeholder="e.g. Bachelor's" />
+              </div>
+              <div>
+                <Label className="text-xs flex items-center gap-1">
+                  <Phone className="w-3 h-3" /> Contact Number
+                </Label>
+                <Input value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} className="glass-card h-9" placeholder="+977..." />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs flex items-center gap-1">
+                <Mail className="w-3 h-3" /> Email
+              </Label>
+              <Input value={email} disabled className="glass-card h-9 opacity-60" />
             </div>
           </div>
 
@@ -223,30 +303,80 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Quick Settings */}
+      {/* Privacy & Security */}
       <Card className="glass-card">
-        <CardContent className="p-0 divide-y divide-border/50">
-          {settingsSections.map((item, i) => (
-            <button key={i} className="w-full flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors">
-              <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                <item.icon className="w-4 h-4 text-muted-foreground" />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-medium">{item.label}</p>
-                <p className="text-xs text-muted-foreground">{item.desc}</p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            </button>
-          ))}
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="w-4 h-4" /> Privacy & Security
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30">
+            <AlertCircle className="w-4 h-4 text-amber-500" />
+            <p className="text-xs text-muted-foreground">
+              You can only change your name and region once every 17 days for security.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="w-full gap-2">
+            <Lock className="w-3.5 h-3.5" /> Change Password
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Language */}
+      <Card className="glass-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Globe className="w-4 h-4" /> Language
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Select value={language} onValueChange={handleLanguageChange}>
+            <SelectTrigger className="glass-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LANGUAGES.map((lang) => (
+                <SelectItem key={lang.code} value={lang.code}>
+                  <span className="flex items-center gap-2">
+                    <span>{lang.flag}</span>
+                    <span>{lang.name}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            Note: "Zenpeace" and core section names stay in English.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Help & Support */}
+      <Card className="glass-card">
+        <CardContent className="p-0">
+          <button className="w-full flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors">
+            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
+              <HelpCircle className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-medium">Help & Support</p>
+              <p className="text-xs text-muted-foreground">FAQ, feedback, report issues</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </button>
         </CardContent>
       </Card>
 
       {/* App Info & Logout */}
       <Card className="glass-card">
         <CardContent className="p-4 space-y-3">
-          <div className="text-center">
-            <p className="text-sm font-medium">Crown of Creation</p>
-            <p className="text-xs text-muted-foreground">Version 1.0.0</p>
+          <div className="text-center flex items-center justify-center gap-2">
+            <Crown className="w-5 h-5 text-primary" />
+            <div>
+              <p className="text-sm font-bold gradient-text">Zenpeace</p>
+              <p className="text-xs text-muted-foreground">Version 1.0.0</p>
+            </div>
           </div>
           <Button onClick={handleLogout} variant="destructive" className="w-full gap-2" size="sm">
             <LogOut className="w-4 h-4" /> Logout
