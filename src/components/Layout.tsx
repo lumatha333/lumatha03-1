@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { BottomNavigation } from '@/components/BottomNavigation';
+import { SubNavigation } from '@/components/SubNavigation';
 import logo from '@/assets/logo.png';
 import { DesktopMessagesPanel } from './DesktopMessagesPanel';
 import { useAuth } from '@/contexts/AuthContext';
@@ -261,11 +261,11 @@ function LayoutContent({ children }: LayoutProps) {
       <main className="flex-1 relative flex flex-col min-w-0">
         {/* Header - Facebook-style hide/show on scroll */}
         <header 
-          className={`sticky z-40 glass-card border-b border-border px-2 py-1.5 transition-all duration-300 ${
+          className={`sticky z-40 glass-card border-b border-border transition-all duration-300 ${
             headerVisible ? 'top-0 opacity-100 translate-y-0' : '-top-16 opacity-0 -translate-y-full'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
             {/* Left side - Mobile sidebar trigger + Logo centered on mobile */}
             <div className="flex items-center gap-2">
               {isMobile && (
@@ -289,7 +289,7 @@ function LayoutContent({ children }: LayoutProps) {
               </Link>
             )}
 
-            {/* Right side - Theme toggle only (removed notifications - moved to bottom nav) */}
+            {/* Right side - Theme toggle only (removed notifications - moved to sub nav) */}
             <div className="flex items-center gap-1">
               <Button 
                 variant="ghost" 
@@ -301,6 +301,9 @@ function LayoutContent({ children }: LayoutProps) {
               </Button>
             </div>
           </div>
+          
+          {/* Sub Navigation - Below header, hides/shows with header */}
+          <SubNavigation visible={headerVisible} />
         </header>
 
         {/* Content Area with Messages Panel on desktop (Home only) */}
@@ -319,14 +322,6 @@ function LayoutContent({ children }: LayoutProps) {
             </aside>
           )}
         </div>
-
-        {/* Bottom Navigation - Mobile only */}
-        {isMobile && (
-          <BottomNavigation 
-            activeTab={location.pathname === '/' ? 'all' : ''} 
-            onTabChange={() => {}} 
-          />
-        )}
       </main>
     </div>
   );
