@@ -31,7 +31,17 @@ interface CategorizedTodo extends Todo {
 export default function Education() {
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('documents');
+  // Default to 'documents' tab - never auto-show To-Do
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('zenpeace_education_tab');
+    // Always default to documents, not todos
+    return saved && ['documents', 'notes', 'todos'].includes(saved) ? saved : 'documents';
+  });
+  
+  // Save active tab preference
+  useEffect(() => {
+    localStorage.setItem('zenpeace_education_tab', activeTab);
+  }, [activeTab]);
   
   const [documents, setDocuments] = useState<DocumentWithProfile[]>([]);
   const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set());
