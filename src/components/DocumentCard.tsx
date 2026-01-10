@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Heart, MessageCircle, Share2, MoreVertical, Download, ExternalLink, Edit, Trash2, Lock, Globe, BookOpen } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreVertical, Download, ExternalLink, Edit, Trash2, Lock, Globe, BookOpen, Bookmark } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 
 type Document = Database['public']['Tables']['documents']['Row'];
@@ -26,9 +26,11 @@ interface DocumentCardProps {
   onDownload: (fileUrl: string, fileName: string) => void;
   onOpenInBrowser: (fileUrl: string) => void;
   onRefresh: () => void;
+  onSave?: () => void;
+  isSaved?: boolean;
 }
 
-export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowser, onRefresh }: DocumentCardProps) {
+export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowser, onRefresh, onSave, isSaved }: DocumentCardProps) {
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
   const isOwner = currentUser?.id === doc.user_id;
@@ -234,6 +236,12 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
                   <DropdownMenuItem onClick={() => handleDownloadFile(doc.file_url, doc.file_name)}>
                     <Download className="w-3.5 h-3.5 mr-2" />Download
                   </DropdownMenuItem>
+                  {onSave && (
+                    <DropdownMenuItem onClick={onSave}>
+                      <Bookmark className={`w-3.5 h-3.5 mr-2 ${isSaved ? 'fill-current' : ''}`} />
+                      {isSaved ? 'Unsave' : 'Save'}
+                    </DropdownMenuItem>
+                  )}
                   {isOwner && (
                     <>
                       <DropdownMenuItem onClick={() => { setEditDescription(doc.description || ''); setEditDialogOpen(true); }}>
