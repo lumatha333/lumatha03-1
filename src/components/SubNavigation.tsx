@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, Plus, Lock, Bell, User } from 'lucide-react';
+import { Home, Lock, Bell, User, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,13 +9,13 @@ interface SubNavigationProps {
   visible?: boolean;
 }
 
-// Order: Feed, Private, Create, Alerts, Profile - ICONS ONLY
+// Order: Feed, Video Only, Private, Profile, Notifications - ICONS ONLY (removed Create, it's in top bar)
 const tabs = [
-  { id: 'feed', icon: Home, path: '/' },
-  { id: 'private', icon: Lock, path: '/private' },
-  { id: 'create', icon: Plus, path: '/create' },
-  { id: 'notifications', icon: Bell, path: '/notifications' },
-  { id: 'profile', icon: User, path: null },
+  { id: 'feed', icon: Home, path: '/', label: 'Feed' },
+  { id: 'videos', icon: Video, path: '/?filter=videos', label: 'Videos' },
+  { id: 'private', icon: Lock, path: '/private', label: 'Private' },
+  { id: 'profile', icon: User, path: null, label: 'Profile' },
+  { id: 'notifications', icon: Bell, path: '/notifications', label: 'Alerts' },
 ];
 
 export function SubNavigation({ visible = true }: SubNavigationProps) {
@@ -56,7 +56,16 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
   }, [user]);
 
   const handleTabClick = (tab: typeof tabs[0]) => {
-    if (tab.path) {
+    if (tab.id === 'videos') {
+      // Set video filter in localStorage and navigate to home
+      localStorage.setItem('zenpeace_feed_filter', 'videos');
+      navigate('/');
+      window.dispatchEvent(new CustomEvent('feedFilterChange', { detail: 'videos' }));
+    } else if (tab.path) {
+      if (tab.id === 'feed') {
+        localStorage.setItem('zenpeace_feed_filter', 'all');
+        window.dispatchEvent(new CustomEvent('feedFilterChange', { detail: 'all' }));
+      }
       navigate(tab.path);
     } else if (tab.id === 'profile' && user) {
       navigate(`/profile/${user.id}`);
@@ -64,6 +73,14 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
   };
 
   const isActive = (tab: typeof tabs[0]) => {
+    if (tab.id === 'videos') {
+      const filter = localStorage.getItem('zenpeace_feed_filter');
+      return location.pathname === '/' && filter === 'videos';
+    }
+    if (tab.id === 'feed') {
+      const filter = localStorage.getItem('zenpeace_feed_filter');
+      return location.pathname === '/' && filter !== 'videos';
+    }
     if (tab.path) return location.pathname === tab.path;
     if (tab.id === 'profile') return location.pathname.startsWith('/profile');
     return false;
@@ -80,7 +97,6 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = isActive(tab);
-          const isCreate = tab.id === 'create';
           const showBadge = tab.id === 'notifications' && unreadCount > 0;
           
           return (
@@ -89,17 +105,16 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
               onClick={() => handleTabClick(tab)}
               className={cn(
                 "flex items-center justify-center p-2.5 rounded-full transition-all relative",
-                isCreate && "bg-gradient-to-br from-primary/30 to-primary/10 scale-110",
                 active 
                   ? "text-primary bg-primary/15" 
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
               )}
+              title={tab.label}
             >
               <div className="relative">
                 <Icon className={cn(
                   "w-5 h-5 transition-all",
-                  active && "scale-110 text-primary",
-                  isCreate && "text-primary"
+                  active && "scale-110 text-primary"
                 )} />
                 {showBadge && (
                   <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[8px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1 animate-pulse">

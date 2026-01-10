@@ -11,9 +11,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Calendar, CalendarDays, CalendarRange, Trash2 } from 'lucide-react';
+import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Trash2, Bookmark, RotateCcw, Sparkles } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import DocumentCard from '@/components/DocumentCard';
+import { DEFAULT_DAILY_TODOS, DEFAULT_WEEKLY_TODOS, DEFAULT_MONTHLY_TODOS, DEFAULT_YEARLY_TODOS, TODO_CATEGORIES, TodoCategory, getDefaultTodos } from '@/data/defaultTodos';
+import { cn } from '@/lib/utils';
 
 type Document = Database['public']['Tables']['documents']['Row'];
 type Todo = Database['public']['Tables']['todos']['Row'];
@@ -21,42 +23,6 @@ type Note = Database['public']['Tables']['notes']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 type DocumentWithProfile = Document & { profiles?: Profile };
-
-// Default todos by category
-const DEFAULT_DAILY_TODOS = [
-  "Wake up and stay clean",
-  "Eat healthy food",
-  "Drink water",
-  "Move your body",
-  "Study or work",
-  "Help someone",
-  "Relax your mind",
-  "Sleep on time"
-];
-
-const DEFAULT_WEEKLY_TODOS = [
-  "Clean your room/home",
-  "Spend time with family",
-  "Learn something new",
-  "Play or enjoy a hobby",
-  "Go outside",
-  "Do a good deed",
-  "Reduce screen time",
-  "Plan next week"
-];
-
-const DEFAULT_MONTHLY_TODOS = [
-  "Think about your progress",
-  "Set small goals",
-  "Learn a new life skill",
-  "Remove unused things",
-  "Try something new",
-  "Check your health",
-  "Save money",
-  "Say thank you and feel grateful"
-];
-
-type TodoCategory = 'daily' | 'weekly' | 'monthly';
 
 interface CategorizedTodo extends Todo {
   category?: TodoCategory;
@@ -68,6 +34,7 @@ export default function Education() {
   const [activeTab, setActiveTab] = useState('documents');
   
   const [documents, setDocuments] = useState<DocumentWithProfile[]>([]);
+  const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set());
   const [docSearch, setDocSearch] = useState('');
   const [docLoading, setDocLoading] = useState(true);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -76,7 +43,7 @@ export default function Education() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [uploading, setUploading] = useState(false);
-  const [docTab, setDocTab] = useState<'my' | 'public'>('public');
+  const [docTab, setDocTab] = useState<'public' | 'own' | 'saved'>('public');
 
   const [todos, setTodos] = useState<CategorizedTodo[]>([]);
   const [newTodo, setNewTodo] = useState('');
@@ -114,9 +81,26 @@ export default function Education() {
         const docsWithProfiles = data.map(doc => ({ ...doc, profiles: profilesMap.get(doc.user_id) }));
         setDocuments(docsWithProfiles);
       }
+
+      // Fetch saved document IDs (using localStorage for now, could be a DB table)
+      const savedDocs = localStorage.getItem('zenpeace_saved_docs');
+      if (savedDocs) setSavedDocIds(new Set(JSON.parse(savedDocs)));
     } finally {
       setDocLoading(false);
     }
+  };
+
+  const handleSaveDoc = (docId: string) => {
+    const newSaved = new Set(savedDocIds);
+    if (newSaved.has(docId)) {
+      newSaved.delete(docId);
+      toast.success('Removed from saved');
+    } else {
+      newSaved.add(docId);
+      toast.success('Saved!');
+    }
+    setSavedDocIds(newSaved);
+    localStorage.setItem('zenpeace_saved_docs', JSON.stringify([...newSaved]));
   };
 
   const handleUpload = async () => {
@@ -180,6 +164,7 @@ export default function Education() {
       let category: TodoCategory = 'daily';
       if (todo.text.startsWith('[weekly]')) category = 'weekly';
       else if (todo.text.startsWith('[monthly]')) category = 'monthly';
+      else if (todo.text.startsWith('[yearly]')) category = 'yearly';
       return { ...todo, category };
     });
     
@@ -196,6 +181,7 @@ export default function Education() {
       ...DEFAULT_DAILY_TODOS.map(text => ({ user_id: userId, text: `[daily]${text}`, completed: false, visibility: 'private' as const })),
       ...DEFAULT_WEEKLY_TODOS.map(text => ({ user_id: userId, text: `[weekly]${text}`, completed: false, visibility: 'private' as const })),
       ...DEFAULT_MONTHLY_TODOS.map(text => ({ user_id: userId, text: `[monthly]${text}`, completed: false, visibility: 'private' as const })),
+      ...DEFAULT_YEARLY_TODOS.map(text => ({ user_id: userId, text: `[yearly]${text}`, completed: false, visibility: 'private' as const })),
     ];
     await supabase.from('todos').insert(allDefaults);
     fetchTodos();
@@ -209,18 +195,45 @@ export default function Education() {
       if (!user) return;
       await supabase.from('todos').insert({ user_id: user.id, text: `[${todoCategory}]${newTodo}`, completed: false, visibility: 'private' });
       setNewTodo(''); fetchTodos();
+      toast.success('Task added! 🎉');
     } finally { setTodoLoading(false); }
   };
 
   const toggleTodo = async (id: string, completed: boolean) => {
     await supabase.from('todos').update({ completed: !completed }).eq('id', id);
     setTodos(todos.map(t => t.id === id ? { ...t, completed: !completed } : t));
+    if (!completed) {
+      toast.success('Great job! ⭐');
+    }
   };
 
   const deleteTodo = async (id: string) => {
     await supabase.from('todos').delete().eq('id', id);
     setTodos(todos.filter(t => t.id !== id));
     toast.success('Task deleted');
+  };
+
+  const resetCategoryTodos = async (category: TodoCategory) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
+    // Delete existing todos in this category
+    const toDelete = todos.filter(t => t.category === category);
+    for (const todo of toDelete) {
+      await supabase.from('todos').delete().eq('id', todo.id);
+    }
+    
+    // Re-add default todos
+    const defaults = getDefaultTodos(category);
+    const newTodos = defaults.map(text => ({
+      user_id: user.id,
+      text: `[${category}]${text}`,
+      completed: false,
+      visibility: 'private' as const
+    }));
+    await supabase.from('todos').insert(newTodos);
+    fetchTodos();
+    toast.success(`${category.charAt(0).toUpperCase() + category.slice(1)} tasks reset! 🔄`);
   };
 
   const fetchNotes = async () => {
@@ -253,16 +266,26 @@ export default function Education() {
 
   const myDocuments = documents.filter(doc => doc.user_id === currentUser?.id);
   const publicDocuments = documents.filter(doc => doc.visibility === 'public');
-  const filteredMyDocs = myDocuments.filter(doc => doc.title?.toLowerCase().includes(docSearch.toLowerCase()));
-  const filteredPublicDocs = publicDocuments.filter(doc => doc.title?.toLowerCase().includes(docSearch.toLowerCase()));
+  const savedDocuments = documents.filter(doc => savedDocIds.has(doc.id));
+  const filteredDocs = docTab === 'public' 
+    ? publicDocuments.filter(doc => doc.title?.toLowerCase().includes(docSearch.toLowerCase()))
+    : docTab === 'own'
+    ? myDocuments.filter(doc => doc.title?.toLowerCase().includes(docSearch.toLowerCase()))
+    : savedDocuments.filter(doc => doc.title?.toLowerCase().includes(docSearch.toLowerCase()));
 
   // Filter todos by category
-  const dailyTodos = todos.filter(t => t.category === 'daily' || t.text.startsWith('[daily]'));
-  const weeklyTodos = todos.filter(t => t.category === 'weekly' || t.text.startsWith('[weekly]'));
-  const monthlyTodos = todos.filter(t => t.category === 'monthly' || t.text.startsWith('[monthly]'));
+  const getTodosByCategory = (category: TodoCategory) => 
+    todos.filter(t => t.category === category || t.text.startsWith(`[${category}]`));
 
   const getTodoDisplayText = (text: string) => {
-    return text.replace(/^\[(daily|weekly|monthly)\]/, '');
+    return text.replace(/^\[(daily|weekly|monthly|yearly)\]/, '');
+  };
+
+  const getCompletionPercentage = (category: TodoCategory) => {
+    const categoryTodos = getTodosByCategory(category);
+    if (categoryTodos.length === 0) return 0;
+    const completed = categoryTodos.filter(t => t.completed).length;
+    return Math.round((completed / categoryTodos.length) * 100);
   };
 
   return (
@@ -286,7 +309,7 @@ export default function Education() {
 
         {/* Documents Tab */}
         <TabsContent value="documents" className="space-y-2 mt-3">
-          {/* Search Bar - Highlighted */}
+          {/* Search Bar */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary" />
             <Input 
@@ -297,7 +320,7 @@ export default function Education() {
             />
           </div>
 
-          {/* Upload Button below search */}
+          {/* Upload Button */}
           <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline" className="w-full gap-1.5 h-8 border-dashed border-primary/50 hover:bg-primary/10">
@@ -319,18 +342,20 @@ export default function Education() {
             </DialogContent>
           </Dialog>
 
-          <Tabs value={docTab} onValueChange={(val) => setDocTab(val as 'my' | 'public')}>
-            <TabsList className="glass-card w-full grid grid-cols-2 h-auto p-0.5">
-              <TabsTrigger value="my" className="text-[10px] py-1"><Lock className="w-2.5 h-2.5 mr-0.5" />My ({myDocuments.length})</TabsTrigger>
-              <TabsTrigger value="public" className="text-[10px] py-1"><Globe className="w-2.5 h-2.5 mr-0.5" />Public ({publicDocuments.length})</TabsTrigger>
+          {/* Document Tabs: Public | Own | Saved */}
+          <Tabs value={docTab} onValueChange={(val) => setDocTab(val as 'public' | 'own' | 'saved')}>
+            <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
+              <TabsTrigger value="public" className="text-[10px] py-1"><Globe className="w-2.5 h-2.5 mr-0.5" />Public</TabsTrigger>
+              <TabsTrigger value="own" className="text-[10px] py-1"><Lock className="w-2.5 h-2.5 mr-0.5" />Own</TabsTrigger>
+              <TabsTrigger value="saved" className="text-[10px] py-1"><Bookmark className="w-2.5 h-2.5 mr-0.5" />Saved</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="my" className="mt-2">
-              {docLoading ? <p className="text-center py-6 text-muted-foreground text-xs">Loading...</p> : filteredMyDocs.length === 0 ? (
-                <Card className="glass-card"><CardContent className="py-6 text-center"><BookOpen className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-xs text-muted-foreground">No documents yet</p></CardContent></Card>
+            <TabsContent value={docTab} className="mt-2">
+              {docLoading ? <p className="text-center py-6 text-muted-foreground text-xs">Loading...</p> : filteredDocs.length === 0 ? (
+                <Card className="glass-card"><CardContent className="py-6 text-center"><BookOpen className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-xs text-muted-foreground">{docTab === 'saved' ? 'No saved documents' : 'No documents yet'}</p></CardContent></Card>
               ) : (
                 <div className="grid grid-cols-1 gap-2">
-                  {filteredMyDocs.map((doc) => (
+                  {filteredDocs.map((doc) => (
                     <DocumentCard 
                       key={doc.id}
                       doc={doc}
@@ -338,25 +363,8 @@ export default function Education() {
                       onDownload={handleDownload}
                       onOpenInBrowser={handleOpenInBrowser}
                       onRefresh={fetchDocuments}
-                    />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="public" className="mt-2">
-              {filteredPublicDocs.length === 0 ? (
-                <Card className="glass-card"><CardContent className="py-6 text-center"><Globe className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-xs text-muted-foreground">No public documents</p></CardContent></Card>
-              ) : (
-                <div className="grid grid-cols-1 gap-2">
-                  {filteredPublicDocs.map((doc) => (
-                    <DocumentCard 
-                      key={doc.id}
-                      doc={doc}
-                      onDelete={handleDeleteDoc}
-                      onDownload={handleDownload}
-                      onOpenInBrowser={handleOpenInBrowser}
-                      onRefresh={fetchDocuments}
+                      onSave={() => handleSaveDoc(doc.id)}
+                      isSaved={savedDocIds.has(doc.id)}
                     />
                   ))}
                 </div>
@@ -383,7 +391,7 @@ export default function Education() {
                     <div className="flex items-center gap-1"><RadioGroupItem value="private" id="note-priv" /><Label htmlFor="note-priv" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Lock className="w-2.5 h-2.5" />Private</Label></div>
                     <div className="flex items-center gap-1"><RadioGroupItem value="public" id="note-pub" /><Label htmlFor="note-pub" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Globe className="w-2.5 h-2.5" />Public</Label></div>
                   </RadioGroup>
-                  <Button onClick={handleSaveNote} className="w-full h-8 text-xs">{editingNote ? 'Update' : 'Save'}</Button>
+                  <Button onClick={handleSaveNote} className="w-full h-8 text-xs">Save</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -392,118 +400,132 @@ export default function Education() {
           {notes.length === 0 ? (
             <Card className="glass-card"><CardContent className="py-6 text-center"><StickyNote className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-xs text-muted-foreground">No notes yet</p></CardContent></Card>
           ) : (
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid gap-2">
               {notes.map((note) => (
-                <Card key={note.id} className="glass-card">
-                  <CardContent className="p-2.5 space-y-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-1">
-                        <StickyNote className="w-3.5 h-3.5 text-yellow-500" />
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded ${note.visibility === 'public' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>{note.visibility}</span>
-                      </div>
-                      <div className="flex gap-0.5">
-                        <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>
-                          <FileText className="w-2.5 h-2.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => deleteNote(note.id)}>
-                          <Trash2 className="w-2.5 h-2.5 text-destructive" />
-                        </Button>
-                      </div>
+                <Card key={note.id} className="glass-card p-3">
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-semibold text-sm flex items-center gap-1">
+                      {note.visibility === 'private' ? <Lock className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
+                      {note.title}
+                    </h3>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>✏️</Button>
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteNote(note.id)}><Trash2 className="w-3 h-3" /></Button>
                     </div>
-                    <h3 className="font-medium text-xs">{note.title}</h3>
-                    {note.content && <p className="text-[10px] text-muted-foreground line-clamp-2">{note.content}</p>}
-                  </CardContent>
+                  </div>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{note.content}</p>
                 </Card>
               ))}
             </div>
           )}
         </TabsContent>
 
-        {/* Todos Tab */}
+        {/* Todos Tab - Enhanced with categories and reset */}
         <TabsContent value="todos" className="space-y-3 mt-3">
-          {/* Add todo input */}
+          {/* Category Selector */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {TODO_CATEGORIES.map((cat) => {
+              const percentage = getCompletionPercentage(cat.id);
+              const isActive = todoCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setTodoCategory(cat.id)}
+                  className={cn(
+                    "p-2 rounded-xl transition-all text-center relative overflow-hidden",
+                    isActive 
+                      ? "bg-primary/20 border-2 border-primary" 
+                      : "glass-card hover:bg-muted/50"
+                  )}
+                >
+                  <span className="text-lg">{cat.emoji}</span>
+                  <p className="text-[10px] font-medium mt-0.5">{cat.label}</p>
+                  <p className="text-[8px] text-muted-foreground">{percentage}%</p>
+                  {/* Progress bar */}
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-muted">
+                    <div 
+                      className="h-full bg-primary transition-all duration-500" 
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Add Task */}
           <div className="flex gap-1.5">
-            <Input placeholder="Add new task..." value={newTodo} onChange={(e) => setNewTodo(e.target.value)} className="glass-card flex-1 h-8 text-xs"
-              onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()} />
-            <select 
-              value={todoCategory} 
-              onChange={(e) => setTodoCategory(e.target.value as TodoCategory)}
-              className="h-8 px-2 text-[10px] rounded-md border border-border bg-background"
-            >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
-            <Button onClick={handleAddTodo} disabled={todoLoading} className="h-8 w-8 p-0"><Plus className="w-3.5 h-3.5" /></Button>
+            <Input
+              placeholder={`Add ${todoCategory} task...`}
+              value={newTodo}
+              onChange={(e) => setNewTodo(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
+              className="h-8 text-xs glass-card"
+            />
+            <Button onClick={handleAddTodo} size="icon" className="h-8 w-8 shrink-0" disabled={todoLoading}>
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
           </div>
 
-          {/* Daily Todos */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-medium">
-              <Calendar className="w-3.5 h-3.5 text-green-500" />
-              <span>🌞 DAILY ({dailyTodos.length})</span>
-            </div>
-            <div className="space-y-1">
-              {dailyTodos.map((todo) => (
-                <Card key={todo.id} className={`glass-card ${todo.completed ? 'opacity-50' : ''}`}>
-                  <CardContent className="p-2 flex items-center gap-2">
-                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => toggleTodo(todo.id, todo.completed || false)}>
-                      <CheckSquare className={`w-3.5 h-3.5 ${todo.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    </Button>
-                    <span className={`flex-1 text-[11px] ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>{getTodoDisplayText(todo.text)}</span>
-                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => deleteTodo(todo.id)}>
-                      <Trash2 className="w-2.5 h-2.5 text-destructive" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
+          {/* Reset Button */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="w-full h-7 text-[10px] text-muted-foreground hover:text-foreground"
+            onClick={() => resetCategoryTodos(todoCategory)}
+          >
+            <RotateCcw className="w-3 h-3 mr-1" />
+            Reset {todoCategory} tasks to defaults
+          </Button>
 
-          {/* Weekly Todos */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-medium">
-              <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
-              <span>📅 WEEKLY ({weeklyTodos.length})</span>
-            </div>
-            <div className="space-y-1">
-              {weeklyTodos.map((todo) => (
-                <Card key={todo.id} className={`glass-card ${todo.completed ? 'opacity-50' : ''}`}>
-                  <CardContent className="p-2 flex items-center gap-2">
-                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => toggleTodo(todo.id, todo.completed || false)}>
-                      <CheckSquare className={`w-3.5 h-3.5 ${todo.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    </Button>
-                    <span className={`flex-1 text-[11px] ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>{getTodoDisplayText(todo.text)}</span>
-                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => deleteTodo(todo.id)}>
-                      <Trash2 className="w-2.5 h-2.5 text-destructive" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-
-          {/* Monthly Todos */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-medium">
-              <CalendarRange className="w-3.5 h-3.5 text-purple-500" />
-              <span>🗓️ MONTHLY ({monthlyTodos.length})</span>
-            </div>
-            <div className="space-y-1">
-              {monthlyTodos.map((todo) => (
-                <Card key={todo.id} className={`glass-card ${todo.completed ? 'opacity-50' : ''}`}>
-                  <CardContent className="p-2 flex items-center gap-2">
-                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => toggleTodo(todo.id, todo.completed || false)}>
-                      <CheckSquare className={`w-3.5 h-3.5 ${todo.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    </Button>
-                    <span className={`flex-1 text-[11px] ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>{getTodoDisplayText(todo.text)}</span>
-                    <Button size="icon" variant="ghost" className="h-5 w-5 shrink-0" onClick={() => deleteTodo(todo.id)}>
-                      <Trash2 className="w-2.5 h-2.5 text-destructive" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+          {/* Todo List */}
+          <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+            {getTodosByCategory(todoCategory).length === 0 ? (
+              <Card className="glass-card">
+                <CardContent className="py-4 text-center">
+                  <Sparkles className="w-8 h-8 mx-auto text-primary/50 mb-2" />
+                  <p className="text-xs text-muted-foreground">No {todoCategory} tasks. Add some!</p>
+                </CardContent>
+              </Card>
+            ) : (
+              getTodosByCategory(todoCategory).map((todo) => (
+                <div 
+                  key={todo.id} 
+                  className={cn(
+                    "flex items-center gap-2 p-2.5 rounded-lg transition-all group",
+                    todo.completed 
+                      ? "bg-primary/10 border border-primary/30" 
+                      : "glass-card hover:bg-muted/30"
+                  )}
+                >
+                  <button 
+                    onClick={() => toggleTodo(todo.id, todo.completed || false)} 
+                    className="shrink-0"
+                  >
+                    <div className={cn(
+                      "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                      todo.completed 
+                        ? "bg-primary border-primary text-primary-foreground" 
+                        : "border-muted-foreground hover:border-primary"
+                    )}>
+                      {todo.completed && <span className="text-[10px]">✓</span>}
+                    </div>
+                  </button>
+                  <span className={cn(
+                    "flex-1 text-xs",
+                    todo.completed && "line-through text-muted-foreground"
+                  )}>
+                    {getTodoDisplayText(todo.text)}
+                  </span>
+                  <button
+                    onClick={() => deleteTodo(todo.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </TabsContent>
       </Tabs>

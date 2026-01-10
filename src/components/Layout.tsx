@@ -1,13 +1,12 @@
 import { ReactNode, useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Crown, Sun, Moon, Menu, ArrowLeft } from 'lucide-react';
+import { Crown, Sun, Moon, Menu, ArrowLeft, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { SubNavigation } from '@/components/SubNavigation';
-import logo from '@/assets/logo.png';
 import { DesktopMessagesPanel } from './DesktopMessagesPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -261,15 +260,15 @@ function LayoutContent({ children }: LayoutProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
-        {/* Header - Facebook-style hide/show on scroll */}
+        {/* Header - Facebook-style hide/show on scroll - NEW LAYOUT */}
         <header 
           className={`sticky z-40 glass-card border-b border-border transition-all duration-300 ${
             headerVisible ? 'top-0 opacity-100 translate-y-0' : '-top-16 opacity-0 -translate-y-full'
           }`}
         >
           <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-            {/* Left side - Back button or Mobile sidebar */}
-            <div className="flex items-center gap-2">
+            {/* Left side - Sidebar, Create, Theme toggle */}
+            <div className="flex items-center gap-1.5">
               {isMobile && isSubSection ? (
                 <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8">
                   <ArrowLeft className="h-5 w-5" />
@@ -278,25 +277,17 @@ function LayoutContent({ children }: LayoutProps) {
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
               
-              {/* Desktop: Logo on left */}
-              {!isMobile && (
-                <Link to="/" className="flex items-center gap-2" onClick={handleLogoClick}>
-                  <Crown className="w-5 h-5 text-primary" />
-                  <span className="font-bold text-sm gradient-text">Zenpeace</span>
-                </Link>
-              )}
-            </div>
-
-            {/* Center - Mobile logo */}
-            {isMobile && (
-              <Link to="/" className="flex items-center gap-1.5 absolute left-1/2 -translate-x-1/2" onClick={handleLogoClick}>
-                <Crown className="w-4 h-4 text-primary" />
-                <span className="font-bold text-xs gradient-text whitespace-nowrap">Zenpeace</span>
-              </Link>
-            )}
-
-            {/* Right side - Theme toggle only */}
-            <div className="flex items-center gap-1">
+              {/* Create Button */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => navigate('/create')}
+                className="h-8 w-8 bg-primary/10 hover:bg-primary/20"
+              >
+                <Plus className="h-4 w-4 text-primary" />
+              </Button>
+              
+              {/* Theme Toggle */}
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -306,6 +297,16 @@ function LayoutContent({ children }: LayoutProps) {
                 {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
               </Button>
             </div>
+
+            {/* Right side - Zenpeace Branding (TEXT ONLY, slightly bigger) */}
+            <Link 
+              to="/" 
+              className="flex items-center gap-1.5" 
+              onClick={handleLogoClick}
+            >
+              <Crown className="w-5 h-5 text-primary" />
+              <span className="font-bold text-base gradient-text whitespace-nowrap">Zenpeace</span>
+            </Link>
           </div>
           
           {/* Sub Navigation - Only show on Home section, hides/shows with header */}
