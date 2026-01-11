@@ -196,12 +196,24 @@ function LayoutContent({ children }: LayoutProps) {
   // Check if we're in chat view (full screen, no header)
   const isFullScreenPage = location.pathname.startsWith('/chat/') && location.pathname !== '/chat';
   
-  // Check if we're on home page - only show SubNavigation there
-  const isHomePage = location.pathname === '/';
+  // Check if we're on Home page subsections (where we show 6 icons and banner)
+  const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || 
+                        location.pathname.startsWith('/profile/') ||
+                        (location.pathname === '/' && localStorage.getItem('zenpeace_feed_filter') === 'videos');
+  
+  // Only show the main banner on exact Home page (/)
+  const showBanner = location.pathname === '/';
+  
+  // Only show SubNavigation on home section pages
+  const showSubNav = isHomeSection;
   
   // Check if we're in a subsection that needs back button
-  const isSubSection = ['/create', '/private', '/notifications'].includes(location.pathname) || 
+  const isSubSection = ['/create', '/private', '/notifications', '/search'].includes(location.pathname) || 
                        location.pathname.startsWith('/profile/');
+
+  // Other sections (not home) - no create, no theme in top bar
+  const isOtherSection = ['/chat', '/marketplace', '/settings', '/funpun', '/education'].includes(location.pathname) ||
+                         location.pathname.startsWith('/music-adventure');
 
   if (isAuthPage) {
     return <>{children}</>;
@@ -260,14 +272,14 @@ function LayoutContent({ children }: LayoutProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
-        {/* Header - Facebook-style hide/show on scroll - NEW LAYOUT */}
+        {/* Header - Different for Home vs Other sections */}
         <header 
           className={`sticky z-40 glass-card border-b border-border transition-all duration-300 ${
             headerVisible ? 'top-0 opacity-100 translate-y-0' : '-top-16 opacity-0 -translate-y-full'
           }`}
         >
           <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-            {/* Left side - Sidebar, Create, Theme toggle */}
+            {/* Left side */}
             <div className="flex items-center gap-1.5">
               {isMobile && isSubSection ? (
                 <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8">
@@ -277,28 +289,31 @@ function LayoutContent({ children }: LayoutProps) {
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
               
-              {/* Create Button */}
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => navigate('/create')}
-                className="h-8 w-8 bg-primary/10 hover:bg-primary/20"
-              >
-                <Plus className="h-4 w-4 text-primary" />
-              </Button>
-              
-              {/* Theme Toggle */}
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={toggleTheme} 
-                className="h-8 w-8"
-              >
-                {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              </Button>
+              {/* Create & Theme Toggle - ONLY on Home main page (/) */}
+              {showBanner && (
+                <>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => navigate('/create')}
+                    className="h-8 w-8 bg-primary/10 hover:bg-primary/20"
+                  >
+                    <Plus className="h-4 w-4 text-primary" />
+                  </Button>
+                  
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={toggleTheme} 
+                    className="h-8 w-8"
+                  >
+                    {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                  </Button>
+                </>
+              )}
             </div>
 
-            {/* Right side - Zenpeace Branding (TEXT ONLY, slightly bigger) */}
+            {/* Right side - Zenpeace Branding */}
             <Link 
               to="/" 
               className="flex items-center gap-1.5" 
@@ -309,8 +324,8 @@ function LayoutContent({ children }: LayoutProps) {
             </Link>
           </div>
           
-          {/* Sub Navigation - Only show on Home section, hides/shows with header */}
-          {isHomePage && <SubNavigation visible={headerVisible} />}
+          {/* Sub Navigation - Only on Home section pages */}
+          {showSubNav && <SubNavigation visible={headerVisible} />}
         </header>
 
         {/* Content Area with Messages Panel on desktop (Home only) */}
@@ -322,8 +337,8 @@ function LayoutContent({ children }: LayoutProps) {
             </div>
           </div>
 
-          {/* Desktop Messages Panel - Only on Home page, extended for ultra-wide */}
-          {!isMobile && isHomePage && (
+          {/* Desktop Messages Panel - Only on Home page */}
+          {!isMobile && location.pathname === '/' && (
             <aside className="hidden lg:flex w-[400px] xl:w-[440px] border-l border-border flex-col overflow-hidden shrink-0">
               <DesktopMessagesPanel />
             </aside>
