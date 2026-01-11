@@ -11,7 +11,8 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { 
   Mountain, Trophy, MapPin, Upload, Star, Heart, Bookmark, Navigation,
-  Award, Medal, Crown, TrendingUp, Target, Compass, Map, Globe, Flag
+  Award, Medal, Crown, TrendingUp, Target, Compass, Map, Globe, Flag,
+  Calendar, CalendarDays, CalendarRange
 } from 'lucide-react';
 
 // Nepal's Top Places
@@ -28,27 +29,92 @@ const NEPAL_TOP_PLACES = [
   { id: 'np10', name: 'Gosaikunda Lake', location: 'Rasuwa', points: 750, stars: 4.7, hearts: 4100, type: 'lake', mapUrl: 'https://maps.google.com/?q=28.0833,85.4167' },
 ];
 
-// Travel categories
+// Travel categories with Top 5 from Nepal
 const TRAVEL_CATEGORIES = [
   { id: 'heritage', name: 'Heritage Sites', icon: '🏛️' },
   { id: 'nature', name: 'Nature & Wildlife', icon: '🌿' },
   { id: 'adventure', name: 'Adventure Spots', icon: '🏔️' },
 ];
 
-// Sample challenges (expanded 60-300)
-const SYSTEM_CHALLENGES = Array.from({ length: 60 }, (_, i) => ({
-  id: `ch${i + 1}`,
-  title: [
-    'Visit a local temple', 'Hike a mountain trail', 'Try local cuisine', 
-    'Take a sunrise photo', 'Meet a local artisan', 'Explore a forest',
-    'Visit a waterfall', 'Camp under stars', 'Learn local dance',
-    'Visit heritage site', 'Try adventure sport', 'Volunteer locally'
-  ][i % 12],
-  description: 'Complete this challenge to earn points and badges!',
-  points: 50 + (i % 5) * 30,
-  difficulty: ['easy', 'medium', 'hard'][i % 3],
-  category: ['exploration', 'culture', 'adventure', 'nature'][i % 4],
-}));
+// Challenge categories - Daily, Weekly, Monthly (100+ challenges)
+const CHALLENGE_CATEGORIES = [
+  { id: 'daily', name: 'Daily', icon: Calendar },
+  { id: 'weekly', name: 'Weekly', icon: CalendarDays },
+  { id: 'monthly', name: 'Monthly', icon: CalendarRange },
+];
+
+// Generate 100+ challenges with Daily/Weekly/Monthly categories
+const generateChallenges = () => {
+  const dailyTasks = [
+    'Take a morning walk', 'Photograph a sunrise', 'Visit a local shop', 'Try new street food',
+    'Talk to a stranger', 'Explore a new street', 'Visit a temple', 'Read in a park',
+    'Take 10 photos of nature', 'Find a hidden cafe', 'Walk 5000 steps', 'Meditate outdoors',
+    'Sketch something outdoors', 'Listen to local music', 'Watch sunset', 'Try local tea',
+    'Visit a bookshop', 'Plant a seed', 'Help someone', 'Write in a journal'
+  ];
+  
+  const weeklyTasks = [
+    'Complete a trekking trail', 'Visit 3 heritage sites', 'Try 5 local dishes', 'Photograph 10 birds',
+    'Explore a new village', 'Camp overnight', 'Learn 10 local words', 'Visit a museum',
+    'Complete a nature walk', 'Document local culture', 'Interview a local elder', 'Visit a waterfall',
+    'Explore ancient ruins', 'Attend a local event', 'Visit wildlife sanctuary', 'Cycle 20km'
+  ];
+  
+  const monthlyTasks = [
+    'Complete a major trek', 'Visit 5 different cities', 'Document a festival', 'Create a travel journal',
+    'Volunteer for a cause', 'Learn a traditional craft', 'Complete photo series', 'Write travel blog',
+    'Create documentary', 'Explore remote area', 'Complete all heritage sites', 'Master local cuisine'
+  ];
+
+  const challenges: any[] = [];
+  let id = 1;
+
+  dailyTasks.forEach((task, i) => {
+    challenges.push({
+      id: `ch${id++}`,
+      title: task,
+      description: 'Complete this daily challenge!',
+      points: 20 + (i % 3) * 10,
+      category: 'daily',
+    });
+  });
+
+  weeklyTasks.forEach((task, i) => {
+    challenges.push({
+      id: `ch${id++}`,
+      title: task,
+      description: 'Complete within this week!',
+      points: 50 + (i % 4) * 25,
+      category: 'weekly',
+    });
+  });
+
+  monthlyTasks.forEach((task, i) => {
+    challenges.push({
+      id: `ch${id++}`,
+      title: task,
+      description: 'Complete this month-long adventure!',
+      points: 150 + (i % 3) * 50,
+      category: 'monthly',
+    });
+  });
+
+  // Add more to reach 100+
+  for (let i = 0; i < 56; i++) {
+    const cat = ['daily', 'weekly', 'monthly'][i % 3];
+    challenges.push({
+      id: `ch${id++}`,
+      title: `Adventure Challenge ${id}`,
+      description: `A ${cat} challenge to test your spirit!`,
+      points: cat === 'daily' ? 25 : cat === 'weekly' ? 75 : 200,
+      category: cat,
+    });
+  }
+
+  return challenges;
+};
+
+const SYSTEM_CHALLENGES = generateChallenges();
 
 // Badges
 const ADVENTURE_BADGES = [
@@ -61,6 +127,7 @@ const ADVENTURE_BADGES = [
 
 export default function Adventure() {
   const [activeTab, setActiveTab] = useState('stats');
+  const [challengeCategory, setChallengeCategory] = useState('daily');
   const [challenges, setChallenges] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,15 +266,6 @@ export default function Adventure() {
     return ADVENTURE_BADGES.filter(b => total >= b.requirement);
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy': return 'bg-green-500';
-      case 'medium': return 'bg-yellow-500';
-      case 'hard': return 'bg-red-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
   // Mock leaderboard
   const globalLeaderboard = [
     { rank: 1, name: 'MountainKing', points: 8500, badge: '👑' },
@@ -224,7 +282,9 @@ export default function Adventure() {
   ];
 
   const earnedBadges = getEarnedBadges();
-  const combinedChallenges = [...challenges, ...SYSTEM_CHALLENGES.slice(0, 60 - challenges.length)];
+  
+  // Filter challenges by category (Daily/Weekly/Monthly)
+  const filteredChallenges = SYSTEM_CHALLENGES.filter(c => c.category === challengeCategory);
 
   return (
     <div className="space-y-4 pb-20">
@@ -233,12 +293,10 @@ export default function Adventure() {
         <h1 className="text-xl font-bold flex items-center gap-2">
           🧗 Adventure
         </h1>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="gap-1">
-            <Trophy className="w-3 h-3 text-yellow-500" />
-            {totalPoints + discoverPoints} pts
-          </Badge>
-        </div>
+        <Badge variant="outline" className="gap-1">
+          <Trophy className="w-3 h-3 text-yellow-500" />
+          {totalPoints + discoverPoints} pts
+        </Badge>
       </div>
 
       {/* Tabs */}
@@ -347,11 +405,30 @@ export default function Adventure() {
           </Card>
         </TabsContent>
 
-        {/* Challenges Tab */}
+        {/* Challenges Tab - Daily/Weekly/Monthly */}
         <TabsContent value="challenges" className="space-y-3 mt-3">
+          {/* Category Selector - Daily/Weekly/Monthly */}
+          <div className="flex gap-2">
+            {CHALLENGE_CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              return (
+                <Button
+                  key={cat.id}
+                  variant={challengeCategory === cat.id ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 gap-1"
+                  onClick={() => setChallengeCategory(cat.id)}
+                >
+                  <Icon className="w-3 h-3" />
+                  {cat.name}
+                </Button>
+              );
+            })}
+          </div>
+
           {loading ? (
             <div className="text-center py-8">Loading challenges...</div>
-          ) : combinedChallenges.length === 0 ? (
+          ) : filteredChallenges.length === 0 ? (
             <Card className="glass-card">
               <CardContent className="py-8 text-center">
                 <Mountain className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
@@ -360,7 +437,7 @@ export default function Adventure() {
             </Card>
           ) : (
             <div className="grid gap-2">
-              {combinedChallenges.slice(0, 20).map((challenge) => (
+              {filteredChallenges.slice(0, 20).map((challenge) => (
                 <Card key={challenge.id} className={`glass-card ${isCompleted(challenge.id) ? 'border-green-500/50' : ''}`}>
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between gap-2">
@@ -372,40 +449,48 @@ export default function Adventure() {
                         <p className="text-[10px] text-muted-foreground line-clamp-1">{challenge.description}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <Badge className={getDifficultyColor(challenge.difficulty)}>
-                          {challenge.difficulty}
+                        <Badge variant="outline" className="text-[10px]">
+                          {challenge.category}
                         </Badge>
                         <span className="text-xs font-bold text-primary">{challenge.points} pts</span>
                       </div>
                     </div>
                     <Dialog open={uploadDialog && selectedChallenge?.id === challenge.id} onOpenChange={setUploadDialog}>
                       <DialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          className="w-full mt-2 h-7 text-xs"
+                        <Button 
+                          size="sm" 
+                          className="w-full mt-2 h-8"
+                          variant={isCompleted(challenge.id) ? 'outline' : 'default'}
                           disabled={isCompleted(challenge.id)}
                           onClick={() => setSelectedChallenge(challenge)}
                         >
-                          {isCompleted(challenge.id) ? '✓ Completed' : 'Upload Proof'}
+                          {isCompleted(challenge.id) ? '✓ Completed' : 'Complete Challenge'}
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="glass-card">
                         <DialogHeader>
-                          <DialogTitle className="text-sm">Upload Proof - {challenge.title}</DialogTitle>
+                          <DialogTitle>Upload Proof</DialogTitle>
                         </DialogHeader>
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           <div>
-                            <Label className="text-xs">Upload Image/Video</Label>
-                            <Input
-                              type="file"
-                              accept="image/*,video/*"
+                            <Label>Challenge: {selectedChallenge?.title}</Label>
+                            <p className="text-sm text-muted-foreground mt-1">{selectedChallenge?.description}</p>
+                          </div>
+                          <div>
+                            <Label>Upload Photo/Video Proof</Label>
+                            <Input 
+                              type="file" 
+                              accept="image/*,video/*" 
                               onChange={(e) => setProofFile(e.target.files?.[0] || null)}
-                              className="glass-card"
+                              className="mt-1"
                             />
                           </div>
-                          <Button className="w-full" onClick={handleUploadProof} disabled={!proofFile || uploading}>
-                            <Upload className="w-4 h-4 mr-2" />
-                            {uploading ? 'Uploading...' : 'Submit Proof'}
+                          <Button 
+                            onClick={handleUploadProof} 
+                            disabled={!proofFile || uploading}
+                            className="w-full"
+                          >
+                            {uploading ? 'Uploading...' : `Submit (+${selectedChallenge?.points} pts)`}
                           </Button>
                         </div>
                       </DialogContent>
@@ -419,63 +504,57 @@ export default function Adventure() {
 
         {/* Discover Tab - Nepal Top 10 */}
         <TabsContent value="discover" className="space-y-3 mt-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold flex items-center gap-1">
-              🇳🇵 Top 10 Places in Nepal
-            </h3>
-            <Badge variant="outline">{discoverPoints} discover pts</Badge>
-          </div>
+          <Card className="glass-card border-primary/30 bg-gradient-to-br from-primary/10 to-transparent">
+            <CardContent className="p-3 text-center">
+              <h3 className="font-bold text-sm mb-1">🇳🇵 Top 10 Places in Nepal</h3>
+              <p className="text-xs text-muted-foreground">Discover and earn points!</p>
+            </CardContent>
+          </Card>
 
-          {NEPAL_TOP_PLACES.map((place, index) => (
-            <Card key={place.id} className="glass-card">
-              <CardContent className="p-3">
-                <div className="flex items-start gap-3">
-                  <div className="text-2xl shrink-0">
-                    {['🏔️', '🥾', '🌊', '🦏', '🙏', '🛕', '☸️', '🐒', '💧', '⛰️'][index]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-medium truncate">{place.name}</h4>
-                      <Badge variant="outline" className="text-[8px] shrink-0">#{index + 1}</Badge>
+          <div className="grid gap-2">
+            {NEPAL_TOP_PLACES.map((place) => (
+              <Card key={place.id} className="glass-card">
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-2xl">
+                      {place.type === 'mountain' ? '🏔️' : 
+                       place.type === 'lake' ? '🏞️' : 
+                       place.type === 'temple' ? '🛕' : 
+                       place.type === 'heritage' ? '🏛️' : 
+                       place.type === 'wildlife' ? '🐘' : '🏞️'}
                     </div>
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <MapPin className="w-2.5 h-2.5" />{place.location}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <span className="flex items-center gap-0.5 text-[10px]">
-                        <Star className="w-3 h-3 text-yellow-500" />{place.stars}
-                      </span>
-                      <span className="flex items-center gap-0.5 text-[10px]">
-                        <Heart className="w-3 h-3 text-red-500" />{place.hearts.toLocaleString()}
-                      </span>
-                      <span className="text-[10px] text-primary font-medium">+{place.points} pts</span>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-sm truncate">{place.name}</h3>
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-2.5 h-2.5" />{place.location}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[10px] flex items-center gap-0.5">
+                          <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />{place.stars}
+                        </span>
+                        <span className="text-[10px] flex items-center gap-0.5">
+                          <Heart className={`w-3 h-3 ${lovedPlaces.has(place.id) ? 'text-red-500 fill-red-500' : 'text-muted-foreground'}`} />
+                          {place.hearts + (lovedPlaces.has(place.id) ? 1 : 0)}
+                        </span>
+                        <span className="text-[10px] text-primary font-bold">{place.points} pts</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Button size="sm" className="flex-1 h-7 text-xs" onClick={() => handleVisitPlace(place)}>
-                    <Navigation className="w-3 h-3 mr-1" />View on Map
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant={lovedPlaces.has(place.id) ? "default" : "outline"} 
-                    className="h-7 w-7 p-0"
-                    onClick={() => handleLovePlace(place.id)}
-                  >
-                    <Heart className={`w-3 h-3 ${lovedPlaces.has(place.id) ? 'fill-current' : ''}`} />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant={savedPlaces.has(place.id) ? "default" : "outline"} 
-                    className="h-7 w-7 p-0"
-                    onClick={() => handleSavePlace(place.id)}
-                  >
-                    <Bookmark className={`w-3 h-3 ${savedPlaces.has(place.id) ? 'fill-current' : ''}`} />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="flex gap-2 mt-2">
+                    <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={() => handleVisitPlace(place)}>
+                      <Navigation className="w-3 h-3 mr-1" />Visit
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => handleLovePlace(place.id)}>
+                      <Heart className={`w-3 h-3 ${lovedPlaces.has(place.id) ? 'text-red-500 fill-red-500' : ''}`} />
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" onClick={() => handleSavePlace(place.id)}>
+                      <Bookmark className={`w-3 h-3 ${savedPlaces.has(place.id) ? 'text-primary fill-primary' : ''}`} />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </TabsContent>
 
         {/* Travel Tab */}
@@ -485,52 +564,54 @@ export default function Adventure() {
             {TRAVEL_CATEGORIES.map((cat) => (
               <Button
                 key={cat.id}
-                variant={travelCategory === cat.id ? "default" : "outline"}
+                variant={travelCategory === cat.id ? 'default' : 'outline'}
                 size="sm"
-                className="flex-1 text-xs gap-1"
+                className="flex-1"
                 onClick={() => setTravelCategory(cat.id)}
               >
-                <span>{cat.icon}</span>
-                <span className="hidden sm:inline">{cat.name}</span>
+                {cat.icon} {cat.name}
               </Button>
             ))}
           </div>
 
-          {/* Top 5 Nepal Places by Category */}
-          <h3 className="text-sm font-bold">🇳🇵 Top 5 in {TRAVEL_CATEGORIES.find(c => c.id === travelCategory)?.name}</h3>
-          
-          {NEPAL_TOP_PLACES
-            .filter(p => 
-              (travelCategory === 'heritage' && ['heritage', 'temple'].includes(p.type)) ||
-              (travelCategory === 'nature' && ['lake', 'wildlife'].includes(p.type)) ||
-              (travelCategory === 'adventure' && ['mountain', 'trek'].includes(p.type))
-            )
-            .slice(0, 5)
-            .map((place, index) => (
+          <Card className="glass-card border-primary/30">
+            <CardContent className="p-3 text-center">
+              <h3 className="font-bold text-sm">🇳🇵 Top 5 from Nepal</h3>
+              <p className="text-xs text-muted-foreground">Must-visit places in {TRAVEL_CATEGORIES.find(c => c.id === travelCategory)?.name}</p>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-2">
+            {NEPAL_TOP_PLACES
+              .filter(p => 
+                travelCategory === 'heritage' ? ['temple', 'heritage'].includes(p.type) :
+                travelCategory === 'nature' ? ['lake', 'wildlife'].includes(p.type) :
+                ['mountain', 'trek'].includes(p.type)
+              )
+              .slice(0, 5)
+              .map((place) => (
               <Card key={place.id} className="glass-card">
                 <CardContent className="p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="w-6 h-6 p-0 justify-center">
-                        {index + 1}
-                      </Badge>
-                      <div>
-                        <h4 className="text-xs font-medium">{place.name}</h4>
-                        <p className="text-[9px] text-muted-foreground">{place.location}</p>
-                      </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xl">
+                      {place.type === 'mountain' ? '🏔️' : 
+                       place.type === 'lake' ? '🏞️' : 
+                       place.type === 'temple' ? '🛕' : 
+                       place.type === 'heritage' ? '🏛️' : 
+                       place.type === 'wildlife' ? '🐘' : '🏞️'}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-0.5 text-[10px]">
-                        <Star className="w-3 h-3 text-yellow-500" />{place.stars}
-                      </span>
-                      <Button size="sm" className="h-6 text-[10px]" onClick={() => handleVisitPlace(place)}>
-                        <Map className="w-3 h-3" />
-                      </Button>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-sm truncate">{place.name}</h3>
+                      <p className="text-[10px] text-muted-foreground">{place.location}</p>
                     </div>
+                    <Button size="sm" className="h-7" onClick={() => handleVisitPlace(place)}>
+                      <Navigation className="w-3 h-3 mr-1" />Map
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             ))}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

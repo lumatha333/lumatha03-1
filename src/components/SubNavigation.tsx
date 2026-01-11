@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, Lock, Bell, User, Video } from 'lucide-react';
+import { Home, Lock, Bell, User, Video, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,13 +9,14 @@ interface SubNavigationProps {
   visible?: boolean;
 }
 
-// Order: Feed, Video Only, Private, Profile, Notifications - ICONS ONLY (removed Create, it's in top bar)
+// 6 icons: Home, VDOs, Search, Private, Notifications, Profile
 const tabs = [
-  { id: 'feed', icon: Home, path: '/', label: 'Feed' },
-  { id: 'videos', icon: Video, path: '/?filter=videos', label: 'Videos' },
+  { id: 'feed', icon: Home, path: '/', label: 'Home' },
+  { id: 'videos', icon: Video, path: '/?filter=videos', label: 'VDOs' },
+  { id: 'search', icon: Search, path: '/search', label: 'Search' },
   { id: 'private', icon: Lock, path: '/private', label: 'Private' },
-  { id: 'profile', icon: User, path: null, label: 'Profile' },
   { id: 'notifications', icon: Bell, path: '/notifications', label: 'Alerts' },
+  { id: 'profile', icon: User, path: null, label: 'Profile' },
 ];
 
 export function SubNavigation({ visible = true }: SubNavigationProps) {
@@ -57,7 +58,6 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
 
   const handleTabClick = (tab: typeof tabs[0]) => {
     if (tab.id === 'videos') {
-      // Set video filter in localStorage and navigate to home
       localStorage.setItem('zenpeace_feed_filter', 'videos');
       navigate('/');
       window.dispatchEvent(new CustomEvent('feedFilterChange', { detail: 'videos' }));
@@ -81,6 +81,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
       const filter = localStorage.getItem('zenpeace_feed_filter');
       return location.pathname === '/' && filter !== 'videos';
     }
+    if (tab.id === 'search') return location.pathname === '/search';
     if (tab.path) return location.pathname === tab.path;
     if (tab.id === 'profile') return location.pathname.startsWith('/profile');
     return false;
@@ -93,7 +94,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
         visible ? "opacity-100 max-h-14" : "opacity-0 max-h-0 overflow-hidden"
       )}
     >
-      <div className="flex justify-around items-center h-11 max-w-lg mx-auto px-4">
+      <div className="flex justify-around items-center h-11 max-w-lg mx-auto px-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = isActive(tab);
@@ -104,7 +105,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
               key={tab.id}
               onClick={() => handleTabClick(tab)}
               className={cn(
-                "flex items-center justify-center p-2.5 rounded-full transition-all relative",
+                "flex items-center justify-center p-2 rounded-full transition-all relative",
                 active 
                   ? "text-primary bg-primary/15" 
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/30"

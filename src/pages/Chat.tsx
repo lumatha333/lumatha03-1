@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Send, ArrowLeft, Search, Plus, CheckCheck, Paperclip, X, MoreVertical, 
   Archive, Ghost, Trash2, ShieldOff, Smile, Mic, MicOff, Play, Pause, 
-  Phone, Video, Lock, Image, Users, Clock, Heart
+  Phone, Video, Lock, Image, Users, Clock, Heart, UserSearch
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useChat } from '@/hooks/useChat';
@@ -20,6 +19,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Card, CardContent } from '@/components/ui/card';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
@@ -43,7 +43,7 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false);
   const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
   const [privateChats, setPrivateChats] = useState<Set<string>>(new Set());
-  const [chatTab, setChatTab] = useState<'main' | 'archived' | 'private' | 'following'>('main');
+  const [chatTab, setChatTab] = useState<'main' | 'find' | 'archived' | 'private'>('main');
   const [ghostMode, setGhostMode] = useState<number | null>(null);
   const [showStickers, setShowStickers] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -147,11 +147,9 @@ export default function Chat() {
   const handlePrivateAccess = (chatUserId: string) => {
     const savedPassword = localStorage.getItem('privateChatPassword');
     if (!savedPassword) {
-      // First time - set password
       setPendingPrivateChat(chatUserId);
       setShowPrivateAuth(true);
     } else {
-      // Verify password
       setPendingPrivateChat(chatUserId);
       setShowPrivateAuth(true);
     }
@@ -160,7 +158,6 @@ export default function Chat() {
   const verifyPrivatePassword = (input: string) => {
     const savedPassword = localStorage.getItem('privateChatPassword');
     if (!savedPassword) {
-      // Setting password for first time
       localStorage.setItem('privateChatPassword', input);
       setShowPrivateAuth(false);
       if (pendingPrivateChat) navigate(`/chat/${pendingPrivateChat}`);
@@ -352,6 +349,7 @@ export default function Chat() {
   const startNewChat = (targetUserId: string) => {
     setShowUserSearch(false);
     setUserSearchQuery('');
+    setChatTab('main');
     navigate(`/chat/${targetUserId}`);
   };
 
@@ -361,7 +359,7 @@ export default function Chat() {
 
   const selectedConversation = conversations.find(c => c.user_id === currentChatUser);
   
-  // Filter conversations by category
+  // Filter conversations by category - ONLY Main, Find, Archive, Private
   const filteredConversations = conversations.filter(conv => {
     const matchesSearch = !searchQuery || conv.user_name.toLowerCase().includes(searchQuery.toLowerCase());
     const isArchived = archivedChats.has(conv.user_id);
@@ -370,7 +368,7 @@ export default function Chat() {
     if (chatTab === 'archived') return matchesSearch && isArchived;
     if (chatTab === 'private') return matchesSearch && isPrivate;
     if (chatTab === 'main') return matchesSearch && !isArchived && !isPrivate;
-    return matchesSearch; // following
+    return matchesSearch;
   });
 
   // Get media from messages for gallery
@@ -448,360 +446,408 @@ export default function Chat() {
               
               <DropdownMenuItem onClick={() => toggleArchive(currentChatUser)}>
                 <Archive className="w-4 h-4 mr-2" />
-                {archivedChats.has(currentChatUser) ? 'Unarchive' : 'Archive'}
+                {archivedChats.has(currentChatUser) ? 'Unarchive' : 'Archive'} Chat
               </DropdownMenuItem>
               
-              {privateChats.has(currentChatUser) ? (
-                <DropdownMenuItem onClick={() => removeFromPrivate(currentChatUser)}>
-                  <Lock className="w-4 h-4 mr-2" />
-                  Remove from Private
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => addToPrivate(currentChatUser)}>
-                  <Lock className="w-4 h-4 mr-2" />
-                  Add to Private
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={() => privateChats.has(currentChatUser) ? removeFromPrivate(currentChatUser) : addToPrivate(currentChatUser)}>
+                <Lock className="w-4 h-4 mr-2" />
+                {privateChats.has(currentChatUser) ? 'Remove from Private' : 'Add to Private'}
+              </DropdownMenuItem>
               
               <DropdownMenuSeparator />
               
               <DropdownMenuItem onClick={() => deleteEntireChat(currentChatUser)} className="text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete Chat
+                Delete Conversation
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        {/* Messages */}
+        {/* Messages Area */}
         <ScrollArea className="flex-1 p-3">
-          {loading ? (
-            <div className="flex justify-center items-center h-full">
-              <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <p className="text-sm text-muted-foreground">Say hello! 👋</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {messages.map((message, index) => {
-                const isOwn = message.sender_id === user?.id;
-                const reactionCount = messageReactions[message.id] || 0;
-                return (
-                  <div 
-                    key={message.id} 
-                    className={cn("flex gap-2", isOwn ? "justify-end" : "justify-start")}
-                  >
-                    <div 
-                      className={cn(
-                        "max-w-[75%] rounded-2xl p-3 relative group",
-                        isOwn ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md"
-                      )}
-                      onDoubleClick={() => handleReactToMessage(message.id)}
-                    >
-                      {message.media_url && (
-                        <div className="mb-2 overflow-hidden rounded-lg">
-                          {message.media_type === 'image' ? (
-                            <img src={message.media_url} alt="" className="max-w-full max-h-64 rounded-lg object-contain" />
-                          ) : message.media_type === 'video' ? (
-                            <video src={message.media_url} className="max-w-full max-h-64 rounded-lg" controls playsInline preload="metadata" />
-                          ) : message.media_type === 'audio' ? (
-                            <div className="flex items-center gap-2 bg-black/10 rounded-lg p-2">
-                              <Mic className="w-4 h-4 text-primary shrink-0" />
-                              <audio src={message.media_url} controls className="w-full h-8" preload="metadata" />
-                            </div>
-                          ) : (
-                            <a href={message.media_url} target="_blank" rel="noopener noreferrer" className="text-xs underline">
-                              📎 Attachment
-                            </a>
-                          )}
-                        </div>
-                      )}
-                      <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                      <div className={cn("flex items-center gap-1 mt-1", isOwn ? "justify-end" : "justify-start")}>
-                        <span className="text-[10px] opacity-70">
-                          {formatDistanceToNow(new Date(message.created_at || ''), { addSuffix: true })}
-                        </span>
-                        {isOwn && message.is_read && <CheckCheck className="w-3 h-3 text-blue-400" />}
+          <div className="space-y-3 max-w-2xl mx-auto">
+            {messages.map((msg) => {
+              const isOwn = msg.sender_id === user?.id;
+              const reactions = messageReactions[msg.id] || 0;
+              
+              return (
+                <div key={msg.id} className={cn("flex gap-2", isOwn ? "justify-end" : "justify-start")}>
+                  {!isOwn && (
+                    <Avatar className="w-7 h-7 shrink-0">
+                      <AvatarImage src={selectedConversation?.user_avatar || undefined} />
+                      <AvatarFallback className="text-[10px] bg-primary/20">{selectedConversation?.user_name?.[0]}</AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className={cn(
+                    "max-w-[75%] rounded-2xl px-3 py-2 relative group",
+                    isOwn 
+                      ? "bg-primary text-primary-foreground rounded-br-sm" 
+                      : "bg-muted rounded-bl-sm"
+                  )}>
+                    {/* Media Content */}
+                    {msg.media_url && (
+                      <div className="mb-1 rounded-lg overflow-hidden">
+                        {msg.media_type === 'image' && (
+                          <img src={msg.media_url} alt="" className="max-w-full rounded" />
+                        )}
+                        {msg.media_type === 'video' && (
+                          <video src={msg.media_url} controls className="max-w-full rounded" />
+                        )}
+                        {msg.media_type === 'audio' && (
+                          <audio src={msg.media_url} controls className="w-full" />
+                        )}
                       </div>
-                      
-                      {/* Reaction count */}
-                      {reactionCount > 0 && (
-                        <div className="absolute -bottom-2 right-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                          <Heart className="w-2.5 h-2.5 fill-current" />
-                          {reactionCount}
-                        </div>
-                      )}
+                    )}
+                    
+                    <p className="text-sm break-words">{msg.content}</p>
+                    
+                    <div className="flex items-center justify-between mt-1 gap-2">
+                      <span className={cn("text-[9px]", isOwn ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                        {formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}
+                      </span>
+                      {isOwn && msg.is_read && <CheckCheck className="w-3 h-3 text-blue-400" />}
                     </div>
+
+                    {/* Heart Reaction */}
+                    <button 
+                      onClick={() => handleReactToMessage(msg.id)}
+                      className={cn(
+                        "absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity",
+                        "bg-background border border-border rounded-full p-1 shadow-sm"
+                      )}
+                    >
+                      <Heart className="w-3 h-3 text-red-500" />
+                    </button>
+                    
+                    {reactions > 0 && (
+                      <div className="absolute -bottom-3 right-2 bg-background border border-border rounded-full px-1.5 py-0.5 flex items-center gap-0.5 text-[10px]">
+                        <Heart className="w-2.5 h-2.5 text-red-500 fill-red-500" />
+                        {reactions}
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
+                </div>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
         </ScrollArea>
+
+        {/* Media Previews */}
+        {mediaPreviews.length > 0 && (
+          <div className="px-3 py-2 border-t border-border flex gap-2 overflow-x-auto">
+            {mediaPreviews.map((preview, i) => (
+              <div key={i} className="relative shrink-0">
+                <img src={preview} alt="" className="w-16 h-16 object-cover rounded-lg" />
+                <button 
+                  onClick={() => removeMedia(i)}
+                  className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-white rounded-full flex items-center justify-center"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Voice Recording UI */}
+        {(isRecording || audioBlob) && (
+          <div className="px-3 py-2 border-t border-border flex items-center gap-3 bg-card">
+            {isRecording ? (
+              <>
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  <span className="text-sm">{formatRecordingTime(recordingTime)}</span>
+                </div>
+                <Button variant="ghost" size="icon" onClick={cancelRecording}><X className="w-4 h-4" /></Button>
+                <Button size="icon" onClick={stopRecording}><MicOff className="w-4 h-4" /></Button>
+              </>
+            ) : audioBlob && (
+              <>
+                <audio src={URL.createObjectURL(audioBlob)} controls className="flex-1 h-8" />
+                <Button variant="ghost" size="icon" onClick={cancelRecording}><X className="w-4 h-4" /></Button>
+                <Button size="icon" onClick={sendVoiceMessage} disabled={uploading}><Send className="w-4 h-4" /></Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Input Area */}
+        {!isRecording && !audioBlob && (
+          <div className="p-3 border-t border-border flex items-center gap-2 bg-card shrink-0">
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple accept="image/*,video/*,.pdf,.doc,.docx" />
+            <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()}><Paperclip className="w-5 h-5" /></Button>
+            <Button variant="ghost" size="icon" onClick={() => setShowStickers(!showStickers)}><Smile className="w-5 h-5" /></Button>
+            <Button variant="ghost" size="icon" onClick={startRecording}><Mic className="w-5 h-5" /></Button>
+            
+            <Input 
+              placeholder="Type a message..." 
+              value={newMessage} 
+              onChange={(e) => setNewMessage(e.target.value)} 
+              onKeyPress={handleKeyPress}
+              className="flex-1 h-10"
+            />
+            <Button size="icon" onClick={handleSend} disabled={uploading || (!newMessage.trim() && mediaFiles.length === 0)}>
+              <Send className="w-5 h-5" />
+            </Button>
+          </div>
+        )}
+
+        {/* Sticker Picker */}
+        {showStickers && (
+          <div className="absolute bottom-16 left-3 right-3 bg-card border border-border rounded-xl p-3 shadow-lg grid grid-cols-8 gap-2">
+            {STICKERS.map((sticker) => (
+              <button key={sticker} onClick={() => handleSendSticker(sticker)} className="text-2xl hover:scale-125 transition-transform">{sticker}</button>
+            ))}
+          </div>
+        )}
 
         {/* Media Gallery Dialog */}
         <Dialog open={showMediaGallery} onOpenChange={setShowMediaGallery}>
-          <DialogContent className="glass-card max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-sm">Media Gallery</DialogTitle>
-            </DialogHeader>
+          <DialogContent className="glass-card max-w-lg">
+            <DialogHeader><DialogTitle>Media Gallery</DialogTitle></DialogHeader>
             <div className="grid grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto">
-              {mediaMessages.length === 0 ? (
-                <p className="col-span-3 text-center text-sm text-muted-foreground py-8">No media shared yet</p>
-              ) : (
-                mediaMessages.map((msg) => (
-                  <div key={msg.id} className="aspect-square rounded-lg overflow-hidden bg-muted">
-                    {msg.media_type === 'image' ? (
-                      <img src={msg.media_url!} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <video src={msg.media_url!} className="w-full h-full object-cover" />
-                    )}
-                  </div>
-                ))
+              {mediaMessages.map((msg) => (
+                <div key={msg.id} className="aspect-square rounded-lg overflow-hidden">
+                  {msg.media_type === 'image' ? (
+                    <img src={msg.media_url || ''} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <video src={msg.media_url || ''} className="w-full h-full object-cover" />
+                  )}
+                </div>
+              ))}
+              {mediaMessages.length === 0 && (
+                <p className="col-span-3 text-center py-8 text-muted-foreground">No media shared yet</p>
               )}
             </div>
           </DialogContent>
         </Dialog>
-
-        {/* Input Area */}
-        <div className="p-3 border-t border-border/50 bg-card/80 backdrop-blur-sm shrink-0 space-y-2">
-          {/* Media Previews */}
-          {mediaPreviews.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {mediaPreviews.map((preview, index) => (
-                <div key={index} className="relative shrink-0">
-                  <img src={preview} alt="" className="h-16 w-16 object-cover rounded-lg" />
-                  <button 
-                    onClick={() => removeMedia(index)}
-                    className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Voice Recording UI */}
-          {audioBlob && (
-            <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2">
-              <audio src={URL.createObjectURL(audioBlob)} controls className="flex-1 h-8" />
-              <Button size="sm" onClick={sendVoiceMessage} disabled={uploading}>
-                <Send className="w-4 h-4" />
-              </Button>
-              <Button size="sm" variant="ghost" onClick={cancelRecording}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <Button variant="ghost" size="icon" className="shrink-0 h-10 w-10" onClick={() => fileInputRef.current?.click()}>
-              <Paperclip className="w-5 h-5" />
-            </Button>
-            
-            <div className="relative">
-              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowStickers(!showStickers)}>
-                <Smile className="w-5 h-5" />
-              </Button>
-              {showStickers && (
-                <div className="absolute bottom-12 left-0 bg-card border border-border rounded-lg p-2 grid grid-cols-4 gap-1 shadow-lg z-10">
-                  {STICKERS.map((sticker) => (
-                    <button key={sticker} onClick={() => handleSendSticker(sticker)} className="text-2xl p-1 hover:bg-muted rounded">
-                      {sticker}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-10 w-10", isRecording && "text-red-500 animate-pulse")}
-              onClick={isRecording ? stopRecording : startRecording}
-            >
-              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </Button>
-            
-            {isRecording && (
-              <span className="text-sm text-red-500 font-mono">{formatRecordingTime(recordingTime)}</span>
-            )}
-            
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Message..."
-              className="flex-1 h-10"
-              disabled={isRecording}
-            />
-            
-            <Button onClick={handleSend} disabled={uploading || (!newMessage.trim() && mediaFiles.length === 0)} size="icon" className="h-10 w-10 shrink-0">
-              <Send className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
       </div>
     );
   }
 
-  // Chat List View
-  return (
-    <div className="space-y-3 pb-20">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">💬 Messages</h1>
-        <Dialog open={showUserSearch} onOpenChange={setShowUserSearch}>
-          <DialogTrigger asChild>
-            <Button size="sm" variant="outline" className="gap-1">
-              <Plus className="w-4 h-4" /> New
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="glass-card">
-            <DialogHeader>
-              <DialogTitle className="text-sm">New Message</DialogTitle>
-            </DialogHeader>
-            <Input
-              placeholder="Search users..."
-              value={userSearchQuery}
-              onChange={(e) => setUserSearchQuery(e.target.value)}
+  // Private Password Dialog
+  if (showPrivateAuth) {
+    return (
+      <div className="space-y-4 pb-20">
+        <Card className="glass-card">
+          <CardContent className="p-6 text-center space-y-4">
+            <Lock className="w-12 h-12 mx-auto text-primary" />
+            <h2 className="font-bold text-lg">Private Chat Access</h2>
+            <p className="text-sm text-muted-foreground">
+              {localStorage.getItem('privateChatPassword') ? 'Enter your password to access private chats' : 'Set a password to protect your private chats'}
+            </p>
+            <Input 
+              type="password" 
+              placeholder="Enter password" 
               className="glass-card"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') verifyPrivatePassword((e.target as HTMLInputElement).value);
+              }}
             />
-            <ScrollArea className="max-h-64">
-              {searchResults.map((result) => (
-                <button
-                  key={result.id}
-                  onClick={() => startNewChat(result.id)}
-                  className="w-full flex items-center gap-3 p-2 hover:bg-muted/50 rounded-lg transition-colors"
-                >
-                  <Avatar className="w-10 h-10">
-                    <AvatarImage src={result.avatar_url} />
-                    <AvatarFallback>{result.name?.[0]?.toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium">{result.name}</span>
-                </button>
-              ))}
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowPrivateAuth(false); setPendingPrivateChat(null); }}>Cancel</Button>
+              <Button className="flex-1" onClick={(e) => {
+                const input = (e.target as HTMLElement).closest('.space-y-4')?.querySelector('input') as HTMLInputElement;
+                verifyPrivatePassword(input?.value || '');
+              }}>Confirm</Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+    );
+  }
 
-      {/* Chat Categories */}
+  // Chat list view - ONLY 4 tabs: Main, Find, Archive, Private
+  return (
+    <div className="space-y-4 pb-20">
+      <h1 className="text-xl font-bold">💬 Messages</h1>
+      
+      {/* Tabs - Only Main, Find, Archive, Private */}
       <Tabs value={chatTab} onValueChange={(v) => setChatTab(v as any)}>
         <TabsList className="w-full grid grid-cols-4 h-auto p-0.5">
-          <TabsTrigger value="main" className="text-[10px] py-1.5">Main</TabsTrigger>
-          <TabsTrigger value="archived" className="text-[10px] py-1.5 gap-0.5">
-            <Archive className="w-3 h-3" />Archive
+          <TabsTrigger value="main" className="text-xs py-1.5">Main</TabsTrigger>
+          <TabsTrigger value="find" className="text-xs py-1.5">
+            <UserSearch className="w-3 h-3 mr-1" />Find
           </TabsTrigger>
-          <TabsTrigger value="private" className="text-[10px] py-1.5 gap-0.5">
-            <Lock className="w-3 h-3" />Private
+          <TabsTrigger value="archived" className="text-xs py-1.5">
+            <Archive className="w-3 h-3 mr-1" />Archive
           </TabsTrigger>
-          <TabsTrigger value="following" className="text-[10px] py-1.5">Following</TabsTrigger>
+          <TabsTrigger value="private" className="text-xs py-1.5">
+            <Lock className="w-3 h-3 mr-1" />Private
+          </TabsTrigger>
         </TabsList>
-      </Tabs>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search conversations..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 h-9 glass-card"
-        />
-      </div>
-
-      {/* Private Chat Password Dialog */}
-      <Dialog open={showPrivateAuth} onOpenChange={setShowPrivateAuth}>
-        <DialogContent className="glass-card max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <Lock className="w-4 h-4" />
-              {localStorage.getItem('privateChatPassword') ? 'Enter Password' : 'Set Private Password'}
-            </DialogTitle>
-          </DialogHeader>
-          <Input
-            type="password"
-            placeholder="Enter password..."
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') verifyPrivatePassword((e.target as HTMLInputElement).value);
-            }}
-            className="glass-card"
-          />
-          <Button onClick={(e) => {
-            const input = (e.target as HTMLElement).parentElement?.querySelector('input');
-            if (input) verifyPrivatePassword(input.value);
-          }}>
-            {localStorage.getItem('privateChatPassword') ? 'Unlock' : 'Set Password'}
-          </Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* Conversation List */}
-      <div className="space-y-2">
-        {loading ? (
-          <p className="text-center py-8 text-muted-foreground text-sm">Loading...</p>
-        ) : filteredConversations.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground text-sm">
-              {chatTab === 'archived' ? 'No archived chats' : 
-               chatTab === 'private' ? 'No private chats' : 
-               'No conversations yet'}
-            </p>
+        {/* Main Chats */}
+        <TabsContent value="main" className="mt-3 space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search chats..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 glass-card"
+            />
           </div>
-        ) : (
-          filteredConversations.map((conv) => (
-            <button
-              key={conv.user_id}
-              onClick={() => {
-                if (chatTab === 'private' || privateChats.has(conv.user_id)) {
-                  handlePrivateAccess(conv.user_id);
-                } else {
-                  navigate(`/chat/${conv.user_id}`);
-                }
-              }}
-              className="w-full flex items-center gap-3 p-3 rounded-xl glass-card hover:bg-muted/50 transition-all"
-            >
-              <div className="relative">
-                <Avatar className="w-12 h-12">
-                  <AvatarImage src={conv.user_avatar} />
-                  <AvatarFallback className="bg-primary/20">{conv.user_name?.[0]?.toUpperCase()}</AvatarFallback>
-                </Avatar>
-                {privateChats.has(conv.user_id) && (
-                  <div className="absolute -bottom-1 -right-1 bg-primary rounded-full p-0.5">
-                    <Lock className="w-3 h-3 text-primary-foreground" />
+          
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          ) : filteredConversations.length === 0 ? (
+            <Card className="glass-card">
+              <CardContent className="py-8 text-center">
+                <p className="text-muted-foreground">No conversations yet</p>
+                <Button className="mt-3" onClick={() => setChatTab('find')}>Find Users</Button>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredConversations.map((conv) => (
+              <Card 
+                key={conv.user_id} 
+                className="glass-card cursor-pointer hover:bg-muted/30 transition-colors"
+                onClick={() => navigate(`/chat/${conv.user_id}`)}
+              >
+                <CardContent className="p-3 flex items-center gap-3">
+                  <Avatar className="w-12 h-12">
+                    <AvatarImage src={conv.user_avatar || undefined} />
+                    <AvatarFallback>{conv.user_name?.[0]?.toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{conv.user_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
                   </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-sm truncate">{conv.user_name}</h3>
-                  <span className="text-[10px] text-muted-foreground">
-                    {conv.last_message ? formatDistanceToNow(new Date(), { addSuffix: true }) : ''}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
-              </div>
-              {(conv.unread_count || 0) > 0 && (
-                <Badge className="bg-primary text-primary-foreground rounded-full h-5 min-w-[20px] flex items-center justify-center text-[10px]">
-                  {conv.unread_count}
-                </Badge>
-              )}
-            </button>
-          ))
-        )}
-      </div>
+                  <div className="text-right shrink-0">
+                    {conv.last_message_time && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: false })}
+                      </p>
+                    )}
+                    {conv.unread_count > 0 && (
+                      <Badge className="mt-1 h-5 min-w-[20px] justify-center">{conv.unread_count}</Badge>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+
+        {/* Find Users */}
+        <TabsContent value="find" className="mt-3 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search users to chat..." 
+              value={userSearchQuery} 
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              className="pl-9 glass-card"
+              autoFocus
+            />
+          </div>
+          
+          {searchResults.length > 0 ? (
+            <div className="space-y-2">
+              {searchResults.map((profile) => (
+                <Card 
+                  key={profile.id} 
+                  className="glass-card cursor-pointer hover:bg-muted/30 transition-colors"
+                  onClick={() => startNewChat(profile.id)}
+                >
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={profile.avatar_url} />
+                      <AvatarFallback>{profile.name?.[0]?.toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{profile.name}</p>
+                      <p className="text-xs text-muted-foreground">Tap to start chat</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : userSearchQuery.length >= 2 ? (
+            <Card className="glass-card">
+              <CardContent className="py-8 text-center">
+                <p className="text-muted-foreground">No users found</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="glass-card">
+              <CardContent className="py-8 text-center">
+                <UserSearch className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">Search for users to start a conversation</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Archived Chats */}
+        <TabsContent value="archived" className="mt-3 space-y-2">
+          {filteredConversations.length === 0 ? (
+            <Card className="glass-card">
+              <CardContent className="py-8 text-center">
+                <Archive className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">No archived chats</p>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredConversations.map((conv) => (
+              <Card 
+                key={conv.user_id} 
+                className="glass-card cursor-pointer hover:bg-muted/30 transition-colors"
+                onClick={() => navigate(`/chat/${conv.user_id}`)}
+              >
+                <CardContent className="p-3 flex items-center gap-3">
+                  <Avatar className="w-12 h-12">
+                    <AvatarImage src={conv.user_avatar || undefined} />
+                    <AvatarFallback>{conv.user_name?.[0]?.toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{conv.user_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+
+        {/* Private Chats */}
+        <TabsContent value="private" className="mt-3 space-y-2">
+          {filteredConversations.length === 0 ? (
+            <Card className="glass-card">
+              <CardContent className="py-8 text-center">
+                <Lock className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">No private chats</p>
+                <p className="text-xs text-muted-foreground mt-1">Add chats from the menu to make them private</p>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredConversations.map((conv) => (
+              <Card 
+                key={conv.user_id} 
+                className="glass-card cursor-pointer hover:bg-muted/30 transition-colors"
+                onClick={() => handlePrivateAccess(conv.user_id)}
+              >
+                <CardContent className="p-3 flex items-center gap-3">
+                  <Avatar className="w-12 h-12">
+                    <AvatarImage src={conv.user_avatar || undefined} />
+                    <AvatarFallback>{conv.user_name?.[0]?.toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      {conv.user_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Password protected</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

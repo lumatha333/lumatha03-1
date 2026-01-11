@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Globe, Users, MapPin, Ghost, ChevronDown, ChevronUp, Flag } from 'lucide-react';
+import { Globe, Users, MapPin, Ghost, ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,17 +14,15 @@ type Post = Database['public']['Tables']['posts']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type PostWithProfile = Post & { profiles?: Profile };
 
-// Feed Vibe options
-const feedVibes = [
+// Feed category options
+const feedCategories = [
   { id: 'global', icon: Globe, label: 'Global', desc: 'Worldwide posts' },
-  { id: 'regional', icon: MapPin, label: 'Regional', desc: 'From your country' },
-  { id: 'friends', icon: Users, label: 'Friends', desc: 'People you follow' },
-  { id: 'ghost', icon: Ghost, label: 'Ghost', desc: 'Disappears in 24h' },
+  { id: 'following', icon: Users, label: 'Following', desc: 'People you follow' },
 ];
 
 export default function Home() {
-  const [feedVibe, setFeedVibe] = useState('global');
-  const [vibeExpanded, setVibeExpanded] = useState(false);
+  const [feedCategory, setFeedCategory] = useState('global');
+  const [categoryExpanded, setCategoryExpanded] = useState(false);
   const [contentFilter, setContentFilter] = useState('all');
   const [posts, setPosts] = useState<PostWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +50,7 @@ export default function Home() {
 
   useEffect(() => {
     if (user) fetchPosts();
-  }, [feedVibe, contentFilter, user, profile]);
+  }, [feedCategory, contentFilter, user, profile]);
 
   const fetchPosts = async () => {
     if (!user) return;
@@ -60,23 +59,12 @@ export default function Home() {
     try {
       let query = supabase.from('posts').select('*, profiles(*)');
 
-      // Apply feed vibe filter
-      switch (feedVibe) {
+      // Apply feed category filter
+      switch (feedCategory) {
         case 'global':
           query = query.eq('visibility', 'public');
           break;
-        case 'regional':
-          query = query.eq('visibility', 'public');
-          if (profile?.country) {
-            const { data: regionalUsers } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('country', profile.country);
-            const userIds = regionalUsers?.map(u => u.id) || [];
-            if (userIds.length > 0) query = query.in('user_id', userIds);
-          }
-          break;
-        case 'friends':
+        case 'following':
           const { data: following } = await supabase
             .from('follows')
             .select('following_id')
@@ -97,15 +85,9 @@ export default function Home() {
             return;
           }
           break;
-        case 'ghost':
-          // Ghost posts - posts from last 24 hours only
-          const yesterday = new Date();
-          yesterday.setHours(yesterday.getHours() - 24);
-          query = query.eq('visibility', 'public').gte('created_at', yesterday.toISOString());
-          break;
       }
 
-      // Apply content filter from SubNavigation
+      // Apply content filter from SubNavigation (VDOs tab)
       if (contentFilter === 'videos') {
         query = query.or('file_type.ilike.%video%,media_types.cs.{video}');
       }
@@ -116,7 +98,7 @@ export default function Home() {
       let processedPosts = postsData || [];
       
       // For global, shuffle posts to mix content
-      if (feedVibe === 'global') {
+      if (feedCategory === 'global') {
         processedPosts = processedPosts.sort(() => Math.random() - 0.5);
       }
       
@@ -179,8 +161,8 @@ export default function Home() {
     setPosts(prev => prev.filter(p => p.id !== postId));
   };
 
-  const currentVibe = feedVibes.find(v => v.id === feedVibe) || feedVibes[0];
-  const CurrentVibeIcon = currentVibe.icon;
+  const currentCategory = feedCategories.find(v => v.id === feedCategory) || feedCategories[0];
+  const CurrentCategoryIcon = currentCategory.icon;
 
   if (!user) {
     return (
@@ -193,76 +175,77 @@ export default function Home() {
 
   return (
     <div className="space-y-3 pb-20">
-      {/* Feed Vibe Selector - Expandable Icon-Based */}
-      <div className="relative">
-        <button
-          onClick={() => setVibeExpanded(!vibeExpanded)}
-          className="w-full glass-card rounded-xl p-2.5 flex items-center justify-between hover:bg-primary/5 transition-all"
+      {/* Top Bar: Create Post (Left) + Category Selector (Right) */}
+      <div className="flex items-center gap-2">
+        {/* Create Post Button */}
+        <Button 
+          onClick={() => navigate('/create')}
+          className="flex-1 gap-2 h-10"
+          variant="outline"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-              <CurrentVibeIcon className="w-5 h-5 text-primary" />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-sm">{currentVibe.label}</p>
-              <p className="text-[10px] text-muted-foreground">{currentVibe.desc}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 text-muted-foreground">
-            {feedVibe === 'regional' && profile?.country && (
-              <span className="text-xs">{profile.country}</span>
-            )}
-            {vibeExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </div>
-        </button>
+          <Plus className="w-4 h-4" />
+          Create Post
+        </Button>
 
-        {/* Expanded Vibe Options */}
-        {vibeExpanded && (
-          <div className="absolute top-full left-0 right-0 mt-1 glass-card rounded-xl p-2 z-20 shadow-lg border border-border animate-in fade-in slide-in-from-top-2 duration-200">
-            {feedVibes.map((vibe) => {
-              const Icon = vibe.icon;
-              const isActive = feedVibe === vibe.id;
-              return (
-                <button
-                  key={vibe.id}
-                  onClick={() => {
-                    setFeedVibe(vibe.id);
-                    setVibeExpanded(false);
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-3 p-2.5 rounded-lg transition-all",
-                    isActive 
-                      ? "bg-primary/15 text-primary" 
-                      : "hover:bg-muted/50 text-foreground"
-                  )}
-                >
-                  <div className={cn(
-                    "w-9 h-9 rounded-full flex items-center justify-center",
-                    isActive ? "bg-primary/20" : "bg-muted/50"
-                  )}>
-                    <Icon className={cn("w-4 h-4", isActive && "text-primary")} />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className="font-medium text-sm">{vibe.label}</p>
-                    <p className="text-[10px] text-muted-foreground">{vibe.desc}</p>
-                  </div>
-                  {isActive && (
-                    <div className="w-2 h-2 rounded-full bg-primary" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Category Selector */}
+        <div className="relative">
+          <button
+            onClick={() => setCategoryExpanded(!categoryExpanded)}
+            className="glass-card rounded-xl px-3 py-2 flex items-center gap-2 hover:bg-primary/5 transition-all"
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
+              <CurrentCategoryIcon className="w-4 h-4 text-primary" />
+            </div>
+            <span className="text-sm font-medium">{currentCategory.label}</span>
+            {categoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {/* Expanded Category Options */}
+          {categoryExpanded && (
+            <div className="absolute top-full right-0 mt-1 glass-card rounded-xl p-2 z-20 shadow-lg border border-border animate-in fade-in slide-in-from-top-2 duration-200 min-w-[160px]">
+              {feedCategories.map((cat) => {
+                const Icon = cat.icon;
+                const isActive = feedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      setFeedCategory(cat.id);
+                      setCategoryExpanded(false);
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-2 p-2 rounded-lg transition-all",
+                      isActive 
+                        ? "bg-primary/15 text-primary" 
+                        : "hover:bg-muted/50 text-foreground"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-7 h-7 rounded-full flex items-center justify-center",
+                      isActive ? "bg-primary/20" : "bg-muted/50"
+                    )}>
+                      <Icon className={cn("w-3.5 h-3.5", isActive && "text-primary")} />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-medium text-xs">{cat.label}</p>
+                    </div>
+                    {isActive && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Ghost Mode Notice */}
-      {feedVibe === 'ghost' && (
+      {/* Video Mode Notice */}
+      {contentFilter === 'videos' && (
         <Card className="glass-card border-primary/30 bg-primary/5">
           <CardContent className="p-3 text-center">
-            <Ghost className="w-5 h-5 mx-auto text-primary mb-1" />
             <p className="text-xs text-muted-foreground">
-              Ghost posts disappear after 24 hours ✨
+              📹 Showing videos only
             </p>
           </CardContent>
         </Card>
@@ -276,14 +259,12 @@ export default function Home() {
       ) : posts.length === 0 ? (
         <Card className="glass-card">
           <CardContent className="py-12 text-center">
-            <CurrentVibeIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+            <CurrentCategoryIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
             <p className="text-muted-foreground">
-              {feedVibe === 'friends' 
+              {feedCategory === 'following' 
                 ? 'Follow some users to see their posts here!' 
-                : feedVibe === 'ghost'
-                ? 'No ghost posts in the last 24 hours'
-                : feedVibe === 'regional'
-                ? 'No posts from your region yet'
+                : contentFilter === 'videos'
+                ? 'No videos found'
                 : 'No posts found'}
             </p>
           </CardContent>
