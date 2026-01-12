@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Crown, Sun, Moon, Menu, ArrowLeft, Plus } from 'lucide-react';
+import { Crown, Menu, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
@@ -15,14 +15,15 @@ interface LayoutProps {
   children: ReactNode;
 }
 
+// Colorful icons for sidebar
 const menuItems = [
-  { title: 'Home', url: '/', emoji: '🏠', desc: 'Social + Explore' },
-  { title: 'Education', url: '/education', emoji: '📚', desc: 'Notes, Docs, Study Hub' },
-  { title: 'Messages', url: '/chat', emoji: '💬', desc: 'Chat + VC + Groups' },
-  { title: 'FunPun', url: '/funpun', emoji: '🎮', desc: 'Games for Fresh Mind' },
-  { title: 'Adventure', url: '/music-adventure', emoji: '🏔️', desc: 'Challenges + Discover + Travel' },
-  { title: 'Marketplace', url: '/marketplace', emoji: '🛒', desc: 'Buy/Sell/Local Business' },
-  { title: 'Settings', url: '/settings', emoji: '⚙️', desc: 'Controls + Privacy' },
+  { title: 'Home', url: '/', emoji: '🏠', color: 'text-blue-500', desc: 'Social + Explore' },
+  { title: 'Education', url: '/education', emoji: '📚', color: 'text-purple-500', desc: 'Notes, Docs, Study Hub' },
+  { title: 'Messages', url: '/chat', emoji: '💬', color: 'text-green-500', desc: 'Chat + VC + Groups' },
+  { title: 'FunPun', url: '/funpun', emoji: '🎮', color: 'text-orange-500', desc: 'Games for Fresh Mind' },
+  { title: 'Adventure', url: '/music-adventure', emoji: '🏔️', color: 'text-teal-500', desc: 'Challenges + Discover + Travel' },
+  { title: 'Marketplace', url: '/marketplace', emoji: '🛒', color: 'text-pink-500', desc: 'Buy/Sell/Local Business' },
+  { title: 'Settings', url: '/settings', emoji: '⚙️', color: 'text-gray-500', desc: 'Controls + Privacy' },
 ];
 
 function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => boolean; onNavigate: (url: string) => void }) {
@@ -51,8 +52,8 @@ function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => b
       </SheetTrigger>
       <SheetContent side="left" className="w-[280px] p-0 glass-card border-r border-primary/20">
         <div className="flex items-center gap-3 p-4 border-b border-border">
-          <Crown className="w-7 h-7 text-primary animate-pulse" />
-          <span className="text-lg font-bold gradient-text">Zenpeace</span>
+          <Crown className="w-8 h-8 text-primary animate-pulse" />
+          <span className="text-2xl font-bold gradient-text tracking-tight">Zenpeace</span>
         </div>
         <nav className="p-2 space-y-1">
           {menuItems.map((item) => (
@@ -65,7 +66,7 @@ function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => b
                   : 'hover:bg-muted/50 text-foreground'
               }`}
             >
-              <span className="text-xl">{item.emoji}</span>
+              <span className={`text-2xl ${item.color}`}>{item.emoji}</span>
               <div className="flex-1 text-left">
                 <span className="font-medium block text-sm">{item.title}</span>
                 <span className="text-[10px] text-muted-foreground">{item.desc}</span>
@@ -84,10 +85,6 @@ function LayoutContent({ children }: LayoutProps) {
   const { setOpen } = useSidebar();
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('zenpeace_theme');
-    return (saved as 'light' | 'dark') || 'dark';
-  });
   const [isAuthPage, setIsAuthPage] = useState(false);
   
   // Scroll hide/show state for Facebook-like behavior
@@ -109,17 +106,13 @@ function LayoutContent({ children }: LayoutProps) {
     const currentScrollY = window.scrollY;
     const scrollDiff = currentScrollY - lastScrollY.current;
     
-    // Only trigger on significant scroll (>5px) to prevent jitter
     if (Math.abs(scrollDiff) < 5) return;
     
     if (currentScrollY < 50) {
-      // Always show at top
       setHeaderVisible(true);
     } else if (scrollDiff > 0 && currentScrollY > 50) {
-      // Scrolling down - hide header
       setHeaderVisible(false);
     } else if (scrollDiff < 0) {
-      // Scrolling up - show header
       setHeaderVisible(true);
     }
     
@@ -159,21 +152,6 @@ function LayoutContent({ children }: LayoutProps) {
     return () => subscription.unsubscribe();
   }, [navigate, isAuthPage]);
 
-  useEffect(() => {
-    if (theme === 'light') {
-      document.documentElement.classList.add('light');
-      document.body.classList.add('light');
-    } else {
-      document.documentElement.classList.remove('light');
-      document.body.classList.remove('light');
-    }
-    localStorage.setItem('zenpeace_theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
-
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
@@ -190,30 +168,22 @@ function LayoutContent({ children }: LayoutProps) {
   };
 
   const handleBack = () => {
-    navigate('/');
+    navigate(-1);
   };
 
   // Check if we're in chat view (full screen, no header)
   const isFullScreenPage = location.pathname.startsWith('/chat/') && location.pathname !== '/chat';
   
-  // Check if we're on Home page subsections (where we show 6 icons and banner)
+  // Check if we're on Home page subsections (where we show 6 icons)
   const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || 
-                        location.pathname.startsWith('/profile/') ||
-                        (location.pathname === '/' && localStorage.getItem('zenpeace_feed_filter') === 'videos');
-  
-  // Only show the main banner on exact Home page (/)
-  const showBanner = location.pathname === '/';
+                        location.pathname.startsWith('/profile/');
   
   // Only show SubNavigation on home section pages
   const showSubNav = isHomeSection;
   
-  // Check if we're in a subsection that needs back button
+  // Check if we need back button
   const isSubSection = ['/create', '/private', '/notifications', '/search'].includes(location.pathname) || 
                        location.pathname.startsWith('/profile/');
-
-  // Other sections (not home) - no create, no theme in top bar
-  const isOtherSection = ['/chat', '/marketplace', '/settings', '/funpun', '/education'].includes(location.pathname) ||
-                         location.pathname.startsWith('/music-adventure');
 
   if (isAuthPage) {
     return <>{children}</>;
@@ -232,13 +202,13 @@ function LayoutContent({ children }: LayoutProps) {
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
       
-      {/* Desktop Sidebar - Sticky, extended for ultra-wide */}
+      {/* Desktop Sidebar - Colorful icons */}
       {!isMobile && (
         <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen w-72 xl:w-80 shrink-0">
           <SidebarContent className="glass-card">
             <div className="flex items-center gap-2 p-3 border-b border-border">
-              <Crown className="w-6 h-6 text-primary animate-pulse" />
-              <span className="text-sm font-bold gradient-text">Zenpeace</span>
+              <Crown className="w-7 h-7 text-primary animate-pulse" />
+              <span className="text-xl font-bold gradient-text tracking-tight">Zenpeace</span>
             </div>
 
             <SidebarGroup>
@@ -254,7 +224,7 @@ function LayoutContent({ children }: LayoutProps) {
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
                         <div className="flex items-center gap-2 w-full">
-                          <span className="text-base">{item.emoji}</span>
+                          <span className={`text-lg ${item.color}`}>{item.emoji}</span>
                           <div className="flex-1 min-w-0">
                             <span className="font-medium block text-xs">{item.title}</span>
                             <span className="text-[9px] text-muted-foreground block truncate">{item.desc}</span>
@@ -272,14 +242,14 @@ function LayoutContent({ children }: LayoutProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
-        {/* Header - Different for Home vs Other sections */}
+        {/* Header - CLEAN: No create, no theme changer, no ranks */}
         <header 
           className={`sticky z-40 glass-card border-b border-border transition-all duration-300 ${
             headerVisible ? 'top-0 opacity-100 translate-y-0' : '-top-16 opacity-0 -translate-y-full'
           }`}
         >
-          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-            {/* Left side */}
+          <div className="flex items-center justify-between gap-2 px-3 py-2">
+            {/* Left side - Only sidebar toggle or back button */}
             <div className="flex items-center gap-1.5">
               {isMobile && isSubSection ? (
                 <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8">
@@ -288,39 +258,16 @@ function LayoutContent({ children }: LayoutProps) {
               ) : isMobile ? (
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
-              
-              {/* Create & Theme Toggle - ONLY on Home main page (/) */}
-              {showBanner && (
-                <>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => navigate('/create')}
-                    className="h-8 w-8 bg-primary/10 hover:bg-primary/20"
-                  >
-                    <Plus className="h-4 w-4 text-primary" />
-                  </Button>
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={toggleTheme} 
-                    className="h-8 w-8"
-                  >
-                    {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                  </Button>
-                </>
-              )}
             </div>
 
-            {/* Right side - Zenpeace Branding */}
+            {/* Right side - Zenpeace Branding (BIGGER) */}
             <Link 
               to="/" 
-              className="flex items-center gap-1.5" 
+              className="flex items-center gap-2" 
               onClick={handleLogoClick}
             >
-              <Crown className="w-5 h-5 text-primary" />
-              <span className="font-bold text-base gradient-text whitespace-nowrap">Zenpeace</span>
+              <Crown className="w-6 h-6 text-primary" />
+              <span className="font-bold text-xl gradient-text whitespace-nowrap tracking-tight">Zenpeace</span>
             </Link>
           </div>
           
@@ -330,7 +277,7 @@ function LayoutContent({ children }: LayoutProps) {
 
         {/* Content Area with Messages Panel on desktop (Home only) */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Main Content - Constrained for balanced layout */}
+          {/* Main Content */}
           <div className="flex-1 overflow-y-auto p-2 md:p-3 min-w-0">
             <div className="max-w-lg xl:max-w-xl mx-auto">
               {children}

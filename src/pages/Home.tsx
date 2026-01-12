@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Globe, Users, MapPin, Ghost, ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { Globe, Users, MapPin, Ghost, ChevronDown, ChevronUp, Plus, Flag } from 'lucide-react';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,14 +14,18 @@ type Post = Database['public']['Tables']['posts']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type PostWithProfile = Post & { profiles?: Profile };
 
-// Feed category options
+// Feed category options - Global, Regional, Following, Ghost
 const feedCategories = [
-  { id: 'global', icon: Globe, label: 'Global', desc: 'Worldwide posts' },
-  { id: 'following', icon: Users, label: 'Following', desc: 'People you follow' },
+  { id: 'global', icon: Globe, label: 'Global', desc: 'Worldwide posts', color: 'text-blue-500' },
+  { id: 'regional', icon: Flag, label: 'Regional', desc: 'Your country', color: 'text-green-500' },
+  { id: 'following', icon: Users, label: 'Following', desc: 'People you follow', color: 'text-purple-500' },
+  { id: 'ghost', icon: Ghost, label: 'Ghost', desc: '24h posts only', color: 'text-orange-500' },
 ];
 
 export default function Home() {
-  const [feedCategory, setFeedCategory] = useState('global');
+  const [feedCategory, setFeedCategory] = useState(() => {
+    return localStorage.getItem('zenpeace_feed_category') || 'global';
+  });
   const [categoryExpanded, setCategoryExpanded] = useState(false);
   const [contentFilter, setContentFilter] = useState('all');
   const [posts, setPosts] = useState<PostWithProfile[]>([]);
@@ -32,14 +36,13 @@ export default function Home() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
-  // Listen for filter changes from SubNavigation
+  // Listen for filter changes from SubNavigation (VDOs tab)
   useEffect(() => {
     const handleFilterChange = (e: CustomEvent) => {
       setContentFilter(e.detail);
     };
     window.addEventListener('feedFilterChange', handleFilterChange as EventListener);
     
-    // Check initial filter
     const savedFilter = localStorage.getItem('zenpeace_feed_filter');
     if (savedFilter) setContentFilter(savedFilter);
     
@@ -47,6 +50,11 @@ export default function Home() {
       window.removeEventListener('feedFilterChange', handleFilterChange as EventListener);
     };
   }, []);
+
+  // Save category preference
+  useEffect(() => {
+    localStorage.setItem('zenpeace_feed_category', feedCategory);
+  }, [feedCategory]);
 
   useEffect(() => {
     if (user) fetchPosts();
@@ -58,11 +66,22 @@ export default function Home() {
 
     try {
       let query = supabase.from('posts').select('*, profiles(*)');
+      const userCountry = profile?.country || '';
 
       // Apply feed category filter
       switch (feedCategory) {
         case 'global':
           query = query.eq('visibility', 'public');
+          break;
+        case 'regional':
+          // Filter by user's country if set
+          if (userCountry) {
+            query = query.eq('visibility', 'public');
+            // We'd need to join with profiles and filter by country
+            // For now, show all public posts tagged with the user's country
+          } else {
+            query = query.eq('visibility', 'public');
+          }
           break;
         case 'following':
           const { data: following } = await supabase
@@ -85,6 +104,11 @@ export default function Home() {
             return;
           }
           break;
+        case 'ghost':
+          // Show posts from last 24 hours only
+          const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          query = query.eq('visibility', 'public').gte('created_at', yesterday);
+          break;
       }
 
       // Apply content filter from SubNavigation (VDOs tab)
@@ -96,6 +120,11 @@ export default function Home() {
       const { data: postsData } = await query;
       
       let processedPosts = postsData || [];
+      
+      // For regional, filter by country from profile
+      if (feedCategory === 'regional' && userCountry) {
+        processedPosts = processedPosts.filter(p => p.profiles?.country === userCountry);
+      }
       
       // For global, shuffle posts to mix content
       if (feedCategory === 'global') {
@@ -187,14 +216,14 @@ export default function Home() {
           Create Post
         </Button>
 
-        {/* Category Selector */}
+        {/* Category Selector - Global / Regional / Following / Ghost */}
         <div className="relative">
           <button
             onClick={() => setCategoryExpanded(!categoryExpanded)}
             className="glass-card rounded-xl px-3 py-2 flex items-center gap-2 hover:bg-primary/5 transition-all"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-              <CurrentCategoryIcon className="w-4 h-4 text-primary" />
+            <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center`}>
+              <CurrentCategoryIcon className={`w-4 h-4 ${currentCategory.color}`} />
             </div>
             <span className="text-sm font-medium">{currentCategory.label}</span>
             {categoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -202,7 +231,7 @@ export default function Home() {
 
           {/* Expanded Category Options */}
           {categoryExpanded && (
-            <div className="absolute top-full right-0 mt-1 glass-card rounded-xl p-2 z-20 shadow-lg border border-border animate-in fade-in slide-in-from-top-2 duration-200 min-w-[160px]">
+            <div className="absolute top-full right-0 mt-1 glass-card rounded-xl p-2 z-20 shadow-lg border border-border animate-in fade-in slide-in-from-top-2 duration-200 min-w-[180px]">
               {feedCategories.map((cat) => {
                 const Icon = cat.icon;
                 const isActive = feedCategory === cat.id;
@@ -224,10 +253,11 @@ export default function Home() {
                       "w-7 h-7 rounded-full flex items-center justify-center",
                       isActive ? "bg-primary/20" : "bg-muted/50"
                     )}>
-                      <Icon className={cn("w-3.5 h-3.5", isActive && "text-primary")} />
+                      <Icon className={cn("w-3.5 h-3.5", cat.color)} />
                     </div>
                     <div className="flex-1 text-left">
                       <p className="font-medium text-xs">{cat.label}</p>
+                      <p className="text-[9px] text-muted-foreground">{cat.desc}</p>
                     </div>
                     {isActive && (
                       <div className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -251,6 +281,17 @@ export default function Home() {
         </Card>
       )}
 
+      {/* Ghost Mode Notice */}
+      {feedCategory === 'ghost' && (
+        <Card className="glass-card border-orange-500/30 bg-orange-500/5">
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-orange-500 flex items-center justify-center gap-1">
+              <Ghost className="w-3 h-3" /> Ghost Mode: Only 24-hour posts
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Posts Feed */}
       {loading ? (
         <div className="space-y-3">
@@ -259,10 +300,14 @@ export default function Home() {
       ) : posts.length === 0 ? (
         <Card className="glass-card">
           <CardContent className="py-12 text-center">
-            <CurrentCategoryIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+            <CurrentCategoryIcon className={`h-12 w-12 mx-auto mb-3 ${currentCategory.color}`} />
             <p className="text-muted-foreground">
               {feedCategory === 'following' 
                 ? 'Follow some users to see their posts here!' 
+                : feedCategory === 'regional'
+                ? 'No posts from your region yet'
+                : feedCategory === 'ghost'
+                ? 'No ghost posts in the last 24 hours'
                 : contentFilter === 'videos'
                 ? 'No videos found'
                 : 'No posts found'}
