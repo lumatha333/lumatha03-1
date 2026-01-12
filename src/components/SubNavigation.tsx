@@ -11,12 +11,12 @@ interface SubNavigationProps {
 
 // 6 icons: Home, VDOs, Search, Private, Notifications, Profile
 const tabs = [
-  { id: 'feed', icon: Home, path: '/', label: 'Home' },
-  { id: 'videos', icon: Video, path: '/?filter=videos', label: 'VDOs' },
-  { id: 'search', icon: Search, path: '/search', label: 'Search' },
-  { id: 'private', icon: Lock, path: '/private', label: 'Private' },
-  { id: 'notifications', icon: Bell, path: '/notifications', label: 'Alerts' },
-  { id: 'profile', icon: User, path: null, label: 'Profile' },
+  { id: 'feed', icon: Home, path: '/', label: 'Home', color: 'text-blue-500' },
+  { id: 'videos', icon: Video, path: '/?filter=videos', label: 'VDOs', color: 'text-red-500' },
+  { id: 'search', icon: Search, path: '/search', label: 'Search', color: 'text-purple-500' },
+  { id: 'private', icon: Lock, path: '/private', label: 'Private', color: 'text-green-500' },
+  { id: 'notifications', icon: Bell, path: '/notifications', label: 'Alerts', color: 'text-orange-500' },
+  { id: 'profile', icon: User, path: null, label: 'Profile', color: 'text-teal-500' },
 ];
 
 export function SubNavigation({ visible = true }: SubNavigationProps) {
@@ -40,7 +40,6 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
 
     fetchUnreadCount();
 
-    // Subscribe to new notifications
     const channel = supabase
       .channel('sub-nav-notifications')
       .on('postgres_changes', {
@@ -105,7 +104,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
               key={tab.id}
               onClick={() => handleTabClick(tab)}
               className={cn(
-                "flex items-center justify-center p-2 rounded-full transition-all relative",
+                "flex flex-col items-center justify-center p-1.5 rounded-lg transition-all relative gap-0.5",
                 active 
                   ? "text-primary bg-primary/15" 
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
@@ -115,7 +114,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
               <div className="relative">
                 <Icon className={cn(
                   "w-5 h-5 transition-all",
-                  active && "scale-110 text-primary"
+                  active ? "scale-110 text-primary" : tab.color
                 )} />
                 {showBadge && (
                   <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[8px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1 animate-pulse">
@@ -123,6 +122,10 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
                   </span>
                 )}
               </div>
+              <span className={cn(
+                "text-[8px] font-medium",
+                active ? "text-primary" : "text-muted-foreground"
+              )}>{tab.label}</span>
             </button>
           );
         })}
