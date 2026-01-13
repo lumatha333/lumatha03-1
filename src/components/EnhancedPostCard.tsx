@@ -46,6 +46,13 @@ const setCurrentPlayingVideo = (video: HTMLVideoElement | null) => {
   currentPlayingVideo = video;
 };
 
+interface PostSettings {
+  commentsOff?: boolean;
+  downloadOff?: boolean;
+  shareOff?: boolean;
+  hideLikes?: boolean;
+}
+
 interface EnhancedPostCardProps {
   post: Post & { profiles?: Profile };
   isSaved: boolean;
@@ -78,6 +85,19 @@ export function EnhancedPostCard({
   const [isFollowing, setIsFollowing] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
   const [selectedReaction, setSelectedReaction] = useState<string | null>(null);
+  
+  // Owner privacy controls - stored in localStorage per post
+  const [postSettings, setPostSettings] = useState<PostSettings>(() => {
+    const saved = localStorage.getItem(`post_settings_${post.id}`);
+    return saved ? JSON.parse(saved) : {};
+  });
+  
+  const updatePostSetting = (key: keyof PostSettings, value: boolean) => {
+    const newSettings = { ...postSettings, [key]: value };
+    setPostSettings(newSettings);
+    localStorage.setItem(`post_settings_${post.id}`, JSON.stringify(newSettings));
+    toast.success(`${key === 'commentsOff' ? 'Comments' : key === 'downloadOff' ? 'Download' : key === 'shareOff' ? 'Sharing' : 'Like count'} ${value ? 'disabled' : 'enabled'}`);
+  };
   
   // Get all media URLs
   const mediaUrls = post.media_urls?.length ? post.media_urls : (post.file_url ? [post.file_url] : []);
@@ -152,6 +172,11 @@ export function EnhancedPostCard({
 
   const handleDownload = async () => {
     if (!hasMedia) return;
+    // Check if download is disabled by owner
+    if (postSettings.downloadOff && !isOwner) {
+      toast.error('Download disabled by owner');
+      return;
+    }
     try {
       const response = await fetch(currentMedia);
       const blob = await response.blob();
@@ -283,11 +308,11 @@ export function EnhancedPostCard({
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="glass-card border-border w-44">
+            <DropdownMenuContent align="end" className="glass-card border-border w-48">
               <DropdownMenuItem onClick={handleCopy} className="text-xs">
                 <Copy className="w-3.5 h-3.5 mr-2" /> Copy text
               </DropdownMenuItem>
-              {hasMedia && (
+              {hasMedia && !postSettings.downloadOff && (
                 <DropdownMenuItem onClick={handleDownload} className="text-xs">
                   <Download className="w-3.5 h-3.5 mr-2" /> Download media
                 </DropdownMenuItem>
@@ -300,9 +325,23 @@ export function EnhancedPostCard({
                       <Edit className="w-3.5 h-3.5 mr-2" /> Edit post
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem className="text-xs">
-                    <MessageSquareOff className="w-3.5 h-3.5 mr-2" /> Turn off comments
+                  <DropdownMenuItem onClick={() => updatePostSetting('commentsOff', !postSettings.commentsOff)} className="text-xs">
+                    <MessageSquareOff className="w-3.5 h-3.5 mr-2" /> 
+                    {postSettings.commentsOff ? '✓ Comments OFF' : 'Turn off comments'}
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updatePostSetting('downloadOff', !postSettings.downloadOff)} className="text-xs">
+                    <Download className="w-3.5 h-3.5 mr-2" /> 
+                    {postSettings.downloadOff ? '✓ Download OFF' : 'Turn off download'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updatePostSetting('shareOff', !postSettings.shareOff)} className="text-xs">
+                    <Share2 className="w-3.5 h-3.5 mr-2" /> 
+                    {postSettings.shareOff ? '✓ Sharing OFF' : 'Turn off sharing'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updatePostSetting('hideLikes', !postSettings.hideLikes)} className="text-xs">
+                    <Heart className="w-3.5 h-3.5 mr-2" /> 
+                    {postSettings.hideLikes ? '✓ Likes hidden' : 'Hide like count'}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   {onDelete && (
                     <DropdownMenuItem onClick={() => onDelete(post.id)} className="text-destructive text-xs">
                       <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete post
@@ -310,15 +349,13 @@ export function EnhancedPostCard({
                   )}
                 </>
               ) : (
-                <>
-                  <DropdownMenuItem onClick={toggleFollow} className="text-xs">
-                    {isFollowing ? (
-                      <><UserMinus className="w-3.5 h-3.5 mr-2" /> Not interested</>
-                    ) : (
-                      <><UserPlus className="w-3.5 h-3.5 mr-2" /> Interested (Follow)</>
-                    )}
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onClick={toggleFollow} className="text-xs">
+                  {isFollowing ? (
+                    <><UserMinus className="w-3.5 h-3.5 mr-2" /> Not interested</>
+                  ) : (
+                    <><UserPlus className="w-3.5 h-3.5 mr-2" /> Interested (Follow)</>
+                  )}
+                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -448,7 +485,7 @@ export function EnhancedPostCard({
           </DialogContent>
         </Dialog>
 
-        {/* Action buttons - Heart only */}
+        {/* Action buttons - Strict owner controls applied */}
         <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/50 mt-auto relative">
           <Button
             variant="ghost"
@@ -457,28 +494,36 @@ export function EnhancedPostCard({
             className={`flex-1 gap-1 h-8 ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
           >
             <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
-            <span className="text-xs">{likesCount > 0 ? likesCount : 'Like'}</span>
+            <span className="text-xs">
+              {postSettings.hideLikes && !isOwner ? 'Like' : (likesCount > 0 ? likesCount : 'Like')}
+            </span>
           </Button>
           
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setCommentsOpen(true)}
-            className="flex-1 gap-1 h-8 text-muted-foreground"
-          >
-            <MessageCircle className="w-4 h-4" />
-            <span className="text-xs">Comment</span>
-          </Button>
+          {/* Comments - hidden if owner turned off */}
+          {!postSettings.commentsOff && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCommentsOpen(true)}
+              className="flex-1 gap-1 h-8 text-muted-foreground"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="text-xs">Comment</span>
+            </Button>
+          )}
           
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleShare}
-            className="flex-1 gap-1 h-8 text-muted-foreground"
-          >
-            <Share2 className="w-4 h-4" />
-            <span className="text-xs">Share</span>
-          </Button>
+          {/* Share - hidden if owner turned off */}
+          {!postSettings.shareOff && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleShare}
+              className="flex-1 gap-1 h-8 text-muted-foreground"
+            >
+              <Share2 className="w-4 h-4" />
+              <span className="text-xs">Share</span>
+            </Button>
+          )}
           
           <Button
             variant="ghost"
