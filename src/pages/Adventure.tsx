@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,432 +8,681 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { toast } from 'sonner';
 import { 
-  Mountain, MapPin, Upload, Star, Heart, Bookmark, Navigation,
-  Target, Compass, Map, Globe, Calendar, CalendarDays, CalendarRange,
-  Plus, Check, ExternalLink, Share2, MessageCircle, Clock, Trophy
+  MapPin, Star, Heart, Navigation, Target, Compass, Map, Globe, 
+  Plus, Check, Share2, MessageCircle, ChevronRight, Footprints, 
+  Award, Users, Plane, Sparkles, Filter, X
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { CommentsDialog } from '@/components/CommentsDialog';
 
-// Challenge filters
-const DURATION_FILTERS = ['daily', 'weekly', 'monthly', 'yearly', 'lifetime'];
-const DIFFICULTY_FILTERS = ['easy', 'medium', 'hard'];
-const TYPE_FILTERS = ['system', 'custom'];
+// ============= CHALLENGE DATA (500+) =============
+const CHALLENGE_CATEGORIES = [
+  { name: 'Health', icon: '💚', emoji: '💚' },
+  { name: 'Fitness', icon: '🏃', emoji: '🏃' },
+  { name: 'Mind', icon: '🧠', emoji: '🧠' },
+  { name: 'Learning', icon: '📚', emoji: '📚' },
+  { name: 'Lifestyle', icon: '🌟', emoji: '🌟' },
+  { name: 'Travel', icon: '✈️', emoji: '✈️' }
+];
 
-// Generate 500+ system challenges
-const generateChallenges = () => {
-  const categories = [
-    { name: 'Nature', icon: '🌿', tasks: ['Photograph sunrise from hilltop', 'Visit a waterfall', 'Hike a mountain trail', 'Camp under stars', 'Watch sunset from hilltop', 'Identify 10 bird species', 'Find a hidden lake', 'Explore a cave', 'Walk through ancient forest', 'Visit a national park', 'Swim in natural pool', 'Photograph wildlife', 'Find rare flower', 'Climb a rock', 'Cross a river'] },
-    { name: 'Culture', icon: '🏛️', tasks: ['Visit a temple', 'Attend local festival', 'Learn traditional dance', 'Try local cuisine', 'Interview village elder', 'Document traditional craft', 'Visit a museum', 'Explore heritage site', 'Learn 10 local words', 'Attend cultural show', 'Cook traditional meal', 'Wear traditional dress', 'Learn folk song', 'Visit ancient ruins', 'Photograph architecture'] },
-    { name: 'Adventure', icon: '⛰️', tasks: ['Go trekking', 'Try rock climbing', 'Go white water rafting', 'Paragliding experience', 'Bungee jumping', 'Mountain biking', 'Zip lining adventure', 'Kayaking in river', 'Solo camping night', 'Night hiking', 'Cliff diving', 'Cave exploration', 'Jungle safari', 'Desert camping', 'Glacier walking'] },
-    { name: 'Social', icon: '🤝', tasks: ['Help a stranger', 'Volunteer for NGO', 'Teach a skill', 'Make new friend abroad', 'Organize community event', 'Share meal with locals', 'Guide a tourist', 'Plant 10 trees', 'Clean public space', 'Donate to charity', 'Join local celebration', 'Host a traveler', 'Learn local game', 'Tell stories to children', 'Support local artisan'] },
-    { name: 'Creative', icon: '🎨', tasks: ['Sketch landscape', 'Write travel poem', 'Create photo series', 'Make travel vlog', 'Document local stories', 'Paint nature scene', 'Compose travel song', 'Write travel blog', 'Create short documentary', 'Design travel poster', 'Make travel journal', 'Record ambient sounds', 'Create timelapse', 'Illustrate journey', 'Photograph portraits'] }
-  ];
-
+const generateSystemChallenges = () => {
   const challenges: any[] = [];
   let id = 1;
+  
+  const healthTasks = [
+    'Drink 1L of Water', 'Sleep 8 hours', 'Take vitamins', 'Eat 5 fruits', 'Walk 10,000 steps',
+    'Meditate for 10 minutes', 'No sugar for a day', 'Drink green tea', 'Eat a salad', 'Stay hydrated',
+    'Stretch for 15 minutes', 'Avoid processed food', 'Eat mindfully', 'Take a power nap', 'Deep breathing exercise',
+    'Drink lemon water', 'Eat breakfast', 'No caffeine after 2pm', 'Eat colorful vegetables', 'Track water intake',
+    'Eat whole grains', 'Take a break every hour', 'No late night snacking', 'Eat fermented foods', 'Practice gratitude',
+    'Limit screen time', 'Go to bed early', 'Wake up with sunrise', 'No processed drinks', 'Eat omega-3 foods'
+  ];
+  
+  const fitnessTasks = [
+    'Do 20 pushups', 'Run for 30 minutes', 'Do 50 squats', 'Plank for 2 minutes', 'Jump rope 100 times',
+    'Yoga session', 'HIIT workout', 'Swimming session', 'Cycling 5km', 'Strength training',
+    'Core workout', 'Leg day workout', 'Upper body workout', 'Flexibility training', 'Dance workout',
+    'Stair climbing', 'Morning jog', 'Evening walk', 'Bodyweight circuit', 'Burpee challenge',
+    'Mountain climbers set', 'Lunges workout', 'Arm workout', 'Back exercises', 'Cardio blast',
+    'Balance training', 'Resistance band workout', 'Kettlebell swings', 'Boxing workout', 'Pilates session'
+  ];
+  
+  const mindTasks = [
+    'Journal for 10 minutes', 'Practice mindfulness', 'Solve a puzzle', 'Learn something new', 'Read for 30 minutes',
+    'Digital detox hour', 'Gratitude journaling', 'Visualization exercise', 'Brain teaser', 'Memory game',
+    'Reflection time', 'Goal setting session', 'Positive affirmations', 'Stress management', 'Creative thinking',
+    'Problem solving exercise', 'Mind mapping', 'Focus training', 'Attention exercise', 'Mental clarity practice',
+    'Emotional awareness', 'Self-reflection', 'Thought journaling', 'Cognitive exercise', 'Mental break',
+    'Breathing meditation', 'Body scan meditation', 'Loving kindness meditation', 'Walking meditation', 'Silent reflection'
+  ];
+  
+  const learningTasks = [
+    'Learn 10 new words', 'Watch educational video', 'Take online course', 'Read an article', 'Practice a skill',
+    'Learn a language lesson', 'Study for 1 hour', 'Complete a tutorial', 'Research a topic', 'Write summary notes',
+    'Learn coding basics', 'Study history', 'Learn about science', 'Financial literacy', 'Learn photography',
+    'Music lesson', 'Art technique', 'Cooking recipe', 'DIY project', 'Writing practice',
+    'Public speaking', 'Leadership skill', 'Communication practice', 'Time management', 'Productivity hack',
+    'Learn Excel', 'Design basics', 'Marketing concept', 'Business skill', 'Technical skill'
+  ];
+  
+  const lifestyleTasks = [
+    'Morning Walk for 20 Minutes', 'Organize your space', 'Plan your week', 'Connect with friend', 'Random act of kindness',
+    'Try new restaurant', 'Cook a new dish', 'Declutter room', 'Update wardrobe', 'Create daily routine',
+    'Budget review', 'Social media cleanup', 'Plant something', 'Self-care routine', 'Evening ritual',
+    'Morning ritual', 'Weekend planning', 'Hobby time', 'Family time', 'Friend meetup',
+    'Nature walk', 'Sunset watching', 'Picnic day', 'Movie night', 'Game night',
+    'Book club', 'Coffee date', 'Shopping wisely', 'Meal prep', 'Home improvement'
+  ];
+  
+  const travelTasks = [
+    'Visit local landmark', 'Explore new neighborhood', 'Try local cuisine', 'Take scenic photos', 'Meet locals',
+    'Visit museum', 'Explore park', 'Historical site visit', 'Beach day', 'Mountain hike',
+    'City walking tour', 'Cultural experience', 'Local market visit', 'Temple/church visit', 'Art gallery',
+    'Nature reserve', 'Waterfall visit', 'Sunrise spot', 'Sunset viewpoint', 'Hidden gem discovery',
+    'Food tour', 'Night market', 'Street food adventure', 'Local festival', 'Traditional ceremony',
+    'Boat ride', 'Cable car ride', 'Train journey', 'Road trip', 'Camping adventure'
+  ];
+
+  const allTasks = [
+    { category: 'Health', tasks: healthTasks, icon: '💚' },
+    { category: 'Fitness', tasks: fitnessTasks, icon: '🏃' },
+    { category: 'Mind', tasks: mindTasks, icon: '🧠' },
+    { category: 'Learning', tasks: learningTasks, icon: '📚' },
+    { category: 'Lifestyle', tasks: lifestyleTasks, icon: '🌟' },
+    { category: 'Travel', tasks: travelTasks, icon: '✈️' }
+  ];
+
   const difficulties = ['easy', 'medium', 'hard'];
   const durations = ['daily', 'weekly', 'monthly', 'yearly', 'lifetime'];
-  const points = { easy: [10, 20, 30], medium: [40, 60, 80], hard: [100, 150, 200] };
+  const descriptions: Record<string, string> = {
+    Health: 'Improve your wellbeing with this healthy habit',
+    Fitness: 'Build strength and endurance with this workout',
+    Mind: 'Sharpen your mind and boost mental clarity',
+    Learning: 'Expand your knowledge and skills',
+    Lifestyle: 'Enhance your daily life with better habits',
+    Travel: 'Explore and discover new experiences'
+  };
 
-  // Generate from categories
-  categories.forEach(cat => {
+  allTasks.forEach(cat => {
     cat.tasks.forEach((task, i) => {
       const diff = difficulties[i % 3];
       const dur = durations[i % 5];
       challenges.push({
         id: `sys-${id++}`,
         title: task,
-        description: `${cat.name} adventure: Complete this ${diff} ${dur} challenge`,
-        category: cat.name.toLowerCase(),
+        description: descriptions[cat.category],
+        category: cat.category.toLowerCase(),
         categoryIcon: cat.icon,
         difficulty: diff,
         duration: dur,
-        points: points[diff as keyof typeof points][Math.floor(Math.random() * 3)],
-        type: 'system'
+        type: 'system',
+        likes: Math.floor(Math.random() * 500),
+        comments: Math.floor(Math.random() * 50)
       });
     });
   });
 
   // Generate more to reach 500+
-  for (let i = 0; i < 425; i++) {
-    const cat = categories[i % 5];
+  for (let i = 0; i < 320; i++) {
+    const cat = allTasks[i % 6];
     const diff = difficulties[i % 3];
     const dur = durations[i % 5];
     challenges.push({
       id: `sys-${id++}`,
-      title: `${cat.name} Quest ${id}`,
-      description: `An exciting ${diff} ${dur} ${cat.name.toLowerCase()} adventure awaits`,
-      category: cat.name.toLowerCase(),
+      title: `${cat.category} Challenge ${id}`,
+      description: `A rewarding ${diff} ${dur} ${cat.category.toLowerCase()} challenge`,
+      category: cat.category.toLowerCase(),
       categoryIcon: cat.icon,
       difficulty: diff,
       duration: dur,
-      points: points[diff as keyof typeof points][Math.floor(Math.random() * 3)],
-      type: 'system'
+      type: 'system',
+      likes: Math.floor(Math.random() * 200),
+      comments: Math.floor(Math.random() * 30)
     });
   }
 
   return challenges;
 };
 
-const SYSTEM_CHALLENGES = generateChallenges();
+const SYSTEM_CHALLENGES = generateSystemChallenges();
 
-// Generate 200+ places per country (Nepal example)
-const generatePlaces = () => {
-  const regions = ['Kathmandu', 'Pokhara', 'Chitwan', 'Lumbini', 'Mustang', 'Everest', 'Annapurna', 'Langtang', 'Dolpo', 'Manang'];
-  const types = ['temple', 'lake', 'mountain', 'heritage', 'wildlife', 'trek', 'village', 'waterfall', 'monastery', 'viewpoint'];
-  
+// ============= DISCOVER PLACES (200+ per country) =============
+const generateDiscoverPlaces = () => {
   const places: any[] = [];
   
-  // Top 5 from Nepal (highlighted)
-  const top5 = [
-    { id: 'np-top-1', name: 'Mount Everest Base Camp', location: 'Solukhumbu', description: 'The ultimate trekking destination at the foot of the world\'s highest peak', stars: 4.9, hearts: 25000, type: 'mountain', mapUrl: 'https://maps.google.com/?q=28.0025,86.8528', isTop: true, image: '🏔️' },
-    { id: 'np-top-2', name: 'Annapurna Circuit Trek', location: 'Gandaki Province', description: 'One of the world\'s most diverse and beautiful treks', stars: 4.8, hearts: 18000, type: 'trek', mapUrl: 'https://maps.google.com/?q=28.5965,83.8200', isTop: true, image: '🥾' },
-    { id: 'np-top-3', name: 'Pashupatinath Temple', location: 'Kathmandu', description: 'Sacred Hindu temple complex and UNESCO World Heritage Site', stars: 4.9, hearts: 22000, type: 'temple', mapUrl: 'https://maps.google.com/?q=27.7107,85.3485', isTop: true, image: '🛕' },
-    { id: 'np-top-4', name: 'Lumbini (Buddha Birthplace)', location: 'Rupandehi', description: 'Birthplace of Lord Buddha and major pilgrimage site', stars: 4.9, hearts: 28000, type: 'heritage', mapUrl: 'https://maps.google.com/?q=27.4833,83.2760', isTop: true, image: '🪷' },
-    { id: 'np-top-5', name: 'Chitwan National Park', location: 'Chitwan', description: 'Home to Bengal tigers, one-horned rhinos, and diverse wildlife', stars: 4.7, hearts: 15000, type: 'wildlife', mapUrl: 'https://maps.google.com/?q=27.5000,84.3333', isTop: true, image: '🦏' },
+  // Countries with places
+  const countries = [
+    { code: 'NP', name: 'Nepal', flag: '🇳🇵' },
+    { code: 'IN', name: 'India', flag: '🇮🇳' },
+    { code: 'JP', name: 'Japan', flag: '🇯🇵' },
+    { code: 'IT', name: 'Italy', flag: '🇮🇹' },
+    { code: 'FR', name: 'France', flag: '🇫🇷' },
+    { code: 'US', name: 'USA', flag: '🇺🇸' },
+    { code: 'UK', name: 'UK', flag: '🇬🇧' },
+    { code: 'AU', name: 'Australia', flag: '🇦🇺' },
+    { code: 'TH', name: 'Thailand', flag: '🇹🇭' },
+    { code: 'ES', name: 'Spain', flag: '🇪🇸' }
   ];
 
-  places.push(...top5);
+  const placeTypes = [
+    { type: 'temple', icon: '🛕', names: ['Ancient Temple', 'Sacred Shrine', 'Holy Sanctuary', 'Historic Temple'] },
+    { type: 'mountain', icon: '⛰️', names: ['Mountain Peak', 'Highland Trail', 'Summit Point', 'Alpine View'] },
+    { type: 'lake', icon: '🏞️', names: ['Crystal Lake', 'Serene Waters', 'Mirror Lake', 'Blue Lagoon'] },
+    { type: 'heritage', icon: '🏛️', names: ['Heritage Site', 'Historic Monument', 'Cultural Landmark', 'Ancient Ruins'] },
+    { type: 'wildlife', icon: '🦁', names: ['Wildlife Reserve', 'Nature Sanctuary', 'Safari Park', 'Animal Haven'] },
+    { type: 'beach', icon: '🏖️', names: ['Golden Beach', 'Coastal Paradise', 'Sandy Shore', 'Ocean View'] },
+    { type: 'forest', icon: '🌲', names: ['Dense Forest', 'Green Woods', 'Natural Reserve', 'Woodland Trail'] },
+    { type: 'waterfall', icon: '💧', names: ['Majestic Falls', 'Cascade Point', 'Water Wonder', 'Flowing Beauty'] },
+    { type: 'viewpoint', icon: '👁️', names: ['Scenic Viewpoint', 'Panoramic Vista', 'Lookout Point', 'Sky View'] },
+    { type: 'market', icon: '🛍️', names: ['Local Market', 'Traditional Bazaar', 'Night Market', 'Artisan Square'] }
+  ];
 
-  // Generate 195+ more places
-  for (let i = 1; i <= 195; i++) {
-    const type = types[i % types.length];
-    const loc = regions[i % regions.length];
-    const typeIcons: Record<string, string> = {
-      temple: '🛕', lake: '🏞️', mountain: '⛰️', heritage: '🏛️', wildlife: '🦁',
-      trek: '🥾', village: '🏘️', waterfall: '💧', monastery: '🧘', viewpoint: '👁️'
-    };
-    places.push({
-      id: `np-${i}`,
-      name: `${type.charAt(0).toUpperCase() + type.slice(1)} of ${loc} ${i}`,
-      location: loc,
-      description: `A beautiful ${type} location in ${loc} region`,
-      stars: parseFloat((3.5 + Math.random() * 1.5).toFixed(1)),
-      hearts: Math.floor(Math.random() * 5000),
-      type,
-      mapUrl: `https://maps.google.com/?q=${27 + Math.random()},${83 + Math.random()}`,
-      isTop: false,
-      image: typeIcons[type] || '📍'
-    });
-  }
+  let id = 1;
+  countries.forEach(country => {
+    // Generate 20+ places per country
+    for (let i = 0; i < 22; i++) {
+      const typeInfo = placeTypes[i % placeTypes.length];
+      const nameIndex = Math.floor(i / placeTypes.length) % typeInfo.names.length;
+      places.push({
+        id: `place-${id++}`,
+        name: `${typeInfo.names[nameIndex]} of ${country.name}`,
+        country: country.name,
+        countryFlag: country.flag,
+        type: typeInfo.type,
+        icon: typeInfo.icon,
+        stars: parseFloat((3.5 + Math.random() * 1.5).toFixed(1)),
+        visits: Math.floor(Math.random() * 10000) + 100,
+        hearts: Math.floor(Math.random() * 5000),
+        mapUrl: `https://maps.google.com/?q=${country.name}+${typeInfo.type}`,
+        description: `A beautiful ${typeInfo.type} destination in ${country.name}`
+      });
+    }
+  });
 
   return places;
 };
 
-const NEPAL_PLACES = generatePlaces();
+const DISCOVER_PLACES = generateDiscoverPlaces();
 
-// Travel places (different from Discover)
-const TRAVEL_PLACES = [
-  { id: 't-1', name: 'Phewa Lake Sunset', location: 'Pokhara', description: 'Perfect spot for romantic boat rides', category: 'romance', image: '🌅' },
-  { id: 't-2', name: 'Nagarkot Sunrise', location: 'Bhaktapur', description: 'Stunning Himalayan sunrise views', category: 'nature', image: '🌄' },
-  { id: 't-3', name: 'Thamel Streets', location: 'Kathmandu', description: 'Vibrant tourist hub with shops and cafes', category: 'culture', image: '🛍️' },
-  { id: 't-4', name: 'Boudhanath Stupa', location: 'Kathmandu', description: 'One of the largest stupas in the world', category: 'spiritual', image: '☸️' },
-  { id: 't-5', name: 'Patan Durbar Square', location: 'Lalitpur', description: 'Ancient royal palace complex', category: 'heritage', image: '🏰' },
+// ============= TRAVEL POSTS (Separate Feed) =============
+const TRAVEL_POSTS = [
+  { id: 't1', title: 'Sunrise at the Mountains', content: 'Unforgettable 🌄', image: '🌄', author: 'TravelLover', likes: 234, comments: 45 },
+  { id: 't2', title: 'Beach Paradise Found', content: 'Crystal clear waters and golden sand', image: '🏖️', author: 'BeachBum', likes: 567, comments: 89 },
+  { id: 't3', title: 'Ancient Temple Discovery', content: 'History comes alive in these walls', image: '🛕', author: 'HistoryBuff', likes: 345, comments: 67 },
+  { id: 't4', title: 'City Lights at Night', content: 'The city never sleeps', image: '🌃', author: 'NightOwl', likes: 456, comments: 78 },
+  { id: 't5', title: 'Mountain Trek Complete', content: 'Reached the summit! 🏔️', image: '⛰️', author: 'HikeMaster', likes: 789, comments: 123 },
+  { id: 't6', title: 'Local Food Adventure', content: 'Best street food ever tasted', image: '🍜', author: 'FoodieExplorer', likes: 321, comments: 54 },
+  { id: 't7', title: 'Waterfall Wonder', content: 'Nature at its finest', image: '💧', author: 'NatureLover', likes: 654, comments: 98 },
+  { id: 't8', title: 'Desert Safari Experience', content: 'Golden dunes as far as eyes can see', image: '🏜️', author: 'DesertRider', likes: 432, comments: 76 },
 ];
 
+// ============= COMPONENT =============
 export default function Adventure() {
   const { user, profile } = useAuth();
   const [activeTab, setActiveTab] = useState('challenges');
-  const [challengeFilters, setChallengeFilters] = useState({ type: 'system', difficulty: 'all', duration: 'daily' });
+  
+  // Filters
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [difficultyFilter, setDifficultyFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('all');
+  
+  // State
   const [customChallenges, setCustomChallenges] = useState<any[]>([]);
-  const [submissions, setSubmissions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [uploadDialog, setUploadDialog] = useState(false);
-  const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [totalPoints, setTotalPoints] = useState(0);
-  const [savedPlaces, setSavedPlaces] = useState<Set<string>>(new Set());
+  const [completedChallenges, setCompletedChallenges] = useState<Set<string>>(new Set());
+  const [likedChallenges, setLikedChallenges] = useState<Set<string>>(new Set());
+  const [visitedPlaces, setVisitedPlaces] = useState<Set<string>>(new Set());
   const [lovedPlaces, setLovedPlaces] = useState<Set<string>>(new Set());
   const [userRatings, setUserRatings] = useState<Record<string, number>>({});
-  const [newCustomChallenge, setNewCustomChallenge] = useState({ title: '', description: '', difficulty: 'medium', duration: 'daily' });
-  const [showAddCustom, setShowAddCustom] = useState(false);
-  const [placeReviewDialog, setPlaceReviewDialog] = useState<any>(null);
-  const [reviewText, setReviewText] = useState('');
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  
+  // Dialogs
+  const [showCreateChallenge, setShowCreateChallenge] = useState(false);
+  const [newChallenge, setNewChallenge] = useState({ title: '', description: '', difficulty: 'medium', duration: 'daily', category: 'lifestyle' });
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState('');
+  const [selectedPostTitle, setSelectedPostTitle] = useState('');
+  
+  // Rankings
+  const [rankingFilter, setRankingFilter] = useState<'global' | 'regional'>('global');
 
+  // Load local data
   useEffect(() => {
-    fetchData();
-    loadLocalData();
+    const saved = localStorage.getItem('adventure_data');
+    if (saved) {
+      const data = JSON.parse(saved);
+      setCustomChallenges(data.customChallenges || []);
+      setCompletedChallenges(new Set(data.completedChallenges || []));
+      setLikedChallenges(new Set(data.likedChallenges || []));
+      setVisitedPlaces(new Set(data.visitedPlaces || []));
+      setLovedPlaces(new Set(data.lovedPlaces || []));
+      setUserRatings(data.userRatings || {});
+      setLikedPosts(new Set(data.likedPosts || []));
+    }
   }, []);
 
-  const loadLocalData = () => {
-    const saved = localStorage.getItem('adventure_saved_places');
-    const loved = localStorage.getItem('adventure_loved_places');
-    const ratings = localStorage.getItem('adventure_user_ratings');
-    const custom = localStorage.getItem('adventure_custom_challenges');
-    if (saved) setSavedPlaces(new Set(JSON.parse(saved)));
-    if (loved) setLovedPlaces(new Set(JSON.parse(loved)));
-    if (ratings) setUserRatings(JSON.parse(ratings));
-    if (custom) setCustomChallenges(JSON.parse(custom));
-  };
+  // Save local data
+  const saveData = useCallback(() => {
+    localStorage.setItem('adventure_data', JSON.stringify({
+      customChallenges,
+      completedChallenges: [...completedChallenges],
+      likedChallenges: [...likedChallenges],
+      visitedPlaces: [...visitedPlaces],
+      lovedPlaces: [...lovedPlaces],
+      userRatings,
+      likedPosts: [...likedPosts]
+    }));
+  }, [customChallenges, completedChallenges, likedChallenges, visitedPlaces, lovedPlaces, userRatings, likedPosts]);
 
-  const fetchData = async () => {
-    try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return;
+  useEffect(() => { saveData(); }, [saveData]);
 
-      const [submissionsRes, pointsRes] = await Promise.all([
-        supabase.from('challenge_submissions').select('*').eq('user_id', authUser.id),
-        supabase.from('user_points').select('total_points').eq('user_id', authUser.id).maybeSingle()
-      ]);
-
-      setSubmissions(submissionsRes.data || []);
-      setTotalPoints(pointsRes.data?.total_points || 0);
-    } catch (error) {
-      console.error('Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUploadProof = async () => {
-    if (!proofFile || !selectedChallenge || !user) return;
-    setUploading(true);
-    try {
-      const fileExt = proofFile.name.split('.').pop();
-      const fileName = `${user.id}/${selectedChallenge.id}-${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('posts-media')
-        .upload(fileName, proofFile, { cacheControl: '31536000', contentType: proofFile.type });
-
-      if (uploadError) throw uploadError;
-
-      const newPoints = totalPoints + (selectedChallenge.points || 50);
-      await supabase.from('user_points').upsert({ user_id: user.id, total_points: newPoints });
-      setTotalPoints(newPoints);
-
-      toast.success(`+${selectedChallenge.points || 50} points! Challenge completed!`);
-      setUploadDialog(false);
-      setProofFile(null);
-      setSelectedChallenge(null);
-      setSubmissions(prev => [...prev, { challenge_id: selectedChallenge.id, status: 'approved' }]);
-    } catch (error) {
-      toast.error('Failed to upload proof');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleVisitPlace = (place: any) => {
-    window.open(place.mapUrl, '_blank');
-    toast.success('Opening in maps...');
-  };
-
-  const handleSavePlace = (placeId: string) => {
-    const newSaved = new Set(savedPlaces);
-    if (newSaved.has(placeId)) {
-      newSaved.delete(placeId);
-      toast.success('Removed from saved');
-    } else {
-      newSaved.add(placeId);
-      toast.success('Place saved!');
-    }
-    setSavedPlaces(newSaved);
-    localStorage.setItem('adventure_saved_places', JSON.stringify([...newSaved]));
-  };
-
-  const handleLovePlace = (placeId: string) => {
-    if (lovedPlaces.has(placeId)) {
-      toast.info('You already loved this place');
-      return;
-    }
-    const newLoved = new Set([...lovedPlaces, placeId]);
-    setLovedPlaces(newLoved);
-    localStorage.setItem('adventure_loved_places', JSON.stringify([...newLoved]));
-    toast.success('❤️ Loved!');
-  };
-
-  const handleRatePlace = (placeId: string, rating: number) => {
-    const newRatings = { ...userRatings, [placeId]: rating };
-    setUserRatings(newRatings);
-    localStorage.setItem('adventure_user_ratings', JSON.stringify(newRatings));
-    toast.success(`Rated ${rating} stars!`);
-  };
-
-  const addCustomChallenge = () => {
-    if (!newCustomChallenge.title) {
-      toast.error('Enter a title');
-      return;
-    }
-    const custom = {
-      id: `custom-${Date.now()}`,
-      title: newCustomChallenge.title,
-      description: newCustomChallenge.description || 'Custom challenge',
-      type: 'custom',
-      difficulty: newCustomChallenge.difficulty,
-      duration: newCustomChallenge.duration,
-      points: 50,
-      categoryIcon: '🎯'
-    };
-    const updated = [...customChallenges, custom];
-    setCustomChallenges(updated);
-    localStorage.setItem('adventure_custom_challenges', JSON.stringify(updated));
-    setNewCustomChallenge({ title: '', description: '', difficulty: 'medium', duration: 'daily' });
-    setShowAddCustom(false);
-    toast.success('Custom challenge added!');
-  };
-
-  const isCompleted = (challengeId: string) => submissions.some(s => s.challenge_id === challengeId);
-
+  // Filter challenges
   const getFilteredChallenges = () => {
-    let challenges = challengeFilters.type === 'custom' ? customChallenges : SYSTEM_CHALLENGES;
+    let challenges = sourceFilter === 'custom' ? customChallenges : 
+                     sourceFilter === 'system' ? SYSTEM_CHALLENGES : 
+                     [...SYSTEM_CHALLENGES, ...customChallenges];
     
-    if (challengeFilters.difficulty !== 'all') {
-      challenges = challenges.filter(c => c.difficulty === challengeFilters.difficulty);
+    if (difficultyFilter !== 'all') {
+      challenges = challenges.filter(c => c.difficulty === difficultyFilter);
     }
-    if (challengeFilters.duration !== 'all') {
-      challenges = challenges.filter(c => c.duration === challengeFilters.duration);
+    if (timeFilter !== 'all') {
+      challenges = challenges.filter(c => c.duration === timeFilter);
     }
     
     return challenges.slice(0, 50);
   };
 
-  // Mock leaderboard data
-  const globalLeaderboard = [
-    { rank: 1, name: 'MountainKing', points: 8500, avatar: '👑' },
-    { rank: 2, name: 'TrekMaster', points: 7200, avatar: '🥈' },
-    { rank: 3, name: 'ExplorerPro', points: 6800, avatar: '🥉' },
-    { rank: 4, name: 'AdventureX', points: 5500, avatar: '⭐' },
-    { rank: 5, name: 'NatureLover', points: 4900, avatar: '🌿' },
-    { rank: 6, name: 'WildHeart', points: 4200, avatar: '💚' },
-    { rank: 7, name: 'PathSeeker', points: 3800, avatar: '🧭' },
-    { rank: 8, name: 'HillClimber', points: 3200, avatar: '⛰️' },
-    { rank: 9, name: 'SkyWalker', points: 2800, avatar: '☁️' },
-    { rank: 10, name: 'RiverRunner', points: 2400, avatar: '🌊' },
+  // Actions
+  const createCustomChallenge = () => {
+    if (!newChallenge.title.trim()) {
+      toast.error('Please enter a title');
+      return;
+    }
+    const challenge = {
+      id: `custom-${Date.now()}`,
+      ...newChallenge,
+      type: 'custom',
+      categoryIcon: CHALLENGE_CATEGORIES.find(c => c.name.toLowerCase() === newChallenge.category)?.icon || '🎯',
+      likes: 0,
+      comments: 0
+    };
+    setCustomChallenges(prev => [...prev, challenge]);
+    setShowCreateChallenge(false);
+    setNewChallenge({ title: '', description: '', difficulty: 'medium', duration: 'daily', category: 'lifestyle' });
+    toast.success('Challenge created! 🎯');
+  };
+
+  const toggleChallengeComplete = (id: string) => {
+    setCompletedChallenges(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+    toast.success(completedChallenges.has(id) ? 'Unmarked' : 'Challenge completed! 🎉');
+  };
+
+  const toggleChallengeLike = (id: string) => {
+    setLikedChallenges(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const togglePlaceVisit = (id: string) => {
+    setVisitedPlaces(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+    toast.success(visitedPlaces.has(id) ? 'Unmarked' : '✓ Marked as Visited');
+  };
+
+  const togglePlaceLove = (id: string) => {
+    setLovedPlaces(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const ratePlace = (id: string, rating: number) => {
+    setUserRatings(prev => ({ ...prev, [id]: rating }));
+    toast.success(`Rated ${rating} stars ⭐`);
+  };
+
+  const togglePostLike = (id: string) => {
+    setLikedPosts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const openComments = (id: string, title: string) => {
+    setSelectedPostId(id);
+    setSelectedPostTitle(title);
+    setCommentsOpen(true);
+  };
+
+  const shareContent = (title: string) => {
+    if (navigator.share) {
+      navigator.share({ title, url: window.location.href });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('Link copied!');
+    }
+  };
+
+  // Mock ranking data
+  const globalRankings = [
+    { rank: 1, name: 'AdventureKing', points: 8500, emoji: '👑' },
+    { rank: 2, name: 'TrekMaster', points: 7200, emoji: '🥈' },
+    { rank: 3, name: 'ExplorerPro', points: 6800, emoji: '🥉' },
+    { rank: 4, name: 'WildHeart', points: 5500, emoji: '⭐' },
+    { rank: 5, name: 'NatureLover', points: 4900, emoji: '🌿' },
+    { rank: 6, name: 'PathSeeker', points: 4200, emoji: '🧭' },
+    { rank: 7, name: 'HillClimber', points: 3800, emoji: '⛰️' },
+    { rank: 8, name: 'SkyWalker', points: 3200, emoji: '☁️' },
+    { rank: 9, name: 'RiverRunner', points: 2800, emoji: '🌊' },
+    { rank: 10, name: 'ForestGuide', points: 2400, emoji: '🌲' },
   ];
 
-  const regionalLeaderboard = [
-    { rank: 1, name: 'NepaliExplorer', points: 4200, avatar: '🇳🇵' },
-    { rank: 2, name: 'HimalayanHiker', points: 3800, avatar: '🏔️' },
-    { rank: 3, name: 'KathmanduKid', points: 3200, avatar: '🏛️' },
-    { rank: 4, name: 'PokharaLover', points: 2800, avatar: '🏞️' },
-    { rank: 5, name: 'SagarmathaPro', points: 2400, avatar: '⛰️' },
+  const regionalRankings = [
+    { rank: 1, name: 'LocalExplorer', points: 4200, emoji: '🏆' },
+    { rank: 2, name: 'RegionalPro', points: 3800, emoji: '🥈' },
+    { rank: 3, name: 'AreaMaster', points: 3200, emoji: '🥉' },
+    { rank: 4, name: 'NeighborHiker', points: 2800, emoji: '⭐' },
+    { rank: 5, name: 'LocalGuide', points: 2400, emoji: '📍' },
+    { rank: 6, name: 'CityWalker', points: 2000, emoji: '🚶' },
+    { rank: 7, name: 'TownExplorer', points: 1800, emoji: '🏘️' },
+    { rank: 8, name: 'StreetSeeker', points: 1500, emoji: '🛤️' },
+    { rank: 9, name: 'ParkLover', points: 1200, emoji: '🌳' },
+    { rank: 10, name: 'NewExplorer', points: 900, emoji: '🌱' },
   ];
+
+  const userRank = 27;
+  const userPoints = completedChallenges.size * 50 + visitedPlaces.size * 30;
 
   const filteredChallenges = getFilteredChallenges();
-  const topPlaces = NEPAL_PLACES.filter(p => p.isTop);
-  const otherPlaces = NEPAL_PLACES.filter(p => !p.isTop).slice(0, 30);
-
-  // Calculate user rank
-  const userRank = totalPoints > 0 ? Math.max(11, 50 - Math.floor(totalPoints / 100)) : '-';
 
   return (
     <div className="space-y-4 pb-20">
-      {/* Header - Clean, no ranks/medals at top */}
-      <h1 className="text-xl font-bold flex items-center gap-2">
-        🏔️ Adventure
-      </h1>
+      {/* ============= CLEAN HEADER ============= */}
+      <div className="text-center py-4">
+        <h1 className="text-2xl font-bold flex items-center justify-center gap-2">
+          <Sparkles className="w-6 h-6 text-primary" />
+          Adventure Zone
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Explore challenges, discover places, and share your journey
+        </p>
+      </div>
 
-      {/* Tabs - Challenges, Discover, Travel (Rankings at bottom) */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-3 h-auto p-0.5">
-          <TabsTrigger value="challenges" className="text-xs py-2">
-            <Target className="w-3.5 h-3.5 mr-1" />Challenges
+      {/* ============= MAIN TABS ============= */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-4 h-auto p-1 bg-muted/50">
+          <TabsTrigger value="challenges" className="text-xs py-2.5 gap-1.5">
+            <Target className="w-4 h-4" />
+            <span className="hidden xs:inline">Challenges</span>
           </TabsTrigger>
-          <TabsTrigger value="discover" className="text-xs py-2">
-            <Compass className="w-3.5 h-3.5 mr-1" />Discover
+          <TabsTrigger value="discover" className="text-xs py-2.5 gap-1.5">
+            <Compass className="w-4 h-4" />
+            <span className="hidden xs:inline">Discover</span>
           </TabsTrigger>
-          <TabsTrigger value="travel" className="text-xs py-2">
-            <Map className="w-3.5 h-3.5 mr-1" />Travel
+          <TabsTrigger value="travel" className="text-xs py-2.5 gap-1.5">
+            <Plane className="w-4 h-4" />
+            <span className="hidden xs:inline">Travel</span>
+          </TabsTrigger>
+          <TabsTrigger value="ranking" className="text-xs py-2.5 gap-1.5">
+            <Award className="w-4 h-4" />
+            <span className="hidden xs:inline">Ranking</span>
           </TabsTrigger>
         </TabsList>
 
-        {/* Challenges Tab */}
-        <TabsContent value="challenges" className="space-y-3 mt-3">
-          {/* Type: System / Custom */}
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant={challengeFilters.type === 'system' ? 'default' : 'outline'}
-              onClick={() => setChallengeFilters(f => ({ ...f, type: 'system' }))}
-              className="flex-1 h-9 text-xs"
-            >
-              System ({SYSTEM_CHALLENGES.length})
-            </Button>
-            <Button
-              size="sm"
-              variant={challengeFilters.type === 'custom' ? 'default' : 'outline'}
-              onClick={() => setChallengeFilters(f => ({ ...f, type: 'custom' }))}
-              className="flex-1 h-9 text-xs"
-            >
-              Custom ({customChallenges.length})
-            </Button>
-            <Button size="sm" variant="outline" className="h-9 w-9 p-0" onClick={() => setShowAddCustom(true)}>
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
+        {/* ============= CHALLENGES TAB ============= */}
+        <TabsContent value="challenges" className="mt-4 space-y-4">
+          {/* Create Challenge Button */}
+          <Card className="glass-card border-dashed border-primary/30 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => setShowCreateChallenge(true)}>
+            <CardContent className="py-4 flex items-center justify-center gap-2">
+              <Plus className="w-5 h-5 text-primary" />
+              <div className="text-center">
+                <p className="font-medium text-sm">Create Your Own Challenge</p>
+                <p className="text-[10px] text-muted-foreground">Design a challenge that fits your lifestyle</p>
+              </div>
+            </CardContent>
+          </Card>
 
-          {/* Difficulty: Easy / Medium / Hard */}
-          <div className="flex gap-1">
-            {['all', 'easy', 'medium', 'hard'].map(d => (
-              <Button
-                key={d}
-                size="sm"
-                variant={challengeFilters.difficulty === d ? 'default' : 'outline'}
-                onClick={() => setChallengeFilters(f => ({ ...f, difficulty: d }))}
-                className="flex-1 h-8 text-[10px] capitalize"
-              >
-                {d === 'all' ? 'All Levels' : d}
-              </Button>
-            ))}
-          </div>
+          {/* Accordion Filters */}
+          <Accordion type="multiple" defaultValue={['source']} className="space-y-2">
+            {/* Source Filter */}
+            <AccordionItem value="source" className="border rounded-lg bg-card/50 px-3">
+              <AccordionTrigger className="py-2.5 hover:no-underline">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Source</span>
+                  <Badge variant="secondary" className="ml-2 text-[10px]">{sourceFilter}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {['all', 'system', 'custom'].map(s => (
+                    <Button 
+                      key={s} 
+                      size="sm" 
+                      variant={sourceFilter === s ? 'default' : 'outline'} 
+                      className="h-8 text-xs capitalize"
+                      onClick={() => setSourceFilter(s)}
+                    >
+                      {s} {s === 'system' && `(${SYSTEM_CHALLENGES.length})`} {s === 'custom' && `(${customChallenges.length})`}
+                    </Button>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
 
-          {/* Duration: Daily / Weekly / Monthly / Yearly / Lifetime */}
-          <ScrollArea className="w-full">
-            <div className="flex gap-1 pb-2">
-              {DURATION_FILTERS.map(d => (
-                <Button
-                  key={d}
-                  size="sm"
-                  variant={challengeFilters.duration === d ? 'default' : 'outline'}
-                  onClick={() => setChallengeFilters(f => ({ ...f, duration: d }))}
-                  className="h-8 text-[10px] capitalize shrink-0 gap-1"
-                >
-                  {d === 'daily' && <Calendar className="w-3 h-3" />}
-                  {d === 'weekly' && <CalendarDays className="w-3 h-3" />}
-                  {d === 'monthly' && <CalendarRange className="w-3 h-3" />}
-                  {d === 'yearly' && <Clock className="w-3 h-3" />}
-                  {d === 'lifetime' && <Trophy className="w-3 h-3" />}
-                  {d}
-                </Button>
-              ))}
-            </div>
-          </ScrollArea>
+            {/* Difficulty Filter */}
+            <AccordionItem value="difficulty" className="border rounded-lg bg-card/50 px-3">
+              <AccordionTrigger className="py-2.5 hover:no-underline">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-orange-500" />
+                  <span className="text-sm font-medium">Difficulty</span>
+                  <Badge variant="secondary" className="ml-2 text-[10px]">{difficultyFilter}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {['all', 'easy', 'medium', 'hard'].map(d => (
+                    <Button 
+                      key={d} 
+                      size="sm" 
+                      variant={difficultyFilter === d ? 'default' : 'outline'} 
+                      className={`h-8 text-xs capitalize ${d === 'easy' ? 'border-green-500/50' : d === 'medium' ? 'border-yellow-500/50' : d === 'hard' ? 'border-red-500/50' : ''}`}
+                      onClick={() => setDifficultyFilter(d)}
+                    >
+                      {d === 'easy' && '🟢 '}{d === 'medium' && '🟡 '}{d === 'hard' && '🔴 '}{d}
+                    </Button>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
 
-          {/* Challenge List */}
-          <div className="space-y-2">
-            {filteredChallenges.map((challenge) => {
-              const completed = isCompleted(challenge.id);
-              return (
-                <Card key={challenge.id} className={`glass-card transition-all ${completed ? 'opacity-60 bg-green-500/10' : ''}`}>
-                  <CardContent className="p-3">
-                    <div className="flex items-start gap-3">
-                      <div className="text-2xl">{challenge.categoryIcon}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium text-sm truncate">{challenge.title}</p>
-                          {completed && <Check className="w-4 h-4 text-green-500 shrink-0" />}
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-1">{challenge.description}</p>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          <Badge variant="outline" className="text-[9px] capitalize">{challenge.difficulty}</Badge>
-                          <Badge variant="outline" className="text-[9px] capitalize">{challenge.duration}</Badge>
-                          <Badge className="text-[9px] bg-primary/20 text-primary">+{challenge.points} pts</Badge>
+            {/* Time Filter */}
+            <AccordionItem value="time" className="border rounded-lg bg-card/50 px-3">
+              <AccordionTrigger className="py-2.5 hover:no-underline">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm font-medium">Time</span>
+                  <Badge variant="secondary" className="ml-2 text-[10px]">{timeFilter}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {['all', 'daily', 'weekly', 'monthly', 'yearly', 'lifetime'].map(t => (
+                    <Button 
+                      key={t} 
+                      size="sm" 
+                      variant={timeFilter === t ? 'default' : 'outline'} 
+                      className="h-8 text-xs capitalize"
+                      onClick={() => setTimeFilter(t)}
+                    >
+                      {t}
+                    </Button>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
+          {/* Challenge Cards */}
+          <div className="space-y-3">
+            {filteredChallenges.length === 0 ? (
+              <Card className="glass-card">
+                <CardContent className="py-12 text-center">
+                  <Target className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                  <p className="font-medium">No challenges here yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Try changing filters or create your own</p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredChallenges.map(challenge => {
+                const isCompleted = completedChallenges.has(challenge.id);
+                const isLiked = likedChallenges.has(challenge.id);
+                return (
+                  <Card key={challenge.id} className={`glass-card transition-all ${isCompleted ? 'bg-green-500/5 border-green-500/30' : ''}`}>
+                    <CardContent className="p-4">
+                      <div className="flex gap-3">
+                        <div className="text-3xl">{challenge.categoryIcon}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-semibold text-sm line-clamp-1">{challenge.title}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{challenge.description}</p>
+                            </div>
+                            {isCompleted && <Check className="w-5 h-5 text-green-500 shrink-0" />}
+                          </div>
+                          
+                          {/* Tags */}
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            <Badge variant="outline" className={`text-[10px] capitalize ${challenge.difficulty === 'easy' ? 'border-green-500/50 text-green-600' : challenge.difficulty === 'medium' ? 'border-yellow-500/50 text-yellow-600' : 'border-red-500/50 text-red-600'}`}>
+                              {challenge.difficulty}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] capitalize">{challenge.duration}</Badge>
+                            <Badge variant="secondary" className="text-[10px] capitalize">{challenge.category}</Badge>
+                          </div>
+                          
+                          {/* Social Actions - Like Posts */}
+                          <div className="flex items-center gap-4 mt-3 pt-2 border-t border-border/50">
+                            <button 
+                              onClick={() => toggleChallengeLike(challenge.id)} 
+                              className={`flex items-center gap-1.5 text-xs transition-colors ${isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-foreground'}`}
+                            >
+                              <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
+                              <span>{(challenge.likes || 0) + (isLiked ? 1 : 0)}</span>
+                            </button>
+                            <button 
+                              onClick={() => openComments(challenge.id, challenge.title)} 
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              <span>{challenge.comments || 0}</span>
+                            </button>
+                            <button 
+                              onClick={() => shareContent(challenge.title)} 
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
+                            <div className="flex-1" />
+                            <Button 
+                              size="sm" 
+                              variant={isCompleted ? 'secondary' : 'default'} 
+                              className="h-7 text-xs"
+                              onClick={() => toggleChallengeComplete(challenge.id)}
+                            >
+                              {isCompleted ? 'Completed ✓' : 'Mark Done'}
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                      {!completed && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="shrink-0 h-8 text-xs"
-                          onClick={() => { setSelectedChallenge(challenge); setUploadDialog(true); }}
-                        >
-                          <Upload className="w-3 h-3 mr-1" /> Proof
-                        </Button>
-                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ============= DISCOVER TAB ============= */}
+        <TabsContent value="discover" className="mt-4 space-y-4">
+          <div className="text-center mb-4">
+            <h2 className="font-semibold text-lg">Discover Beautiful Places</h2>
+            <p className="text-xs text-muted-foreground">Places worth remembering around the world</p>
+          </div>
+
+          {/* Place Cards - Grid Layout */}
+          <div className="grid grid-cols-2 gap-3">
+            {DISCOVER_PLACES.slice(0, 40).map(place => {
+              const isVisited = visitedPlaces.has(place.id);
+              const isLoved = lovedPlaces.has(place.id);
+              const userRating = userRatings[place.id] || 0;
+              
+              return (
+                <Card key={place.id} className={`glass-card overflow-hidden ${isVisited ? 'border-green-500/30' : ''}`}>
+                  <CardContent className="p-3">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-2xl">{place.icon}</span>
+                      <span className="text-sm">{place.countryFlag}</span>
+                    </div>
+                    
+                    {/* Info */}
+                    <p className="font-medium text-xs line-clamp-1">{place.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{place.country}</p>
+                    
+                    {/* Stars */}
+                    <div className="flex items-center gap-0.5 mt-2">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <button key={s} onClick={() => ratePlace(place.id, s)}>
+                          <Star className={`w-3 h-3 transition-colors ${(userRating || place.stars) >= s ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30'}`} />
+                        </button>
+                      ))}
+                      <span className="text-[9px] text-muted-foreground ml-1">{place.stars}</span>
+                    </div>
+                    
+                    {/* Meta */}
+                    <p className="text-[9px] text-muted-foreground mt-1">
+                      {place.visits.toLocaleString()} visits
+                    </p>
+                    
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50">
+                      <button 
+                        onClick={() => togglePlaceVisit(place.id)} 
+                        className={`flex items-center gap-1 text-[10px] ${isVisited ? 'text-green-500' : 'text-muted-foreground'}`}
+                      >
+                        <Footprints className="w-3 h-3" />
+                        {isVisited ? '✓' : 'Visit'}
+                      </button>
+                      <button 
+                        onClick={() => togglePlaceLove(place.id)} 
+                        className={`${isLoved ? 'text-red-500' : 'text-muted-foreground'}`}
+                      >
+                        <Heart className={`w-3 h-3 ${isLoved ? 'fill-current' : ''}`} />
+                      </button>
+                      <button onClick={() => openComments(place.id, place.name)} className="text-muted-foreground">
+                        <MessageCircle className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => shareContent(place.name)} className="text-muted-foreground">
+                        <Share2 className="w-3 h-3" />
+                      </button>
                     </div>
                   </CardContent>
                 </Card>
@@ -441,289 +690,239 @@ export default function Adventure() {
             })}
           </div>
 
-          {filteredChallenges.length === 0 && (
+          {DISCOVER_PLACES.length === 0 && (
             <Card className="glass-card">
-              <CardContent className="py-8 text-center">
-                <Target className="w-10 h-10 mx-auto text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground">No challenges found</p>
+              <CardContent className="py-12 text-center">
+                <Compass className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                <p className="font-medium">New places coming soon</p>
+                <p className="text-xs text-muted-foreground mt-1">Keep exploring 🌍</p>
               </CardContent>
             </Card>
           )}
+        </TabsContent>
 
-          {/* Rankings at Bottom */}
-          <div className="pt-4 space-y-4">
-            <div className="text-center">
-              <h3 className="font-bold text-sm flex items-center justify-center gap-2 mb-1">
-                🏆 Your Rank
+        {/* ============= TRAVEL TAB ============= */}
+        <TabsContent value="travel" className="mt-4 space-y-4">
+          <div className="text-center mb-4">
+            <h2 className="font-semibold text-lg">Travel Stories</h2>
+            <p className="text-xs text-muted-foreground">Share moments from your journey</p>
+          </div>
+
+          {/* Travel Posts - Same as normal posts */}
+          <div className="space-y-3">
+            {TRAVEL_POSTS.map(post => {
+              const isLiked = likedPosts.has(post.id);
+              return (
+                <Card key={post.id} className="glass-card">
+                  <CardContent className="p-4">
+                    {/* Author */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm">
+                        {post.author[0]}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{post.author}</p>
+                        <p className="text-[10px] text-muted-foreground">Travel Story</p>
+                      </div>
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="text-6xl text-center py-6 bg-gradient-to-br from-primary/5 to-secondary/5 rounded-lg mb-3">
+                      {post.image}
+                    </div>
+                    <p className="font-medium text-sm">{post.title}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{post.content}</p>
+                    
+                    {/* Actions */}
+                    <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
+                      <button 
+                        onClick={() => togglePostLike(post.id)} 
+                        className={`flex items-center gap-1.5 text-xs transition-colors ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+                      >
+                        <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
+                        <span>{post.likes + (isLiked ? 1 : 0)}</span>
+                      </button>
+                      <button 
+                        onClick={() => openComments(post.id, post.title)} 
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>{post.comments}</span>
+                      </button>
+                      <button 
+                        onClick={() => shareContent(post.title)} 
+                        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {TRAVEL_POSTS.length === 0 && (
+            <Card className="glass-card">
+              <CardContent className="py-12 text-center">
+                <Plane className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                <p className="font-medium">No travel stories yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Share your first journey ✨</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ============= RANKING TAB (SOFT & FRIENDLY) ============= */}
+        <TabsContent value="ranking" className="mt-4 space-y-4">
+          <div className="text-center mb-4">
+            <h2 className="font-semibold text-lg">Active Explorers</h2>
+            <p className="text-xs text-muted-foreground">People exploring the most right now</p>
+          </div>
+
+          {/* Filter: Global / Regional */}
+          <div className="flex gap-2">
+            <Button 
+              variant={rankingFilter === 'global' ? 'default' : 'outline'} 
+              className="flex-1 h-10"
+              onClick={() => setRankingFilter('global')}
+            >
+              <Globe className="w-4 h-4 mr-2" />
+              Global
+            </Button>
+            <Button 
+              variant={rankingFilter === 'regional' ? 'default' : 'outline'} 
+              className="flex-1 h-10"
+              onClick={() => setRankingFilter('regional')}
+            >
+              <MapPin className="w-4 h-4 mr-2" />
+              Regional
+            </Button>
+          </div>
+
+          {/* Your Rank Card */}
+          <Card className="glass-card bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/30">
+            <CardContent className="py-4 text-center">
+              <p className="text-sm text-muted-foreground">Your Rank</p>
+              <p className="text-3xl font-bold text-primary mt-1">#{userRank}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Keep going, you're doing great 💚
+              </p>
+              <p className="text-sm font-medium mt-2">{userPoints} points</p>
+            </CardContent>
+          </Card>
+
+          {/* Top 10 List */}
+          <Card className="glass-card">
+            <CardContent className="p-4">
+              <h3 className="font-medium text-sm mb-3 flex items-center gap-2">
+                {rankingFilter === 'global' ? <Globe className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                Top 10 {rankingFilter === 'global' ? 'Global' : 'Regional'} Explorers
               </h3>
-              <p className="text-2xl font-bold text-primary">#{userRank}</p>
-              <p className="text-xs text-muted-foreground">{totalPoints} points</p>
-            </div>
-
-            <Card className="glass-card">
-              <CardContent className="p-3">
-                <h4 className="font-medium text-xs mb-2 flex items-center gap-1">
-                  <Globe className="w-3 h-3" /> Global Top 10
-                </h4>
-                <div className="space-y-1">
-                  {globalLeaderboard.slice(0, 5).map((u) => (
-                    <div key={u.rank} className="flex items-center gap-2 text-xs">
-                      <span className="w-5 text-center font-medium">{u.rank}</span>
-                      <span>{u.avatar}</span>
-                      <span className="flex-1 truncate">{u.name}</span>
-                      <span className="text-muted-foreground">{u.points}</span>
+              <div className="space-y-2">
+                {(rankingFilter === 'global' ? globalRankings : regionalRankings).map(user => (
+                  <div key={user.rank} className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${user.rank <= 3 ? 'bg-primary/5' : ''}`}>
+                    <span className="w-6 text-center font-bold text-sm">
+                      {user.rank <= 3 ? ['🥇', '🥈', '🥉'][user.rank - 1] : `#${user.rank}`}
+                    </span>
+                    <span className="text-xl">{user.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{user.name}</p>
+                      <p className="text-[10px] text-muted-foreground">Exploring consistently this week</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="glass-card">
-              <CardContent className="p-3">
-                <h4 className="font-medium text-xs mb-2 flex items-center gap-1">
-                  🇳🇵 Regional Top 5
-                </h4>
-                <div className="space-y-1">
-                  {regionalLeaderboard.map((u) => (
-                    <div key={u.rank} className="flex items-center gap-2 text-xs">
-                      <span className="w-5 text-center font-medium">{u.rank}</span>
-                      <span>{u.avatar}</span>
-                      <span className="flex-1 truncate">{u.name}</span>
-                      <span className="text-muted-foreground">{u.points}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* Discover Tab - 200+ Places with 5-Star Rating */}
-        <TabsContent value="discover" className="space-y-4 mt-3">
-          {/* Top 5 Nepal Places - Highlighted */}
-          <div>
-            <h3 className="font-medium text-sm mb-2 flex items-center gap-1">
-              🇳🇵 Top 5 Places in Nepal
-            </h3>
-            <div className="space-y-2">
-              {topPlaces.map((place) => (
-                <Card key={place.id} className="glass-card border-primary/30 bg-gradient-to-r from-primary/5 to-transparent">
-                  <CardContent className="p-3">
-                    <div className="flex gap-3">
-                      <div className="text-3xl">{place.image}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm">{place.name}</p>
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                          <MapPin className="w-2.5 h-2.5" /> {place.location}
-                        </p>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{place.description}</p>
-                        
-                        {/* 5-Star Rating */}
-                        <div className="flex items-center gap-1 mt-2">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                              key={star}
-                              onClick={() => handleRatePlace(place.id, star)}
-                              className="transition-transform hover:scale-110"
-                            >
-                              <Star className={`w-4 h-4 ${(userRatings[place.id] || 0) >= star ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
-                            </button>
-                          ))}
-                          <span className="text-xs text-muted-foreground ml-1">({place.stars})</span>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 mt-2">
-                          <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1" onClick={() => handleVisitPlace(place)}>
-                            <Navigation className="w-3 h-3" /> Visit
-                          </Button>
-                          <button onClick={() => handleLovePlace(place.id)} className="flex items-center gap-1 text-xs">
-                            <Heart className={`w-4 h-4 ${lovedPlaces.has(place.id) ? 'fill-red-500 text-red-500' : ''}`} />
-                            <span>{place.hearts + (lovedPlaces.has(place.id) ? 1 : 0)}</span>
-                          </button>
-                          <button onClick={() => setPlaceReviewDialog(place)} className="text-xs text-muted-foreground hover:text-foreground">
-                            <MessageCircle className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleSavePlace(place.id)} className={`${savedPlaces.has(place.id) ? 'text-primary' : 'text-muted-foreground'}`}>
-                            <Bookmark className={`w-4 h-4 ${savedPlaces.has(place.id) ? 'fill-current' : ''}`} />
-                          </button>
-                          <button className="text-muted-foreground hover:text-foreground">
-                            <Share2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-
-          {/* More Places */}
-          <div>
-            <h3 className="font-medium text-sm mb-2">🗺️ Explore More Places</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {otherPlaces.map((place) => (
-                <Card key={place.id} className="glass-card">
-                  <CardContent className="p-2.5">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xl">{place.image}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-xs truncate">{place.name}</p>
-                        <p className="text-[9px] text-muted-foreground truncate">{place.location}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <Star key={star} className={`w-2.5 h-2.5 ${star <= Math.round(place.stars) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30'}`} />
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
-                        <Heart className="w-2.5 h-2.5" /> {place.hearts}
-                      </div>
-                    </div>
-                    <Button size="sm" variant="ghost" className="w-full h-6 mt-1 text-[9px]" onClick={() => handleVisitPlace(place)}>
-                      <ExternalLink className="w-2.5 h-2.5 mr-1" /> Open Map
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* Travel Tab - Same layout as posts */}
-        <TabsContent value="travel" className="space-y-3 mt-3">
-          <h3 className="font-medium text-sm mb-2">✈️ Travel Destinations</h3>
-          {TRAVEL_PLACES.map((place) => (
-            <Card key={place.id} className="glass-card">
-              <CardContent className="p-3">
-                <div className="flex gap-3">
-                  <div className="text-4xl">{place.image}</div>
-                  <div className="flex-1">
-                    <p className="font-semibold">{place.name}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
-                      <MapPin className="w-3 h-3" /> {place.location}
-                    </p>
-                    <p className="text-sm text-muted-foreground">{place.description}</p>
-                    <Badge variant="outline" className="text-[9px] mt-2 capitalize">{place.category}</Badge>
+                    <span className="text-xs font-medium text-muted-foreground">{user.points.toLocaleString()}</span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-
-          {/* Rankings at bottom of Travel too */}
-          <div className="pt-4">
-            <Card className="glass-card">
-              <CardContent className="p-3 text-center">
-                <h4 className="font-medium text-sm mb-2">🏆 Your Travel Stats</h4>
-                <p className="text-2xl font-bold text-primary">{totalPoints} pts</p>
-                <p className="text-xs text-muted-foreground">Global Rank: #{userRank}</p>
-              </CardContent>
-            </Card>
-          </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Upload Proof Dialog */}
-      <Dialog open={uploadDialog} onOpenChange={setUploadDialog}>
-        <DialogContent>
+      {/* ============= CREATE CHALLENGE DIALOG ============= */}
+      <Dialog open={showCreateChallenge} onOpenChange={setShowCreateChallenge}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Complete Challenge</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="w-5 h-5 text-primary" />
+              Create Your Own Challenge
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            {selectedChallenge && (
-              <div className="p-3 rounded-lg bg-muted/50">
-                <p className="font-medium text-sm">{selectedChallenge.title}</p>
-                <p className="text-xs text-muted-foreground">{selectedChallenge.description}</p>
-                <Badge className="mt-2 text-xs">+{selectedChallenge.points} points</Badge>
-              </div>
-            )}
+          <div className="space-y-4 mt-2">
             <div>
-              <label className="text-sm font-medium">Upload Proof (Photo/Video)</label>
-              <Input
-                type="file"
-                accept="image/*,video/*"
-                onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+              <label className="text-sm font-medium">Challenge Title *</label>
+              <Input 
+                value={newChallenge.title} 
+                onChange={e => setNewChallenge(p => ({ ...p, title: e.target.value }))}
+                placeholder="e.g., Morning Walk for 20 Minutes"
                 className="mt-1"
               />
             </div>
-            <Button onClick={handleUploadProof} disabled={!proofFile || uploading} className="w-full">
-              {uploading ? 'Uploading...' : 'Submit Proof'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Custom Challenge Dialog */}
-      <Dialog open={showAddCustom} onOpenChange={setShowAddCustom}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Custom Challenge</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              placeholder="Challenge title..."
-              value={newCustomChallenge.title}
-              onChange={(e) => setNewCustomChallenge(prev => ({ ...prev, title: e.target.value }))}
-            />
-            <Textarea
-              placeholder="Description (optional)..."
-              value={newCustomChallenge.description}
-              onChange={(e) => setNewCustomChallenge(prev => ({ ...prev, description: e.target.value }))}
-            />
-            <div className="flex gap-2">
-              <select
-                className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm"
-                value={newCustomChallenge.difficulty}
-                onChange={(e) => setNewCustomChallenge(prev => ({ ...prev, difficulty: e.target.value }))}
+            <div>
+              <label className="text-sm font-medium">Description</label>
+              <Textarea 
+                value={newChallenge.description} 
+                onChange={e => setNewChallenge(p => ({ ...p, description: e.target.value }))}
+                placeholder="Describe your challenge..."
+                className="mt-1"
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium">Difficulty</label>
+                <select 
+                  className="w-full h-10 mt-1 rounded-md border bg-background px-3 text-sm"
+                  value={newChallenge.difficulty}
+                  onChange={e => setNewChallenge(p => ({ ...p, difficulty: e.target.value }))}
+                >
+                  <option value="easy">🟢 Easy</option>
+                  <option value="medium">🟡 Medium</option>
+                  <option value="hard">🔴 Hard</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Time</label>
+                <select 
+                  className="w-full h-10 mt-1 rounded-md border bg-background px-3 text-sm"
+                  value={newChallenge.duration}
+                  onChange={e => setNewChallenge(p => ({ ...p, duration: e.target.value }))}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                  <option value="lifetime">Lifetime</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Category</label>
+              <select 
+                className="w-full h-10 mt-1 rounded-md border bg-background px-3 text-sm"
+                value={newChallenge.category}
+                onChange={e => setNewChallenge(p => ({ ...p, category: e.target.value }))}
               >
-                {DIFFICULTY_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-              <select
-                className="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm"
-                value={newCustomChallenge.duration}
-                onChange={(e) => setNewCustomChallenge(prev => ({ ...prev, duration: e.target.value }))}
-              >
-                {DURATION_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
+                {CHALLENGE_CATEGORIES.map(c => (
+                  <option key={c.name} value={c.name.toLowerCase()}>{c.icon} {c.name}</option>
+                ))}
               </select>
             </div>
-            <Button onClick={addCustomChallenge} className="w-full">
-              <Plus className="w-4 h-4 mr-1" /> Add Challenge
+            <Button onClick={createCustomChallenge} className="w-full">
+              <Plus className="w-4 h-4 mr-2" />
+              Create Challenge
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Place Review Dialog */}
-      <Dialog open={!!placeReviewDialog} onOpenChange={() => setPlaceReviewDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Leave a Review</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {placeReviewDialog && (
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">{placeReviewDialog.image}</span>
-                <div>
-                  <p className="font-medium text-sm">{placeReviewDialog.name}</p>
-                  <p className="text-xs text-muted-foreground">{placeReviewDialog.location}</p>
-                </div>
-              </div>
-            )}
-            <Textarea
-              placeholder="Write your review..."
-              value={reviewText}
-              onChange={(e) => setReviewText(e.target.value)}
-            />
-            <Button onClick={() => { toast.success('Review submitted!'); setPlaceReviewDialog(null); setReviewText(''); }} className="w-full">
-              Submit Review
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Comments Dialog */}
+      <CommentsDialog 
+        open={commentsOpen} 
+        onOpenChange={setCommentsOpen} 
+        postId={selectedPostId} 
+        postTitle={selectedPostTitle} 
+      />
     </div>
   );
 }
