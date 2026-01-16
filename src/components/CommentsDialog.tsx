@@ -91,9 +91,12 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
   };
 
   const addComment = async () => {
-    if (!newComment.trim() || !user) return;
+    if (!newComment.trim()) return;
+    if (!user) {
+      toast.error('Please login to comment');
+      return;
+    }
 
-    // Check user's comment count for this post (unlimited now per spec)
     try {
       const { error } = await supabase.from('comments').insert({
         post_id: postId,
@@ -101,11 +104,15 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
         content: newComment.trim()
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Comment insert error:', error);
+        throw error;
+      }
       setNewComment('');
       fetchComments();
       toast.success('Comment added');
     } catch (error) {
+      console.error('Failed to add comment:', error);
       toast.error('Failed to add comment');
     }
   };

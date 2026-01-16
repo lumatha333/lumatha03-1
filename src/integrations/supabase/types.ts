@@ -138,6 +138,7 @@ export type Database = {
           document_id: string | null
           id: string
           post_id: string | null
+          reference_id: string | null
           updated_at: string | null
           user_id: string
         }
@@ -147,6 +148,7 @@ export type Database = {
           document_id?: string | null
           id?: string
           post_id?: string | null
+          reference_id?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -156,6 +158,7 @@ export type Database = {
           document_id?: string | null
           id?: string
           post_id?: string | null
+          reference_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
