@@ -46,8 +46,8 @@ export function AdventureCommentsDialog({
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  // Create a unique document_id based on item type and id
-  const documentId = `adventure_${itemType}_${itemId}`;
+  // Create a unique reference_id based on item type and id (text field, not UUID)
+  const referenceId = `adventure_${itemType}_${itemId}`;
 
   useEffect(() => {
     if (open && itemId) {
@@ -58,11 +58,12 @@ export function AdventureCommentsDialog({
   const fetchComments = async () => {
     setLoading(true);
     try {
-      // Use document_id field to store adventure-related comments
+      // Use reference_id field (TEXT) to store adventure-related comments
+      // @ts-ignore - reference_id is a new column not yet in types
       const { data, error } = await supabase
         .from('comments')
         .select('*')
-        .eq('document_id', documentId)
+        .eq('reference_id', referenceId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -110,8 +111,10 @@ export function AdventureCommentsDialog({
     }
 
     try {
+      // Use reference_id (TEXT) for adventure items - allows non-UUID identifiers
+      // @ts-ignore - reference_id is a new column not yet in types
       const { error } = await supabase.from('comments').insert({
-        document_id: documentId, // Use document_id for adventure items
+        reference_id: referenceId,
         user_id: user.id,
         content: newComment.trim()
       });
@@ -129,8 +132,9 @@ export function AdventureCommentsDialog({
   const addReply = async (parentId: string) => {
     if (!replyContent.trim() || !user) return;
     try {
+      // @ts-ignore - reference_id is a new column not yet in types
       const { error } = await supabase.from('comments').insert({
-        document_id: documentId,
+        reference_id: referenceId,
         user_id: user.id,
         content: `@reply: ${replyContent.trim()}`
       });

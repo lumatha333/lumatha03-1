@@ -154,14 +154,31 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
   };
 
   const handleAddComment = async () => {
-    if (!newComment.trim() || !currentUser) return;
-    await supabase.from('comments').insert({
-      user_id: currentUser.id,
-      document_id: doc.id,
-      content: newComment
-    });
-    setNewComment('');
-    loadComments();
+    if (!newComment.trim()) return;
+    if (!currentUser) {
+      toast.error('Please login to comment');
+      return;
+    }
+    
+    try {
+      const { error } = await supabase.from('comments').insert({
+        user_id: currentUser.id,
+        document_id: doc.id,
+        content: newComment
+      });
+      
+      if (error) {
+        console.error('Comment insert error:', error);
+        throw error;
+      }
+      
+      setNewComment('');
+      loadComments();
+      toast.success('Comment added');
+    } catch (error) {
+      console.error('Failed to add comment:', error);
+      toast.error('Failed to add comment');
+    }
   };
 
   const handleDeleteComment = async (commentId: string) => {
