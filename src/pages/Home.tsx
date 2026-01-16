@@ -28,6 +28,7 @@ export default function Home() {
   });
   const [categoryExpanded, setCategoryExpanded] = useState(false);
   const [contentFilter, setContentFilter] = useState('all');
+  const [videoType, setVideoType] = useState<'all' | 'short' | 'long'>('all');
   const [posts, setPosts] = useState<PostWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
@@ -270,13 +271,26 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Video Mode Notice */}
+      {/* Video Mode - Short/Long Toggle */}
       {contentFilter === 'videos' && (
         <Card className="glass-card border-primary/30 bg-primary/5">
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">
-              📹 Showing videos only
-            </p>
+          <CardContent className="p-3">
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-xs text-muted-foreground mr-2">📹</span>
+              {['all', 'short', 'long'].map((type) => (
+                <Button
+                  key={type}
+                  size="sm"
+                  variant={videoType === type ? 'default' : 'outline'}
+                  className="h-7 text-xs capitalize px-3"
+                  onClick={() => setVideoType(type as 'all' | 'short' | 'long')}
+                >
+                  {type === 'all' && 'All'}
+                  {type === 'short' && '⚡ Short'}
+                  {type === 'long' && '🎬 Long'}
+                </Button>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
