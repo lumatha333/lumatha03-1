@@ -34,8 +34,8 @@ export default function Education() {
   // Default to 'documents' tab - never auto-show To-Do
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem('zenpeace_education_tab');
-    // Always default to documents, not todos
-    return saved && ['documents', 'notes', 'todos'].includes(saved) ? saved : 'documents';
+    // Default to tasks (first tab)
+    return saved && ['documents', 'notes', 'todos'].includes(saved) ? saved : 'todos';
   });
   
   // Save active tab preference
@@ -300,20 +300,20 @@ export default function Education() {
 
   return (
     <div className="space-y-3 pb-20">
-      {/* Tabs - Order: Docs, Notes, Tasks */}
+      {/* Tabs - Order: Tasks, Notes, Docs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
-          <TabsTrigger value="documents" className="gap-1 text-[11px] sm:text-xs py-1.5">
-            <FileText className="w-3 h-3" />
-            <span>Docs</span>
+          <TabsTrigger value="todos" className="gap-1 text-[11px] sm:text-xs py-1.5">
+            <CheckSquare className="w-3 h-3" />
+            Tasks
           </TabsTrigger>
           <TabsTrigger value="notes" className="gap-1 text-[11px] sm:text-xs py-1.5">
             <StickyNote className="w-3 h-3" />
             Notes
           </TabsTrigger>
-          <TabsTrigger value="todos" className="gap-1 text-[11px] sm:text-xs py-1.5">
-            <CheckSquare className="w-3 h-3" />
-            Tasks
+          <TabsTrigger value="documents" className="gap-1 text-[11px] sm:text-xs py-1.5">
+            <FileText className="w-3 h-3" />
+            <span>Docs</span>
           </TabsTrigger>
         </TabsList>
 
