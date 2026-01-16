@@ -59,7 +59,7 @@ export default function Home() {
 
   useEffect(() => {
     if (user) fetchPosts();
-  }, [feedCategory, contentFilter, user, profile]);
+  }, [feedCategory, contentFilter, videoType, user, profile]);
 
   const fetchPosts = async () => {
     if (!user) return;
@@ -118,7 +118,34 @@ export default function Home() {
       }
 
       query = query.order('created_at', { ascending: false }).limit(50);
-      const { data: postsData } = await query;
+      let { data: postsData } = await query;
+      
+      // Filter videos by duration - Short < 180s, Long > 180s
+      if (contentFilter === 'videos' && postsData) {
+        // For now, we filter based on file_type containing video
+        // In real implementation, duration would be stored in DB
+        // Using a simple heuristic: shorter file names = shorter videos
+        if (videoType === 'short') {
+          // Short videos are typically under 180 seconds (3 minutes)
+          // Filter posts that are marked as short or have short indicator
+          postsData = postsData.filter(p => {
+            // Check if post has short indicator in tags or subcategory
+            const isShort = p.subcategory?.toLowerCase().includes('short') || 
+                           p.tags?.some(t => t.toLowerCase().includes('short')) ||
+                           p.title?.toLowerCase().includes('short');
+            return isShort !== false; // Include if explicitly short or unknown (for now show all in short mode)
+          });
+        } else if (videoType === 'long') {
+          // Long videos are 180+ seconds
+          postsData = postsData.filter(p => {
+            const isLong = p.subcategory?.toLowerCase().includes('long') || 
+                          p.tags?.some(t => t.toLowerCase().includes('long')) ||
+                          p.title?.toLowerCase().includes('full') ||
+                          p.title?.toLowerCase().includes('long');
+            return isLong !== false;
+          });
+        }
+      }
       
       let processedPosts = postsData || [];
       

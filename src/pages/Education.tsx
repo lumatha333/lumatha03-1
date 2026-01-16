@@ -300,12 +300,12 @@ export default function Education() {
 
   return (
     <div className="space-y-3 pb-20">
-      {/* Tabs */}
+      {/* Tabs - Order: Docs, Notes, Tasks */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
           <TabsTrigger value="documents" className="gap-1 text-[11px] sm:text-xs py-1.5">
             <FileText className="w-3 h-3" />
-            <span className="hidden xs:inline">Docs</span>
+            <span>Docs</span>
           </TabsTrigger>
           <TabsTrigger value="notes" className="gap-1 text-[11px] sm:text-xs py-1.5">
             <StickyNote className="w-3 h-3" />
