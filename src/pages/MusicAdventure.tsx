@@ -603,15 +603,47 @@ export default function MusicAdventure() {
   };
 
   // ============= TRAVEL STORY ACTIONS =============
+  const [uploadingImage, setUploadingImage] = useState(false);
+  
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    
+    setUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('posts-media')
+        .upload(fileName, file);
+      
+      if (uploadError) throw uploadError;
+      
+      const { data } = supabase.storage.from('posts-media').getPublicUrl(fileName);
+      setNewStory(prev => ({ ...prev, image: data.publicUrl }));
+      toast.success('Image uploaded! 📸');
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+  
   const createTravelStory = () => {
     if (!newStory.title.trim() || !newStory.content.trim()) {
       toast.error('Please fill in title and content');
       return;
     }
+    if (!newStory.image) {
+      toast.error('Please upload an image for your story');
+      return;
+    }
     const story = {
       id: `story-${Date.now()}`,
       ...newStory,
-      image: newStory.image || 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800',
+      image: newStory.image,
       author: profile?.name || 'You',
       authorAvatar: profile?.name?.[0] || 'U',
       likes: 0,
@@ -1274,16 +1306,46 @@ export default function MusicAdventure() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Image URL (optional)</label>
-              <Input 
-                value={newStory.image} 
-                onChange={e => setNewStory(p => ({ ...p, image: e.target.value }))}
-                placeholder="https://example.com/image.jpg"
-                className="mt-1"
-              />
-              <p className="text-[10px] text-muted-foreground mt-1">Leave empty for default travel image</p>
+              <label className="text-sm font-medium">Upload Photo *</label>
+              <div className="mt-1 space-y-2">
+                {newStory.image ? (
+                  <div className="relative rounded-lg overflow-hidden">
+                    <img src={newStory.image} alt="Preview" className="w-full h-40 object-cover" />
+                    <Button 
+                      size="sm" 
+                      variant="destructive" 
+                      className="absolute top-2 right-2 h-7 text-xs"
+                      onClick={() => setNewStory(p => ({ ...p, image: '' }))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-primary/30 rounded-lg cursor-pointer hover:bg-primary/5 transition-colors">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                    />
+                    {uploadingImage ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+                        <p className="text-xs text-muted-foreground">Uploading...</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Image className="w-8 h-8 text-primary/50" />
+                        <p className="text-xs text-muted-foreground">Click to upload photo</p>
+                        <p className="text-[10px] text-muted-foreground">JPG, PNG, WEBP up to 10MB</p>
+                      </div>
+                    )}
+                  </label>
+                )}
+              </div>
             </div>
-            <Button onClick={createTravelStory} className="w-full">
+            <Button onClick={createTravelStory} className="w-full" disabled={uploadingImage || !newStory.image}>
               <Plane className="w-4 h-4 mr-2" />
               Share Story
             </Button>

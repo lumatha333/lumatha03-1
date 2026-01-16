@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search as SearchIcon, User, FileText, Image, Calendar, Sparkles, Play, X } from 'lucide-react';
+import { Search as SearchIcon, User, FileText, Image, Calendar, Sparkles, Play, X, Heart, MessageCircle, Share2, Clock, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,10 +8,22 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, parse, isToday, isYesterday, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { CommentsDialog } from '@/components/CommentsDialog';
+import { ShareDialog } from '@/components/ShareDialog';
+import { toast } from 'sonner';
+
+// Recent Search Item
+interface RecentSearch {
+  type: 'user' | 'keyword' | 'date';
+  value: string;
+  label: string;
+  timestamp: number;
+}
 
 export default function Search() {
   const navigate = useNavigate();
@@ -24,6 +36,27 @@ export default function Search() {
   const [loading, setLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: string } | null>(null);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+  
+  // Social interactions
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState('');
+  const [selectedPostTitle, setSelectedPostTitle] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareContent, setShareContent] = useState({ id: '', title: '', content: '' });
+
+  // Load recent searches
+  useEffect(() => {
+    const saved = localStorage.getItem('zenpeace_recent_searches');
+    if (saved) {
+      try {
+        setRecentSearches(JSON.parse(saved).slice(0, 10));
+      } catch (e) {
+        console.error('Failed to parse recent searches');
+      }
+    }
+  }, []);
 
   // Debounced search
   useEffect(() => {
@@ -44,11 +77,58 @@ export default function Search() {
     }
   }, [dateQuery]);
 
+  // Fetch user's liked posts
+  useEffect(() => {
+    if (user) {
+      supabase.from('likes').select('post_id').eq('user_id', user.id)
+        .then(({ data }) => {
+          if (data) setLikedPosts(new Set(data.map(l => l.post_id)));
+        });
+    }
+  }, [user]);
+
+  const addRecentSearch = (type: RecentSearch['type'], value: string, label: string) => {
+    const newSearch: RecentSearch = { type, value, label, timestamp: Date.now() };
+    const updated = [newSearch, ...recentSearches.filter(s => !(s.type === type && s.value === value))].slice(0, 10);
+    setRecentSearches(updated);
+    localStorage.setItem('zenpeace_recent_searches', JSON.stringify(updated));
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    localStorage.removeItem('zenpeace_recent_searches');
+    toast.success('Search history cleared');
+  };
+
+  const parseNaturalDate = (input: string): Date | null => {
+    const lower = input.toLowerCase().trim();
+    
+    // Handle natural language
+    if (lower === 'today') return new Date();
+    if (lower === 'yesterday') return subDays(new Date(), 1);
+    
+    // Try parsing common formats
+    const formats = ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy', 'd MMM yyyy', 'MMM d, yyyy', 'd MMMM yyyy'];
+    for (const fmt of formats) {
+      const parsed = parse(input, fmt, new Date());
+      if (isValid(parsed)) return parsed;
+    }
+    
+    // Try ISO format
+    const isoDate = parseISO(input);
+    if (isValid(isoDate)) return isoDate;
+    
+    return null;
+  };
+
   const performSearch = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
 
     try {
+      // Add to recent searches
+      addRecentSearch('keyword', searchQuery, searchQuery);
+
       if (activeTab === 'all' || activeTab === 'users') {
         const { data: usersData } = await supabase
           .from('profiles')
@@ -64,7 +144,7 @@ export default function Search() {
           .select('*, profiles(*)')
           .eq('visibility', 'public')
           .order('created_at', { ascending: false })
-          .limit(30);
+          .limit(50);
 
         if (activeTab === 'posts') {
           // Text posts only - no media
@@ -93,11 +173,23 @@ export default function Search() {
     setLoading(true);
 
     try {
-      const searchDate = parseISO(dateQuery);
+      // Try natural language date parsing
+      let searchDate = parseNaturalDate(dateQuery);
+      
+      if (!searchDate) {
+        // Try as ISO date
+        searchDate = parseISO(dateQuery);
+      }
+      
       if (!isValid(searchDate)) {
+        toast.error('Invalid date format. Try: today, yesterday, or 2024-12-31');
         setLoading(false);
         return;
       }
+
+      // Add to recent searches
+      const formattedDate = format(searchDate, 'MMMM d, yyyy');
+      addRecentSearch('date', dateQuery, formattedDate);
 
       const startOfDay = new Date(searchDate);
       startOfDay.setHours(0, 0, 0, 0);
@@ -122,6 +214,30 @@ export default function Search() {
     }
   };
 
+  const toggleLike = async (postId: string) => {
+    if (!user) return;
+    const isLiked = likedPosts.has(postId);
+    
+    if (isLiked) {
+      await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', user.id);
+      setLikedPosts(prev => { const next = new Set(prev); next.delete(postId); return next; });
+    } else {
+      await supabase.from('likes').insert({ post_id: postId, user_id: user.id });
+      setLikedPosts(prev => new Set(prev).add(postId));
+    }
+  };
+
+  const openComments = (id: string, title: string) => {
+    setSelectedPostId(id);
+    setSelectedPostTitle(title);
+    setCommentsOpen(true);
+  };
+
+  const openShare = (post: any) => {
+    setShareContent({ id: post.id, title: post.title, content: post.content || '' });
+    setShareOpen(true);
+  };
+
   const mediaPosts = posts.filter(p => p.file_url || (p.media_urls && p.media_urls.length > 0));
   const textPosts = posts.filter(p => !p.file_url && (!p.media_urls || p.media_urls.length === 0));
 
@@ -129,8 +245,91 @@ export default function Search() {
     setSelectedMedia({ url, type });
   };
 
+  // Render post with social actions
+  const renderPostCard = (post: any, i: number) => {
+    const isLiked = likedPosts.has(post.id);
+    
+    return (
+      <Card 
+        key={post.id} 
+        className="glass-card transition-all duration-200 animate-in fade-in slide-in-from-right duration-300"
+        style={{ animationDelay: `${i * 50}ms` }}
+      >
+        <CardContent className="p-3">
+          {/* Author */}
+          <div 
+            className="flex items-center gap-2 mb-2 cursor-pointer"
+            onClick={() => navigate(`/profile/${post.user_id}`)}
+          >
+            <Avatar className="w-7 h-7">
+              <AvatarImage src={post.profiles?.avatar_url} />
+              <AvatarFallback className="text-[10px]">{post.profiles?.name?.[0]}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate">{post.profiles?.name}</p>
+              <p className="text-[9px] text-muted-foreground">
+                {format(new Date(post.created_at), 'MMM d, yyyy')}
+              </p>
+            </div>
+            <Badge variant="outline" className="text-[8px] ml-auto">{post.category}</Badge>
+          </div>
+          
+          {/* Content */}
+          <p className="text-sm font-medium">{post.title}</p>
+          {post.content && <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{post.content}</p>}
+          
+          {/* Media */}
+          {post.file_url && (
+            <div 
+              className="mt-2 rounded-lg overflow-hidden cursor-pointer"
+              onClick={() => openMedia(post.file_url, post.file_type)}
+            >
+              {post.file_type?.includes('video') ? (
+                <div className="relative">
+                  <video src={post.file_url} className="w-full h-40 object-cover" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <Play className="w-10 h-10 text-white" />
+                  </div>
+                </div>
+              ) : (
+                <img src={post.file_url} alt="" className="w-full h-40 object-cover hover:scale-105 transition-transform" />
+              )}
+            </div>
+          )}
+          
+          {/* Social Actions */}
+          <div className="flex items-center gap-4 mt-3 pt-2 border-t border-border/50">
+            <button 
+              onClick={() => toggleLike(post.id)} 
+              className={cn(
+                "flex items-center gap-1.5 text-xs transition-colors",
+                isLiked ? "text-red-500" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Heart className={cn("w-4 h-4", isLiked && "fill-current")} />
+              <span>{post.likes_count || 0}</span>
+            </button>
+            <button 
+              onClick={() => openComments(post.id, post.title)} 
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Comment
+            </button>
+            <button 
+              onClick={() => openShare(post)} 
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
-    <div className="space-y-4 pb-20">
+    <div className="space-y-4 pb-20 scroll-smooth">
       {/* Enhanced Search Input with Animation */}
       <div className={cn(
         "relative transition-all duration-300",
@@ -141,7 +340,7 @@ export default function Search() {
           isFocused ? "text-primary" : "text-muted-foreground"
         )} />
         <Input
-          placeholder="Search users, posts, media..."
+          placeholder="Search people, posts, places, or dates..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
@@ -164,45 +363,54 @@ export default function Search() {
         )}
       </div>
 
-      {/* Tabs with smooth transitions */}
+      {/* Tabs with smooth horizontal scroll */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-5 h-auto p-1 glass-card">
-          <TabsTrigger value="all" className="text-[10px] py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-            All
-          </TabsTrigger>
-          <TabsTrigger value="users" className="text-[10px] py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-            <User className="w-3 h-3 mr-0.5" />Users
-          </TabsTrigger>
-          <TabsTrigger value="posts" className="text-[10px] py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-            <FileText className="w-3 h-3 mr-0.5" />Posts
-          </TabsTrigger>
-          <TabsTrigger value="media" className="text-[10px] py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-            <Image className="w-3 h-3 mr-0.5" />Media
-          </TabsTrigger>
-          <TabsTrigger value="date" className="text-[10px] py-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white transition-all">
-            <Sparkles className="w-3 h-3 mr-0.5" />Magic
-          </TabsTrigger>
-        </TabsList>
+        <ScrollArea className="w-full">
+          <TabsList className="w-full inline-flex h-auto p-1 glass-card">
+            <TabsTrigger value="all" className="text-[10px] py-2 px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+              All
+            </TabsTrigger>
+            <TabsTrigger value="users" className="text-[10px] py-2 px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+              <User className="w-3 h-3 mr-0.5" />Users
+            </TabsTrigger>
+            <TabsTrigger value="posts" className="text-[10px] py-2 px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+              <FileText className="w-3 h-3 mr-0.5" />Posts
+            </TabsTrigger>
+            <TabsTrigger value="media" className="text-[10px] py-2 px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+              <Image className="w-3 h-3 mr-0.5" />Media
+            </TabsTrigger>
+            <TabsTrigger value="date" className="text-[10px] py-2 px-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white transition-all">
+              <Sparkles className="w-3 h-3 mr-0.5" />Magic
+            </TabsTrigger>
+          </TabsList>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
 
         {/* All Tab */}
         <TabsContent value="all" className="space-y-4 mt-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+              <div className="animate-pulse flex flex-col items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/20" />
+                <p className="text-xs text-muted-foreground">Searching...</p>
+              </div>
             </div>
           ) : (
             <>
               {users.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                    <User className="w-3 h-3" /> Users ({users.length})
+                    <User className="w-3 h-3" /> People ({users.length})
                   </p>
                   {users.slice(0, 5).map((profile, i) => (
                     <Card 
                       key={profile.id} 
                       className="glass-card cursor-pointer hover:bg-muted/30 transition-all duration-200 hover:scale-[1.01] animate-in fade-in slide-in-from-left duration-300"
                       style={{ animationDelay: `${i * 50}ms` }}
-                      onClick={() => navigate(`/profile/${profile.id}`)}
+                      onClick={() => {
+                        addRecentSearch('user', profile.id, profile.name);
+                        navigate(`/profile/${profile.id}`);
+                      }}
                     >
                       <CardContent className="p-3 flex items-center gap-3">
                         <Avatar className="w-12 h-12 ring-2 ring-primary/20">
@@ -227,43 +435,7 @@ export default function Search() {
                   <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                     <FileText className="w-3 h-3" /> Posts ({posts.length})
                   </p>
-                  {posts.slice(0, 10).map((post, i) => (
-                    <Card 
-                      key={post.id} 
-                      className="glass-card transition-all duration-200 hover:scale-[1.01] animate-in fade-in slide-in-from-right duration-300"
-                      style={{ animationDelay: `${i * 50}ms` }}
-                    >
-                      <CardContent className="p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Avatar className="w-6 h-6">
-                            <AvatarImage src={post.profiles?.avatar_url} />
-                            <AvatarFallback className="text-[10px]">{post.profiles?.name?.[0]}</AvatarFallback>
-                          </Avatar>
-                          <p className="text-xs font-medium">{post.profiles?.name}</p>
-                          <Badge variant="outline" className="text-[8px] ml-auto">{post.category}</Badge>
-                        </div>
-                        <p className="text-sm font-medium line-clamp-1">{post.title}</p>
-                        {post.content && <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>}
-                        {post.file_url && (
-                          <div 
-                            className="mt-2 rounded-lg overflow-hidden cursor-pointer"
-                            onClick={() => openMedia(post.file_url, post.file_type)}
-                          >
-                            {post.file_type?.includes('video') ? (
-                              <div className="relative">
-                                <video src={post.file_url} className="w-full h-32 object-cover" />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                  <Play className="w-8 h-8 text-white" />
-                                </div>
-                              </div>
-                            ) : (
-                              <img src={post.file_url} alt="" className="w-full h-32 object-cover hover:scale-105 transition-transform" />
-                            )}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                  {posts.slice(0, 10).map((post, i) => renderPostCard(post, i))}
                 </div>
               )}
 
@@ -271,8 +443,8 @@ export default function Search() {
                 <Card className="glass-card animate-in fade-in duration-300">
                   <CardContent className="py-12 text-center">
                     <SearchIcon className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                    <p className="text-muted-foreground">No results found for "{searchQuery}"</p>
-                    <p className="text-xs text-muted-foreground mt-1">Try different keywords or check spelling</p>
+                    <p className="text-muted-foreground">Nothing found for "{searchQuery}"</p>
+                    <p className="text-xs text-muted-foreground mt-1">Try another word or date</p>
                   </CardContent>
                 </Card>
               )}
@@ -311,6 +483,7 @@ export default function Search() {
               <CardContent className="py-8 text-center">
                 <User className="w-10 h-10 mx-auto text-muted-foreground/50 mb-2" />
                 <p className="text-sm text-muted-foreground">No users found</p>
+                <p className="text-xs text-muted-foreground mt-1">Try a different name</p>
               </CardContent>
             </Card>
           )}
@@ -318,35 +491,13 @@ export default function Search() {
 
         {/* Posts Tab (Text Only) */}
         <TabsContent value="posts" className="space-y-2 mt-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {textPosts.map((post, i) => (
-            <Card 
-              key={post.id} 
-              className="glass-card transition-all duration-200 animate-in fade-in slide-in-from-right duration-300"
-              style={{ animationDelay: `${i * 50}ms` }}
-            >
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Avatar className="w-7 h-7">
-                    <AvatarImage src={post.profiles?.avatar_url} />
-                    <AvatarFallback className="text-[10px]">{post.profiles?.name?.[0]}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-xs font-medium">{post.profiles?.name}</p>
-                    <p className="text-[9px] text-muted-foreground">
-                      {format(new Date(post.created_at), 'MMM d, yyyy')}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-sm font-medium">{post.title}</p>
-                {post.content && <p className="text-xs text-muted-foreground line-clamp-3 mt-1">{post.content}</p>}
-              </CardContent>
-            </Card>
-          ))}
+          {textPosts.map((post, i) => renderPostCard(post, i))}
           {textPosts.length === 0 && searchQuery.length >= 2 && !loading && (
             <Card className="glass-card animate-in fade-in duration-300">
               <CardContent className="py-8 text-center">
                 <FileText className="w-10 h-10 mx-auto text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground">No text posts found</p>
+                <p className="text-sm text-muted-foreground">No posts found</p>
+                <p className="text-xs text-muted-foreground mt-1">Try different keywords</p>
               </CardContent>
             </Card>
           )}
@@ -388,7 +539,7 @@ export default function Search() {
             <Card className="glass-card animate-in fade-in duration-300">
               <CardContent className="py-8 text-center">
                 <Image className="w-10 h-10 mx-auto text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground">No media found</p>
+                <p className="text-sm text-muted-foreground">No photos or videos found</p>
               </CardContent>
             </Card>
           )}
@@ -407,20 +558,32 @@ export default function Search() {
               </h3>
               <p className="text-xs text-muted-foreground mb-4">
                 Enter any date to discover ALL posts from that day!<br/>
-                Images, videos, and text posts - everything!
+                Try: today, yesterday, 2024-12-31, 31 Dec 2024
               </p>
               <Input
-                type="date"
+                type="text"
                 value={dateQuery}
                 onChange={(e) => setDateQuery(e.target.value)}
-                className="glass-card border-2 border-purple-500/30 focus:border-purple-500 transition-colors"
+                placeholder="today, yesterday, or 2024-12-31"
+                className="glass-card border-2 border-purple-500/30 focus:border-purple-500 transition-colors text-center"
+                onKeyPress={(e) => e.key === 'Enter' && searchByDate()}
               />
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Or pick a date: <input 
+                  type="date" 
+                  className="ml-1 bg-transparent border-b border-purple-500/50 text-purple-500 text-[10px]"
+                  onChange={(e) => setDateQuery(e.target.value)}
+                />
+              </p>
             </CardContent>
           </Card>
 
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full" />
+              <div className="animate-pulse flex flex-col items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-purple-500/20" />
+                <p className="text-xs text-muted-foreground">Searching...</p>
+              </div>
             </div>
           )}
 
@@ -429,50 +592,15 @@ export default function Search() {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
-                  Posts from {format(parseISO(dateQuery), 'MMMM d, yyyy')}
+                  Posts from {(() => {
+                    const d = parseNaturalDate(dateQuery);
+                    return d ? format(d, 'MMMM d, yyyy') : dateQuery;
+                  })()}
                 </p>
                 <Badge variant="outline" className="bg-purple-500/10">{posts.length} found</Badge>
               </div>
               
-              {posts.map((post, i) => (
-                <Card 
-                  key={post.id} 
-                  className="glass-card animate-in fade-in slide-in-from-bottom duration-300"
-                  style={{ animationDelay: `${i * 50}ms` }}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Avatar className="w-7 h-7">
-                        <AvatarImage src={post.profiles?.avatar_url} />
-                        <AvatarFallback className="text-[10px]">{post.profiles?.name?.[0]}</AvatarFallback>
-                      </Avatar>
-                      <p className="text-xs font-medium flex-1">{post.profiles?.name}</p>
-                      <span className="text-[10px] text-muted-foreground">
-                        {format(new Date(post.created_at), 'h:mm a')}
-                      </span>
-                    </div>
-                    <p className="text-sm font-medium">{post.title}</p>
-                    {post.content && <p className="text-xs text-muted-foreground line-clamp-2">{post.content}</p>}
-                    {post.file_url && (
-                      <div 
-                        className="mt-2 rounded-lg overflow-hidden cursor-pointer"
-                        onClick={() => openMedia(post.file_url, post.file_type)}
-                      >
-                        {post.file_type?.includes('video') ? (
-                          <div className="relative">
-                            <video src={post.file_url} className="w-full h-40 object-cover" />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                              <Play className="w-10 h-10 text-white" />
-                            </div>
-                          </div>
-                        ) : (
-                          <img src={post.file_url} alt="" className="w-full h-40 object-cover" />
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+              {posts.map((post, i) => renderPostCard(post, i))}
             </div>
           )}
 
@@ -480,7 +608,7 @@ export default function Search() {
             <Card className="glass-card animate-in fade-in duration-300">
               <CardContent className="py-10 text-center">
                 <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">No posts found from this date</p>
+                <p className="text-muted-foreground">No activity found on this day</p>
                 <p className="text-xs text-muted-foreground mt-1">Try selecting a different date</p>
               </CardContent>
             </Card>
@@ -488,8 +616,55 @@ export default function Search() {
         </TabsContent>
       </Tabs>
 
+      {/* Recent Searches - Show when no query */}
+      {searchQuery.length < 2 && activeTab !== 'date' && recentSearches.length > 0 && (
+        <Card className="glass-card animate-in fade-in duration-300">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Recent Searches
+              </p>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 text-[10px] text-muted-foreground"
+                onClick={clearRecentSearches}
+              >
+                Clear All
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              {recentSearches.map((search, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    if (search.type === 'user') {
+                      navigate(`/profile/${search.value}`);
+                    } else if (search.type === 'date') {
+                      setActiveTab('date');
+                      setDateQuery(search.value);
+                    } else {
+                      setSearchQuery(search.value);
+                    }
+                  }}
+                  className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                >
+                  {search.type === 'user' && <User className="w-3 h-3 text-primary" />}
+                  {search.type === 'keyword' && <SearchIcon className="w-3 h-3 text-muted-foreground" />}
+                  {search.type === 'date' && <Calendar className="w-3 h-3 text-purple-500" />}
+                  <span className="text-xs flex-1 truncate">{search.label}</span>
+                  <span className="text-[9px] text-muted-foreground">
+                    {search.type === 'date' ? '📅' : search.type === 'user' ? '👤' : '🔍'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Empty state when no search */}
-      {searchQuery.length < 2 && activeTab !== 'date' && (
+      {searchQuery.length < 2 && activeTab !== 'date' && recentSearches.length === 0 && (
         <Card className="glass-card animate-in fade-in duration-500">
           <CardContent className="py-16 text-center">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
@@ -497,7 +672,7 @@ export default function Search() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Search Zenpeace</h3>
             <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-              Find users, posts, photos, and videos. Or use Magic Date to explore posts from any day!
+              Start typing to explore Zenpeace
             </p>
           </CardContent>
         </Card>
@@ -532,6 +707,23 @@ export default function Search() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Comments Dialog */}
+      <CommentsDialog
+        open={commentsOpen}
+        onOpenChange={setCommentsOpen}
+        postId={selectedPostId}
+        postTitle={selectedPostTitle}
+      />
+
+      {/* Share Dialog */}
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        postId={shareContent.id}
+        postTitle={shareContent.title}
+        postContent={shareContent.content}
+      />
     </div>
   );
 }
