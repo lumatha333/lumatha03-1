@@ -16,7 +16,7 @@ import {
   RefreshCw, Users, ExternalLink, Image, Video
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { CommentsDialog } from '@/components/CommentsDialog';
+import { AdventureCommentsDialog } from '@/components/AdventureCommentsDialog';
 import { ShareDialog } from '@/components/ShareDialog';
 
 // ============= CHALLENGE CATEGORIES =============
@@ -1353,12 +1353,13 @@ export default function MusicAdventure() {
         </DialogContent>
       </Dialog>
 
-      {/* Comments Dialog */}
-      <CommentsDialog 
+      {/* Comments Dialog - Now saves to database properly */}
+      <AdventureCommentsDialog 
         open={commentsOpen} 
         onOpenChange={setCommentsOpen} 
-        postId={selectedPostId} 
-        postTitle={selectedPostTitle} 
+        itemId={selectedPostId} 
+        itemTitle={selectedPostTitle}
+        itemType={selectedPostId.startsWith('sys-') || selectedPostId.startsWith('custom-') ? 'challenge' : selectedPostId.startsWith('story-') ? 'travel' : 'place'}
       />
 
       {/* Share Dialog - Share to Friends */}
