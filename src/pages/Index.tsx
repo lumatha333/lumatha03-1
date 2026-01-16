@@ -4,7 +4,6 @@ import { SplashScreen } from '@/components/SplashScreen';
 import { AuthProvider } from '@/contexts/AuthContext';
 import Home from '@/pages/Home';
 import Education from '@/pages/Education';
-import Music from '@/pages/Music';
 import MusicAdventure from '@/pages/MusicAdventure';
 import Marketplace from '@/pages/Marketplace';
 import Settings from '@/pages/Settings';
@@ -17,6 +16,7 @@ import Saved from '@/pages/Saved';
 import Create from '@/pages/Create';
 import FunPun from '@/pages/FunPun';
 import Notifications from '@/pages/Notifications';
+import Search from '@/pages/Search';
 import NotFound from '@/pages/NotFound';
 
 export default function Index() {
@@ -30,7 +30,6 @@ export default function Index() {
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<Home />} />
               <Route path="/education" element={<Education />} />
-              <Route path="/music" element={<Music />} />
               <Route path="/music-adventure" element={<MusicAdventure />} />
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/settings" element={<Settings />} />
@@ -42,6 +41,7 @@ export default function Index() {
               <Route path="/create" element={<Create />} />
               <Route path="/funpun" element={<FunPun />} />
               <Route path="/notifications" element={<Notifications />} />
+              <Route path="/search" element={<Search />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
