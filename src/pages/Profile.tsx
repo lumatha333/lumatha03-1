@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFriends } from '@/hooks/useFriends';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -11,7 +12,7 @@ import { LazyImage } from '@/components/LazyImage';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { 
   ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
-  MapPin, Calendar, Phone, Globe, Briefcase, Star, Trophy, Eye
+  MapPin, Calendar, Phone, Globe, Briefcase, Star, Trophy, Eye, MessageCircle, UserCheck, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
@@ -36,6 +37,9 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [adventurePoints, setAdventurePoints] = useState({ challenges: 0, discovery: 0, explore: 0, total: 0 });
+  const [isFriend, setIsFriend] = useState(false);
+  const [friendRequestStatus, setFriendRequestStatus] = useState<'none' | 'pending_sent' | 'pending_received' | 'accepted'>('none');
+  const { sendFriendRequest, acceptFriendRequest, friends } = useFriends();
 
   useEffect(() => {
     if (userId) {
@@ -129,6 +133,29 @@ export default function Profile() {
           .eq('user_id', currentUser.id);
 
         setLikes(likesData || []);
+
+        // Check friend status
+        const { data: friendData } = await supabase
+          .from('friend_requests')
+          .select('*')
+          .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`)
+          .single();
+
+        if (friendData) {
+          if (friendData.status === 'accepted') {
+            setIsFriend(true);
+            setFriendRequestStatus('accepted');
+          } else if (friendData.status === 'pending') {
+            if (friendData.sender_id === currentUser.id) {
+              setFriendRequestStatus('pending_sent');
+            } else {
+              setFriendRequestStatus('pending_received');
+            }
+          }
+        } else {
+          setIsFriend(false);
+          setFriendRequestStatus('none');
+        }
       }
 
       // Get followers/following count
@@ -285,16 +312,6 @@ export default function Profile() {
                   {profile.name?.[0] || 'U'}
                 </AvatarFallback>
               </Avatar>
-              {!isOwnProfile && currentUser && (
-                <Button
-                  size="icon"
-                  onClick={handleFollow}
-                  variant={isFollowing ? "outline" : "default"}
-                  className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-lg"
-                >
-                  {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                </Button>
-              )}
             </div>
             
             <div className="flex-1 text-center sm:text-left space-y-2">
@@ -318,6 +335,107 @@ export default function Profile() {
 
               {profile.bio && (
                 <p className="text-sm text-muted-foreground">{profile.bio}</p>
+              )}
+
+              {/* Action Buttons - Follow, Friend, Message */}
+              {!isOwnProfile && currentUser && (
+                <div className="flex flex-wrap gap-2 justify-center sm:justify-start pt-2">
+                  {/* Follow Button */}
+                  <Button
+                    size="sm"
+                    onClick={handleFollow}
+                    variant={isFollowing ? "outline" : "default"}
+                    className="gap-1.5"
+                  >
+                    {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                    {isFollowing ? 'Unfollow' : 'Follow'}
+                  </Button>
+
+                  {/* Friend Request Button */}
+                  {friendRequestStatus === 'none' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        sendFriendRequest(userId!);
+                        setFriendRequestStatus('pending_sent');
+                      }}
+                      className="gap-1.5"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Add Friend
+                    </Button>
+                  )}
+                  {friendRequestStatus === 'pending_sent' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled
+                      className="gap-1.5"
+                    >
+                      <Clock className="w-4 h-4" />
+                      Request Sent
+                    </Button>
+                  )}
+                  {friendRequestStatus === 'pending_received' && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={async () => {
+                        const { data } = await supabase
+                          .from('friend_requests')
+                          .select('id')
+                          .eq('sender_id', userId)
+                          .eq('receiver_id', currentUser.id)
+                          .single();
+                        if (data) {
+                          acceptFriendRequest(data.id, userId!);
+                          setFriendRequestStatus('accepted');
+                          setIsFriend(true);
+                        }
+                      }}
+                      className="gap-1.5"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      Accept Request
+                    </Button>
+                  )}
+                  {friendRequestStatus === 'accepted' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled
+                      className="gap-1.5 bg-green-500/10 text-green-600 border-green-500/30"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      Friends
+                    </Button>
+                  )}
+
+                  {/* Message Button - Only for friends */}
+                  {isFriend ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => navigate('/chat')}
+                      className="gap-1.5"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Message
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled
+                      className="gap-1.5 opacity-50"
+                      title="Only friends can message"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Message
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </div>

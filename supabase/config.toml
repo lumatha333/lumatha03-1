@@ -1,1 +1,4 @@
 project_id = "ufkacqdvrmapqpsisqai"
+
+[functions.cleanup-ghost-posts]
+verify_jwt = false

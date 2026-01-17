@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Globe, Users, MapPin, Ghost, ChevronDown, ChevronUp, Plus, Flag } from 'lucide-react';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
+import { ShortsViewer } from '@/components/ShortsViewer';
+import { CommentsDialog } from '@/components/CommentsDialog';
+import { ShareDialog } from '@/components/ShareDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
@@ -34,6 +37,11 @@ export default function Home() {
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+  const [showShortsViewer, setShowShortsViewer] = useState(false);
+  const [shortsData, setShortsData] = useState<any[]>([]);
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<string>('');
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
@@ -310,7 +318,30 @@ export default function Home() {
                   size="sm"
                   variant={videoType === type ? 'default' : 'outline'}
                   className="h-7 text-xs capitalize px-3"
-                  onClick={() => setVideoType(type as 'all' | 'short' | 'long')}
+                  onClick={() => {
+                    setVideoType(type as 'all' | 'short' | 'long');
+                    // Open ShortsViewer when clicking Short
+                    if (type === 'short') {
+                      const videoPosts = posts.filter(p => 
+                        p.file_type?.includes('video') || 
+                        p.media_types?.some(t => t.includes('video'))
+                      );
+                      const shortVideos = videoPosts.map(p => ({
+                        id: p.id,
+                        url: p.file_url || (p.media_urls && p.media_urls[0]) || '',
+                        title: p.title,
+                        username: p.profiles?.name || 'User',
+                        userAvatar: p.profiles?.avatar_url || undefined,
+                        userId: p.user_id,
+                        likesCount: likeCounts[p.id] || 0,
+                        isLiked: likedPosts.has(p.id)
+                      })).filter(v => v.url);
+                      if (shortVideos.length > 0) {
+                        setShortsData(shortVideos);
+                        setShowShortsViewer(true);
+                      }
+                    }
+                  }}
                 >
                   {type === 'all' && 'All'}
                   {type === 'short' && '⚡ Short'}
@@ -373,6 +404,43 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      {/* Shorts Viewer Modal */}
+      {showShortsViewer && shortsData.length > 0 && (
+        <ShortsViewer
+          videos={shortsData}
+          initialIndex={0}
+          onClose={() => setShowShortsViewer(false)}
+          onLike={(videoId) => toggleLike(videoId)}
+          onComment={(videoId) => {
+            setSelectedPostId(videoId);
+            setCommentDialogOpen(true);
+          }}
+          onShare={(videoId) => {
+            setSelectedPostId(videoId);
+            setShareDialogOpen(true);
+          }}
+          onProfileClick={(userId) => {
+            setShowShortsViewer(false);
+            navigate(`/profile/${userId}`);
+          }}
+        />
+      )}
+
+      {/* Comment Dialog */}
+      <CommentsDialog
+        postId={selectedPostId}
+        open={commentDialogOpen}
+        onOpenChange={setCommentDialogOpen}
+        postTitle=""
+      />
+
+      {/* Share Dialog */}
+      <ShareDialog
+        postId={selectedPostId}
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+      />
     </div>
   );
 }
