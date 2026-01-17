@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LazyImage } from '@/components/LazyImage';
-import { Star, MoreVertical, Copy, Edit, Trash2, Heart, X, ChevronLeft, ChevronRight, Play, MessageCircle, Share2 } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Star, MoreVertical, Copy, Edit, Trash2, Heart, ChevronLeft, ChevronRight, Play, MessageCircle, Share2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
 
 type Post = Database['public']['Tables']['posts']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -24,9 +24,10 @@ interface PostCardProps {
   onToggleLike: (id: string) => void;
   onDelete?: (id: string) => void;
   onUpdate?: (id: string, updates: Partial<Post>) => void;
+  onOpenComments?: (id: string, title: string) => void;
 }
 
-export function PostCard({ post, isSaved, isLiked, likesCount, currentUserId, onToggleSave, onToggleLike, onDelete, onUpdate }: PostCardProps) {
+export function PostCard({ post, isSaved, isLiked, likesCount, currentUserId, onToggleSave, onToggleLike, onDelete, onUpdate, onOpenComments }: PostCardProps) {
   const navigate = useNavigate();
   const [imageOpen, setImageOpen] = useState(false);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
@@ -160,62 +161,23 @@ export function PostCard({ post, isSaved, isLiked, likesCount, currentUserId, on
         </div>
       )}
 
-      {/* Full Screen Media Dialog - Facebook style */}
-      <Dialog open={imageOpen} onOpenChange={setImageOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 z-50 text-white bg-black/50 hover:bg-black/70 rounded-full"
-            onClick={() => setImageOpen(false)}
-          >
-            <X className="w-6 h-6" />
-          </Button>
-          
-          <div className="relative flex items-center justify-center min-h-[60vh]">
-            {isVideo ? (
-              <video 
-                src={currentMedia} 
-                className="max-w-full max-h-[90vh] object-contain"
-                controls
-                autoPlay
-              />
-            ) : (
-              <img 
-                src={currentMedia} 
-                alt={post.title} 
-                className="max-w-full max-h-[90vh] object-contain"
-                loading="lazy"
-              />
-            )}
-            
-            {hasMultipleMedia && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute left-4 bg-white/20 hover:bg-white/40 text-white rounded-full"
-                  onClick={prevMedia}
-                >
-                  <ChevronLeft className="w-6 h-6" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-4 bg-white/20 hover:bg-white/40 text-white rounded-full"
-                  onClick={nextMedia}
-                >
-                  <ChevronRight className="w-6 h-6" />
-                </Button>
-                
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm">
-                  {currentMediaIndex + 1} / {mediaUrls.length}
-                </div>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Full Screen Media Viewer - Reference style with bottom actions */}
+      <FullScreenMediaViewer
+        open={imageOpen}
+        onOpenChange={setImageOpen}
+        mediaUrls={mediaUrls}
+        mediaTypes={mediaTypes}
+        initialIndex={currentMediaIndex}
+        title={post.title}
+        likesCount={likesCount}
+        isLiked={isLiked}
+        onLike={() => onToggleLike(post.id)}
+        onComment={() => {
+          setImageOpen(false);
+          onOpenComments?.(post.id, post.title);
+        }}
+        onShare={handleShare}
+      />
 
       <CardContent className="flex-1 flex flex-col p-4 space-y-3">
         {/* User info and actions */}
@@ -330,6 +292,7 @@ export function PostCard({ post, isSaved, isLiked, likesCount, currentUserId, on
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => onOpenComments?.(post.id, post.title)}
             className="flex-1 gap-2 text-muted-foreground"
           >
             <MessageCircle className="w-5 h-5" />
