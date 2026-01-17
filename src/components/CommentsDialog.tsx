@@ -217,6 +217,16 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
     return `${days}d`;
   };
 
+  // Get current user's profile
+  const [currentProfile, setCurrentProfile] = useState<{ name: string; avatar_url: string | null } | null>(null);
+  
+  useEffect(() => {
+    if (user) {
+      supabase.from('profiles').select('name, avatar_url').eq('id', user.id).single()
+        .then(({ data }) => setCurrentProfile(data));
+    }
+  }, [user]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full h-full max-w-full max-h-full sm:max-w-lg sm:max-h-[90vh] sm:h-auto m-0 sm:m-auto p-0 flex flex-col glass-card border-0 sm:border sm:border-border rounded-none sm:rounded-lg">
@@ -244,7 +254,7 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
             comments.map((comment) => (
               <div key={comment.id} className="group">
                 <div className="flex gap-2">
-                  <Avatar className="w-7 h-7 shrink-0">
+                  <Avatar className="w-8 h-8 shrink-0">
                     <AvatarImage src={comment.profiles?.avatar_url || undefined} />
                     <AvatarFallback className="bg-primary/20 text-primary text-[10px]">
                       {comment.profiles?.name?.[0] || 'U'}
@@ -266,36 +276,36 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
                       </div>
                     ) : (
                       <>
-                        <div className="bg-muted/30 rounded-xl px-2.5 py-1.5">
-                          <p className="font-medium text-xs">{comment.profiles?.name || 'Anonymous'}</p>
-                          <p className="text-xs">{comment.content}</p>
+                        <div className="bg-muted/30 rounded-xl px-3 py-2">
+                          <p className="font-semibold text-xs">{comment.profiles?.name || 'Anonymous'}</p>
+                          <p className="text-sm mt-0.5">{comment.content}</p>
                         </div>
                         
                         {/* Actions - Heart reaction only */}
-                        <div className="flex items-center gap-2 mt-1 ml-1 flex-wrap">
-                          <span className="text-[9px] text-muted-foreground">{formatTime(comment.created_at)}</span>
+                        <div className="flex items-center gap-3 mt-1 ml-2 flex-wrap">
+                          <span className="text-[10px] text-muted-foreground">{formatTime(comment.created_at)}</span>
                           
                           {/* Heart reaction button */}
                           <button 
                             onClick={() => toggleLike(comment.id)}
-                            className={`text-[10px] font-medium hover:underline flex items-center gap-0.5 ${comment.userLiked ? 'text-red-500' : ''}`}
+                            className={`text-[11px] font-medium hover:underline flex items-center gap-1 ${comment.userLiked ? 'text-red-500' : ''}`}
                           >
-                            <Heart className={`w-3 h-3 ${comment.userLiked ? 'fill-current' : ''}`} />
-                            {comment.likeCount > 0 && <span className="ml-0.5">{comment.likeCount}</span>}
+                            <Heart className={`w-3.5 h-3.5 ${comment.userLiked ? 'fill-current' : ''}`} />
+                            {comment.likeCount > 0 && <span>{comment.likeCount}</span>}
                           </button>
                           
                           <button 
                             onClick={() => { setReplyingTo(comment.id); setReplyContent(''); }}
-                            className="text-[10px] font-medium hover:underline flex items-center gap-0.5"
+                            className="text-[11px] font-medium hover:underline flex items-center gap-1"
                           >
-                            <Reply className="w-2.5 h-2.5" /> Reply
+                            <Reply className="w-3 h-3" /> Reply
                           </button>
                           
                           {user?.id === comment.user_id && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5">
-                                  <MoreVertical className="w-3 h-3" />
+                                  <MoreVertical className="w-3.5 h-3.5" />
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="glass-card min-w-[100px]">
@@ -319,14 +329,14 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
                           value={replyContent}
                           onChange={(e) => setReplyContent(e.target.value)}
                           placeholder="Write a reply..."
-                          className="h-7 text-xs flex-1"
+                          className="h-8 text-xs flex-1"
                           autoFocus
                         />
-                        <Button size="sm" className="h-7 w-7 p-0" onClick={() => addReply(comment.id)}>
-                          <Send className="w-3 h-3" />
+                        <Button size="sm" className="h-8 w-8 p-0" onClick={() => addReply(comment.id)}>
+                          <Send className="w-3.5 h-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setReplyingTo(null)}>
-                          <X className="w-3 h-3" />
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setReplyingTo(null)}>
+                          <X className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     )}
@@ -337,17 +347,30 @@ export function CommentsDialog({ open, onOpenChange, postId, postTitle }: Commen
           )}
         </div>
 
-        {/* Add Comment Input - Fixed at bottom */}
-        <div className="p-3 border-t border-border sticky bottom-0 bg-background/95 backdrop-blur-sm">
-          <div className="flex gap-2">
+        {/* Add Comment Input - Fixed at bottom with user avatar like Instagram */}
+        <div className="p-3 border-t border-border bg-background/95 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            {/* User's avatar */}
+            <Avatar className="w-8 h-8 shrink-0">
+              <AvatarImage src={currentProfile?.avatar_url || undefined} />
+              <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                {currentProfile?.name?.[0] || user?.email?.[0] || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            
             <Input
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Write a comment..."
+              placeholder="Add a comment..."
               onKeyPress={(e) => e.key === 'Enter' && addComment()}
-              className="flex-1 h-9 text-sm"
+              className="flex-1 h-10 text-sm rounded-full bg-muted/50 border-0"
             />
-            <Button onClick={addComment} disabled={!newComment.trim()} className="h-9 w-9 p-0">
+            <Button 
+              onClick={addComment} 
+              disabled={!newComment.trim()} 
+              size="sm"
+              className="h-10 px-4 rounded-full"
+            >
               <Send className="w-4 h-4" />
             </Button>
           </div>

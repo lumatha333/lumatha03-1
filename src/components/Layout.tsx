@@ -202,33 +202,55 @@ function LayoutContent({ children }: LayoutProps) {
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
       
-      {/* Desktop Sidebar - Colorful icons */}
+      {/* Desktop Sidebar - Gradient styling */}
       {!isMobile && (
-        <Sidebar className="border-r border-border transition-transform duration-300 sticky top-0 h-screen w-72 xl:w-80 shrink-0">
-          <SidebarContent className="glass-card">
-            <div className="flex items-center gap-2 p-3 border-b border-border">
-              <Crown className="w-7 h-7 text-primary animate-pulse" />
+        <Sidebar className="border-r border-border/50 transition-transform duration-300 sticky top-0 h-screen w-72 xl:w-80 shrink-0">
+          <SidebarContent className="relative overflow-hidden" style={{
+            background: 'linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(220 50% 8%) 100%)'
+          }}>
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none" />
+            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary/20 to-transparent pointer-events-none" />
+            
+            <div className="relative flex items-center gap-2 p-4 border-b border-border/30">
+              <div className="relative">
+                <Crown className="w-8 h-8 text-primary" />
+                <div className="absolute inset-0 w-8 h-8 bg-primary/30 blur-lg rounded-full animate-pulse" />
+              </div>
               <span className="text-xl font-bold gradient-text tracking-tight">Zenpeace</span>
             </div>
 
-            <SidebarGroup>
-              <SidebarGroupLabel className="text-[10px]">Main Menu</SidebarGroupLabel>
+            <SidebarGroup className="relative">
+              <SidebarGroupLabel className="text-[10px] text-muted-foreground/70 px-4">Main Menu</SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="px-2">
                   {menuItems.map((item, index) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton 
                         isActive={isActive(item.url)}
                         onClick={() => handleMenuClick(item.url)}
-                        className="cursor-pointer transition-all duration-300 hover:translate-x-1 hover:bg-primary/10 py-2"
+                        className={`cursor-pointer transition-all duration-300 hover:translate-x-1 py-2.5 rounded-xl ${
+                          isActive(item.url) 
+                            ? 'bg-gradient-to-r from-primary/20 to-secondary/10 shadow-lg shadow-primary/10' 
+                            : 'hover:bg-gradient-to-r hover:from-primary/10 hover:to-transparent'
+                        }`}
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
-                        <div className="flex items-center gap-2 w-full">
-                          <span className={`text-lg ${item.color}`}>{item.emoji}</span>
+                        <div className="flex items-center gap-3 w-full">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                            isActive(item.url) 
+                              ? 'bg-gradient-to-br from-primary/30 to-secondary/20' 
+                              : 'bg-muted/30'
+                          }`}>
+                            <span className={`text-lg ${item.color}`}>{item.emoji}</span>
+                          </div>
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium block text-xs">{item.title}</span>
+                            <span className={`font-medium block text-sm ${isActive(item.url) ? 'text-primary' : ''}`}>{item.title}</span>
                             <span className="text-[9px] text-muted-foreground block truncate">{item.desc}</span>
                           </div>
+                          {isActive(item.url) && (
+                            <div className="w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary" />
+                          )}
                         </div>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -236,6 +258,9 @@ function LayoutContent({ children }: LayoutProps) {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+            
+            {/* Bottom gradient decoration */}
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-primary/5 to-transparent pointer-events-none" />
           </SidebarContent>
         </Sidebar>
       )}

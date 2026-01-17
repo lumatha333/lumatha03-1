@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { X, ChevronLeft, ChevronRight, Heart, MessageCircle, Share2, MoreHorizontal } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Heart, MessageCircle, Share2, MoreHorizontal, Download } from 'lucide-react';
 
 interface FullScreenMediaViewerProps {
   open: boolean;
@@ -15,6 +15,8 @@ interface FullScreenMediaViewerProps {
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
+  isGhostPost?: boolean;
+  downloadDisabled?: boolean;
 }
 
 export function FullScreenMediaViewer({
@@ -28,9 +30,16 @@ export function FullScreenMediaViewer({
   isLiked = false,
   onLike,
   onComment,
-  onShare
+  onShare,
+  isGhostPost = false,
+  downloadDisabled = false
 }: FullScreenMediaViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  
+  // Reset index when initialIndex changes
+  useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex]);
   
   const hasMultiple = mediaUrls.length > 1;
   const currentMedia = mediaUrls[currentIndex] || '';
@@ -47,38 +56,71 @@ export function FullScreenMediaViewer({
     setCurrentIndex((prev) => (prev - 1 + mediaUrls.length) % mediaUrls.length);
   };
 
+  // Ghost posts cannot be downloaded
+  const canDownload = !isGhostPost && !downloadDisabled;
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canDownload) return;
+    
+    try {
+      const response = await fetch(currentMedia);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `media-${currentIndex}.${isVideo ? 'mp4' : 'jpg'}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      console.error('Download failed');
+    }
+  };
+
   if (!currentMedia) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-screen h-screen max-w-none max-h-none p-0 m-0 bg-black border-none rounded-none [&>button]:hidden">
-        {/* Dark fullscreen container */}
-        <div className="relative w-full h-full flex flex-col">
+      <DialogContent className="w-screen h-screen max-w-none max-h-none p-0 m-0 bg-black border-none rounded-none inset-0 [&>button]:hidden data-[state=open]:!inset-0">
+        {/* Dark fullscreen container - completely edge to edge */}
+        <div className="fixed inset-0 w-screen h-screen flex flex-col bg-black">
           {/* Top bar with close and options */}
-          <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-4">
+          <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-3 bg-gradient-to-b from-black/70 to-transparent">
             <Button
               variant="ghost"
               size="icon"
-              className="text-white/80 hover:text-white hover:bg-white/10 rounded-full w-10 h-10"
+              className="text-white/90 hover:text-white hover:bg-white/10 rounded-full w-10 h-10"
               onClick={() => onOpenChange(false)}
             >
               <X className="w-6 h-6" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-white/80 hover:text-white hover:bg-white/10 rounded-full w-10 h-10"
-            >
-              <MoreHorizontal className="w-6 h-6" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {canDownload && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white/90 hover:text-white hover:bg-white/10 rounded-full w-10 h-10"
+                  onClick={handleDownload}
+                >
+                  <Download className="w-5 h-5" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white/90 hover:text-white hover:bg-white/10 rounded-full w-10 h-10"
+              >
+                <MoreHorizontal className="w-6 h-6" />
+              </Button>
+            </div>
           </div>
 
-          {/* Media content - centered */}
-          <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+          {/* Media content - completely fills the screen */}
+          <div className="flex-1 flex items-center justify-center w-full h-full">
             {isVideo ? (
               <video 
                 src={currentMedia} 
-                className="max-w-full max-h-full object-contain"
+                className="w-full h-full object-contain"
                 controls
                 autoPlay
                 playsInline
@@ -87,7 +129,7 @@ export function FullScreenMediaViewer({
               <img 
                 src={currentMedia} 
                 alt={title || 'Media'} 
-                className="max-w-full max-h-full object-contain"
+                className="w-full h-full object-contain"
                 loading="eager"
               />
             )}
@@ -98,7 +140,7 @@ export function FullScreenMediaViewer({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute left-4 text-white/80 hover:text-white hover:bg-white/20 rounded-full w-12 h-12"
+                  className="absolute left-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full w-12 h-12"
                   onClick={prevMedia}
                 >
                   <ChevronLeft className="w-8 h-8" />
@@ -106,7 +148,7 @@ export function FullScreenMediaViewer({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute right-4 text-white/80 hover:text-white hover:bg-white/20 rounded-full w-12 h-12"
+                  className="absolute right-2 text-white/80 hover:text-white hover:bg-white/20 rounded-full w-12 h-12"
                   onClick={nextMedia}
                 >
                   <ChevronRight className="w-8 h-8" />
@@ -115,9 +157,9 @@ export function FullScreenMediaViewer({
             )}
           </div>
 
-          {/* Bottom action bar - like the reference image */}
-          <div className="absolute bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-16 pb-8">
-            <div className="flex items-center justify-center gap-8 px-6">
+          {/* Bottom action bar - like Facebook */}
+          <div className="absolute bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-16 pb-6">
+            <div className="flex items-center justify-center gap-10 px-6">
               {/* Like button */}
               <button 
                 onClick={onLike}
