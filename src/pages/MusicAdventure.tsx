@@ -417,9 +417,9 @@ export default function MusicAdventure() {
   
   // Ranking states
   const [rankingFilter, setRankingFilter] = useState<'global' | 'regional'>('global');
-  const [rankingCategory, setRankingCategory] = useState<'challenges' | 'discover'>('challenges');
+  const [rankingCategory, setRankingCategory] = useState<'challenges' | 'discover' | 'travel'>('challenges');
 
-  // Load data from localStorage - reset all counts
+  // Load data from localStorage - preserve likes and loves
   useEffect(() => {
     const saved = localStorage.getItem('adventure_zone_v2');
     if (saved) {
@@ -427,13 +427,12 @@ export default function MusicAdventure() {
         const data = JSON.parse(saved);
         setCustomChallenges(data.customChallenges || []);
         setCompletedChallenges(new Set(data.completedChallenges || []));
-        // Reset likes - start fresh
-        setLikedChallenges(new Set());
+        setLikedChallenges(new Set(data.likedChallenges || []));
         setVisitedPlaces(new Set(data.visitedPlaces || []));
-        setLovedPlaces(new Set());
+        setLovedPlaces(new Set(data.lovedPlaces || []));
         setUserRatings(data.userRatings || {});
         setTravelStories(data.travelStories || []);
-        setLikedPosts(new Set());
+        setLikedPosts(new Set(data.likedPosts || []));
       } catch (e) {}
     }
     checkChallengeResets();
@@ -679,19 +678,22 @@ export default function MusicAdventure() {
 
   // ============= RANKING DATA =============
   const calculateUserRank = () => {
-    const challengePoints = completedChallenges.size * 50;
-    const discoverPoints = visitedPlaces.size * 30;
-    
     if (rankingCategory === 'challenges') {
       return completedChallenges.size === 0 ? 'Unranked' : Math.max(1, 100 - completedChallenges.size);
-    } else {
+    } else if (rankingCategory === 'discover') {
       return visitedPlaces.size === 0 ? 'Unranked' : Math.max(1, 100 - visitedPlaces.size);
+    } else {
+      // Travel ranking based on heart/likes received on travel stories
+      const totalLikes = travelStories.reduce((sum, story) => sum + (likedPosts.has(story.id) ? 1 : 0), 0);
+      return totalLikes === 0 ? 'Unranked' : Math.max(1, 100 - totalLikes * 10);
     }
   };
 
   const userPoints = rankingCategory === 'challenges' 
     ? completedChallenges.size * 50 
-    : visitedPlaces.size * 30;
+    : rankingCategory === 'discover'
+    ? visitedPlaces.size * 30
+    : likedPosts.size * 20; // Travel points from hearts
 
   const globalRankings = [
     { rank: 1, name: 'AdventureKing', points: 8500, emoji: '👑' },
@@ -1127,23 +1129,31 @@ export default function MusicAdventure() {
 
         {/* ============= RANKING TAB ============= */}
         <TabsContent value="ranking" className="mt-4 space-y-4">
-          {/* Category Filter */}
+          {/* Category Filter - 3 categories */}
           <div className="flex gap-2">
             <Button 
               variant={rankingCategory === 'challenges' ? 'default' : 'outline'} 
-              className="flex-1 h-10"
+              className="flex-1 h-10 text-xs px-2"
               onClick={() => setRankingCategory('challenges')}
             >
-              <Target className="w-4 h-4 mr-2" />
+              <Target className="w-4 h-4 mr-1" />
               Challenges
             </Button>
             <Button 
               variant={rankingCategory === 'discover' ? 'default' : 'outline'} 
-              className="flex-1 h-10"
+              className="flex-1 h-10 text-xs px-2"
               onClick={() => setRankingCategory('discover')}
             >
-              <Compass className="w-4 h-4 mr-2" />
+              <Compass className="w-4 h-4 mr-1" />
               Discover
+            </Button>
+            <Button 
+              variant={rankingCategory === 'travel' ? 'default' : 'outline'} 
+              className="flex-1 h-10 text-xs px-2"
+              onClick={() => setRankingCategory('travel')}
+            >
+              <Heart className="w-4 h-4 mr-1" />
+              Travel
             </Button>
           </div>
 
@@ -1170,17 +1180,25 @@ export default function MusicAdventure() {
           {/* Your Rank Card */}
           <Card className="glass-card bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/30">
             <CardContent className="py-4 text-center">
-              <p className="text-sm text-muted-foreground">Your {rankingCategory === 'challenges' ? 'Challenges' : 'Discover'} Rank</p>
+              <p className="text-sm text-muted-foreground">
+                Your {rankingCategory === 'challenges' ? 'Challenges' : rankingCategory === 'discover' ? 'Discover' : 'Travel ❤️'} Rank
+              </p>
               <p className={`text-3xl font-bold mt-1 ${userRank === 'Unranked' ? 'text-muted-foreground' : 'text-primary'}`}>
                 {userRank === 'Unranked' ? 'Unranked' : `#${userRank}`}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {userRank === 'Unranked' 
-                  ? `Complete ${rankingCategory === 'challenges' ? 'challenges' : 'place visits'} to get ranked!`
+                  ? rankingCategory === 'challenges' 
+                    ? 'Complete challenges to get ranked!'
+                    : rankingCategory === 'discover'
+                    ? 'Visit places to get ranked!'
+                    : 'Get ❤️ hearts on travel stories to rank!'
                   : 'Keep going, you\'re doing great 💚'
                 }
               </p>
-              <p className="text-sm font-medium mt-2">{userPoints} points</p>
+              <p className="text-sm font-medium mt-2">
+                {userPoints} {rankingCategory === 'travel' ? 'hearts' : 'points'}
+              </p>
             </CardContent>
           </Card>
 
@@ -1189,7 +1207,11 @@ export default function MusicAdventure() {
             <CardContent className="p-4">
               <h3 className="font-medium text-sm mb-3 flex items-center gap-2">
                 {rankingFilter === 'global' ? <Globe className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-                Top 10 {rankingFilter === 'global' ? 'Global' : 'Regional'} • {rankingCategory === 'challenges' ? 'Challenges' : 'Discover'}
+                Top 10 {rankingFilter === 'global' ? 'Global' : 'Regional'} • {
+                  rankingCategory === 'challenges' ? 'Challenges' : 
+                  rankingCategory === 'discover' ? 'Discover' : 
+                  'Travel Hearts ❤️'
+                }
               </h3>
               <div className="space-y-2">
                 {(rankingFilter === 'global' ? globalRankings : regionalRankings).map(u => (
@@ -1200,9 +1222,14 @@ export default function MusicAdventure() {
                     <span className="text-xl">{u.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{u.name}</p>
-                      <p className="text-[10px] text-muted-foreground">Active explorer</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {rankingCategory === 'travel' ? 'Story creator' : 'Active explorer'}
+                      </p>
                     </div>
-                    <span className="text-xs font-medium text-muted-foreground">{u.points.toLocaleString()}</span>
+                    <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      {rankingCategory === 'travel' && <Heart className="w-3 h-3 text-red-500 fill-current" />}
+                      {u.points.toLocaleString()}
+                    </span>
                   </div>
                 ))}
               </div>
