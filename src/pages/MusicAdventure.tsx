@@ -18,6 +18,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { AdventureCommentsDialog } from '@/components/AdventureCommentsDialog';
 import { ShareDialog } from '@/components/ShareDialog';
+import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
 
 // ============= CHALLENGE CATEGORIES =============
 const CHALLENGE_CATEGORIES = [
@@ -418,6 +419,28 @@ export default function MusicAdventure() {
   // Ranking states
   const [rankingFilter, setRankingFilter] = useState<'global' | 'regional'>('global');
   const [rankingCategory, setRankingCategory] = useState<'challenges' | 'discover' | 'travel'>('challenges');
+  
+  // Media viewer state
+  const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
+  const [mediaViewerData, setMediaViewerData] = useState<{
+    urls: string[];
+    types: string[];
+    title: string;
+    id: string;
+    isLiked: boolean;
+  }>({ urls: [], types: [], title: '', id: '', isLiked: false });
+
+  // Open media viewer function
+  const openMediaViewer = (imageUrl: string, title: string, id: string, isLiked: boolean) => {
+    setMediaViewerData({
+      urls: [imageUrl],
+      types: ['image'],
+      title,
+      id,
+      isLiked
+    });
+    setMediaViewerOpen(true);
+  };
 
   // Load data from localStorage - preserve likes and loves
   useEffect(() => {
@@ -676,16 +699,16 @@ export default function MusicAdventure() {
     setShareOpen(true);
   };
 
-  // ============= RANKING DATA =============
+// ============= RANKING DATA - GENUINE SYSTEM (NO FAKE BOTS) =============
   const calculateUserRank = () => {
     if (rankingCategory === 'challenges') {
-      return completedChallenges.size === 0 ? 'Unranked' : Math.max(1, 100 - completedChallenges.size);
+      return completedChallenges.size === 0 ? 'Unranked' : 1; // Only real user at their rank
     } else if (rankingCategory === 'discover') {
-      return visitedPlaces.size === 0 ? 'Unranked' : Math.max(1, 100 - visitedPlaces.size);
+      return visitedPlaces.size === 0 ? 'Unranked' : 1;
     } else {
       // Travel ranking based on heart/likes received on travel stories
       const totalLikes = travelStories.reduce((sum, story) => sum + (likedPosts.has(story.id) ? 1 : 0), 0);
-      return totalLikes === 0 ? 'Unranked' : Math.max(1, 100 - totalLikes * 10);
+      return totalLikes === 0 ? 'Unranked' : 1;
     }
   };
 
@@ -695,31 +718,10 @@ export default function MusicAdventure() {
     ? visitedPlaces.size * 30
     : likedPosts.size * 20; // Travel points from hearts
 
-  const globalRankings = [
-    { rank: 1, name: 'AdventureKing', points: 8500, emoji: '👑' },
-    { rank: 2, name: 'TrekMaster', points: 7200, emoji: '🥈' },
-    { rank: 3, name: 'ExplorerPro', points: 6800, emoji: '🥉' },
-    { rank: 4, name: 'WildHeart', points: 5500, emoji: '⭐' },
-    { rank: 5, name: 'NatureLover', points: 4900, emoji: '🌿' },
-    { rank: 6, name: 'PathSeeker', points: 4200, emoji: '🧭' },
-    { rank: 7, name: 'HillClimber', points: 3800, emoji: '⛰️' },
-    { rank: 8, name: 'SkyWalker', points: 3200, emoji: '☁️' },
-    { rank: 9, name: 'RiverRunner', points: 2800, emoji: '🌊' },
-    { rank: 10, name: 'ForestGuide', points: 2400, emoji: '🌲' },
-  ];
-
-  const regionalRankings = [
-    { rank: 1, name: 'LocalHero', points: 4200, emoji: '🏆' },
-    { rank: 2, name: 'RegionalPro', points: 3800, emoji: '🥈' },
-    { rank: 3, name: 'AreaMaster', points: 3200, emoji: '🥉' },
-    { rank: 4, name: 'TownExplorer', points: 2800, emoji: '⭐' },
-    { rank: 5, name: 'CityWalker', points: 2400, emoji: '🚶' },
-    { rank: 6, name: 'NeighborGuide', points: 2000, emoji: '🏘️' },
-    { rank: 7, name: 'StreetSeeker', points: 1800, emoji: '🛤️' },
-    { rank: 8, name: 'ParkLover', points: 1500, emoji: '🌳' },
-    { rank: 9, name: 'LocalFan', points: 1200, emoji: '💚' },
-    { rank: 10, name: 'NewExplorer', points: 900, emoji: '🌱' },
-  ];
+  // Empty rankings - genuine system, no fake bots
+  // Rankings will be populated with real users when database integration is added
+  const globalRankings: { rank: number; name: string; points: number; emoji: string }[] = [];
+  const regionalRankings: { rank: number; name: string; points: number; emoji: string }[] = [];
 
   const userRank = calculateUserRank();
 
@@ -934,12 +936,15 @@ export default function MusicAdventure() {
                 
                 return (
                   <Card key={place.id} className="glass-card overflow-hidden">
-                    {/* Full Width Image */}
-                    <div className="aspect-video w-full overflow-hidden relative">
+                    {/* Full Width Image - Clickable for fullscreen */}
+                    <div 
+                      className="aspect-video w-full overflow-hidden relative cursor-pointer"
+                      onClick={() => openMediaViewer(place.image, place.name, place.id, lovedPlaces.has(place.id))}
+                    >
                       <img 
                         src={place.image} 
                         alt={place.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                         loading="lazy"
                       />
                       {isVisited && (
@@ -1080,12 +1085,15 @@ export default function MusicAdventure() {
                       </div>
                     </CardContent>
                     
-                    {/* Post Image - Full Width */}
-                    <div className="aspect-[4/3] w-full overflow-hidden">
+                    {/* Post Image - Full Width, Clickable for fullscreen */}
+                    <div 
+                      className="aspect-[4/3] w-full overflow-hidden cursor-pointer"
+                      onClick={() => openMediaViewer(post.image, post.title, post.id, likedPosts.has(post.id))}
+                    >
                       <img 
                         src={post.image} 
                         alt={post.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                         loading="lazy"
                       />
                     </div>
@@ -1129,52 +1137,56 @@ export default function MusicAdventure() {
 
         {/* ============= RANKING TAB ============= */}
         <TabsContent value="ranking" className="mt-4 space-y-4">
-          {/* Category Filter - 3 categories */}
-          <div className="flex gap-2">
-            <Button 
-              variant={rankingCategory === 'challenges' ? 'default' : 'outline'} 
-              className="flex-1 h-10 text-xs px-2"
-              onClick={() => setRankingCategory('challenges')}
-            >
-              <Target className="w-4 h-4 mr-1" />
-              Challenges
-            </Button>
-            <Button 
-              variant={rankingCategory === 'discover' ? 'default' : 'outline'} 
-              className="flex-1 h-10 text-xs px-2"
-              onClick={() => setRankingCategory('discover')}
-            >
-              <Compass className="w-4 h-4 mr-1" />
-              Discover
-            </Button>
-            <Button 
-              variant={rankingCategory === 'travel' ? 'default' : 'outline'} 
-              className="flex-1 h-10 text-xs px-2"
-              onClick={() => setRankingCategory('travel')}
-            >
-              <Heart className="w-4 h-4 mr-1" />
-              Travel
-            </Button>
+          {/* Main Categories with ^ separator style */}
+          <div className="text-center space-y-3">
+            <p className="text-xs text-muted-foreground font-medium">🌟 MAIN ADVENTURE CATEGORIES</p>
+            <div className="flex items-center justify-center gap-3">
+              <button 
+                onClick={() => setRankingCategory('challenges')}
+                className={`text-sm font-semibold transition-colors ${rankingCategory === 'challenges' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Challenges
+              </button>
+              <span className="text-muted-foreground">^</span>
+              <button 
+                onClick={() => setRankingCategory('discover')}
+                className={`text-sm font-semibold transition-colors ${rankingCategory === 'discover' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Discover
+              </button>
+              <span className="text-muted-foreground">^</span>
+              <button 
+                onClick={() => setRankingCategory('travel')}
+                className={`text-sm font-semibold transition-colors ${rankingCategory === 'travel' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Travel
+              </button>
+            </div>
           </div>
 
-          {/* Global/Regional Filter */}
-          <div className="flex gap-2">
-            <Button 
-              variant={rankingFilter === 'global' ? 'default' : 'outline'} 
-              className="flex-1 h-9"
-              onClick={() => setRankingFilter('global')}
-            >
-              <Globe className="w-4 h-4 mr-2" />
-              Global
-            </Button>
-            <Button 
-              variant={rankingFilter === 'regional' ? 'default' : 'outline'} 
-              className="flex-1 h-9"
-              onClick={() => setRankingFilter('regional')}
-            >
-              <MapPin className="w-4 h-4 mr-2" />
-              Regional
-            </Button>
+          {/* Scope Categories with ^ separator style */}
+          <div className="text-center space-y-2">
+            <p className="text-xs text-muted-foreground font-medium">🌍 SCOPE</p>
+            <div className="flex items-center justify-center gap-4">
+              <button 
+                onClick={() => setRankingFilter('global')}
+                className={`text-sm font-semibold transition-colors flex items-center gap-1.5 ${rankingFilter === 'global' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Globe className="w-4 h-4" />
+                Global
+              </button>
+              <span className="text-muted-foreground">^</span>
+              <button 
+                onClick={() => setRankingFilter('regional')}
+                className={`text-sm font-semibold transition-colors flex items-center gap-1.5 ${rankingFilter === 'regional' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <MapPin className="w-4 h-4" />
+                Regional
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {rankingFilter === 'global' ? 'From everywhere' : 'Near you'}
+            </p>
           </div>
 
           {/* Your Rank Card */}
@@ -1193,7 +1205,7 @@ export default function MusicAdventure() {
                     : rankingCategory === 'discover'
                     ? 'Visit places to get ranked!'
                     : 'Get ❤️ hearts on travel stories to rank!'
-                  : 'Keep going, you\'re doing great 💚'
+                  : 'You\'re on the leaderboard! 💚'
                 }
               </p>
               <p className="text-sm font-medium mt-2">
@@ -1202,7 +1214,7 @@ export default function MusicAdventure() {
             </CardContent>
           </Card>
 
-          {/* Top 10 Rankings */}
+          {/* Top 10 Rankings - Genuine system (empty until real users participate) */}
           <Card className="glass-card">
             <CardContent className="p-4">
               <h3 className="font-medium text-sm mb-3 flex items-center gap-2">
@@ -1210,29 +1222,48 @@ export default function MusicAdventure() {
                 Top 10 {rankingFilter === 'global' ? 'Global' : 'Regional'} • {
                   rankingCategory === 'challenges' ? 'Challenges' : 
                   rankingCategory === 'discover' ? 'Discover' : 
-                  'Travel Hearts ❤️'
+                  'Travel ❤️'
                 }
               </h3>
-              <div className="space-y-2">
-                {(rankingFilter === 'global' ? globalRankings : regionalRankings).map(u => (
-                  <div key={u.rank} className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${u.rank <= 3 ? 'bg-primary/5' : ''}`}>
-                    <span className="w-6 text-center font-bold text-sm">
-                      {u.rank <= 3 ? ['🥇', '🥈', '🥉'][u.rank - 1] : `#${u.rank}`}
-                    </span>
-                    <span className="text-xl">{u.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{u.name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {rankingCategory === 'travel' ? 'Story creator' : 'Active explorer'}
-                      </p>
+              
+              {(rankingFilter === 'global' ? globalRankings : regionalRankings).length === 0 ? (
+                <div className="text-center py-8">
+                  <Award className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                  <p className="font-medium text-muted-foreground">No rankings yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Be the first to climb the leaderboard!
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-2 max-w-[200px] mx-auto">
+                    {rankingCategory === 'challenges' 
+                      ? 'Complete challenges to earn points and rank up' 
+                      : rankingCategory === 'discover'
+                      ? 'Visit and rate places to earn points'
+                      : 'Share travel stories and get hearts to rank'
+                    }
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(rankingFilter === 'global' ? globalRankings : regionalRankings).map(u => (
+                    <div key={u.rank} className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${u.rank <= 3 ? 'bg-primary/5' : ''}`}>
+                      <span className="w-6 text-center font-bold text-sm">
+                        {u.rank <= 3 ? ['🥇', '🥈', '🥉'][u.rank - 1] : `#${u.rank}`}
+                      </span>
+                      <span className="text-xl">{u.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{u.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {rankingCategory === 'travel' ? 'Story creator' : 'Active explorer'}
+                        </p>
+                      </div>
+                      <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        {rankingCategory === 'travel' && <Heart className="w-3 h-3 text-red-500 fill-current" />}
+                        {u.points.toLocaleString()}
+                      </span>
                     </div>
-                    <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                      {rankingCategory === 'travel' && <Heart className="w-3 h-3 text-red-500 fill-current" />}
-                      {u.points.toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1396,6 +1427,33 @@ export default function MusicAdventure() {
         postId={shareContent.id}
         postTitle={shareContent.title}
         postContent={shareContent.content}
+      />
+
+      {/* Full Screen Media Viewer */}
+      <FullScreenMediaViewer
+        open={mediaViewerOpen}
+        onOpenChange={setMediaViewerOpen}
+        mediaUrls={mediaViewerData.urls}
+        mediaTypes={mediaViewerData.types}
+        title={mediaViewerData.title}
+        isLiked={mediaViewerData.isLiked}
+        onLike={() => {
+          const id = mediaViewerData.id;
+          if (id.startsWith('place-')) {
+            togglePlaceLove(id);
+          } else if (id.startsWith('story-')) {
+            togglePostLike(id);
+          }
+          setMediaViewerData(prev => ({ ...prev, isLiked: !prev.isLiked }));
+        }}
+        onComment={() => {
+          setMediaViewerOpen(false);
+          openComments(mediaViewerData.id, mediaViewerData.title);
+        }}
+        onShare={() => {
+          setMediaViewerOpen(false);
+          openShare(mediaViewerData.id, mediaViewerData.title, `Check out ${mediaViewerData.title}`);
+        }}
       />
     </div>
   );
