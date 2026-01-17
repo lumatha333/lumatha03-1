@@ -172,6 +172,14 @@ export function EnhancedPostCard({
 
   const handleDownload = async () => {
     if (!hasMedia) return;
+    
+    // Ghost posts cannot be downloaded by anyone
+    const isGhostPost = post.category === 'ghost';
+    if (isGhostPost) {
+      toast.error('Ghost posts cannot be downloaded');
+      return;
+    }
+    
     // Check if download is disabled by owner
     if (postSettings.downloadOff && !isOwner) {
       toast.error('Download disabled by owner');
@@ -312,7 +320,7 @@ export function EnhancedPostCard({
               <DropdownMenuItem onClick={handleCopy} className="text-xs">
                 <Copy className="w-3.5 h-3.5 mr-2" /> Copy text
               </DropdownMenuItem>
-              {hasMedia && !postSettings.downloadOff && (
+              {hasMedia && !postSettings.downloadOff && post.category !== 'ghost' && (
                 <DropdownMenuItem onClick={handleDownload} className="text-xs">
                   <Download className="w-3.5 h-3.5 mr-2" /> Download media
                 </DropdownMenuItem>

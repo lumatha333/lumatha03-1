@@ -106,6 +106,13 @@ export default function Search() {
     localStorage.setItem('zenpeace_recent_searches', JSON.stringify(updated));
   };
 
+  // Remove individual search item
+  const removeRecentSearch = (index: number) => {
+    const updated = recentSearches.filter((_, i) => i !== index);
+    setRecentSearches(updated);
+    localStorage.setItem('zenpeace_recent_searches', JSON.stringify(updated));
+  };
+
   const clearRecentSearches = () => {
     setRecentSearches([]);
     localStorage.removeItem('zenpeace_recent_searches');
@@ -793,28 +800,44 @@ export default function Search() {
             </div>
             <div className="space-y-1">
               {recentSearches.map((search, i) => (
-                <button
+                <div
                   key={i}
-                  onClick={() => {
-                    if (search.type === 'user') {
-                      navigate(`/profile/${search.value}`);
-                    } else if (search.type === 'date') {
-                      setActiveTab('date');
-                      setDateQuery(search.value);
-                    } else {
-                      setSearchQuery(search.value);
-                    }
-                  }}
-                  className="w-full flex items-center gap-2 p-2.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                  className="flex items-center gap-2 p-2.5 rounded-lg hover:bg-muted/50 transition-colors group"
                 >
-                  {search.type === 'user' && <User className="w-3.5 h-3.5 text-primary" />}
-                  {search.type === 'keyword' && <SearchIcon className="w-3.5 h-3.5 text-muted-foreground" />}
-                  {search.type === 'date' && <Calendar className="w-3.5 h-3.5 text-purple-500" />}
-                  <span className="text-sm flex-1 truncate">{search.label}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {search.type === 'date' ? '📅' : search.type === 'user' ? '👤' : '🔍'}
-                  </span>
-                </button>
+                  <button
+                    onClick={() => {
+                      if (search.type === 'user') {
+                        navigate(`/profile/${search.value}`);
+                      } else if (search.type === 'date') {
+                        setActiveTab('date');
+                        setDateQuery(search.value);
+                      } else {
+                        setSearchQuery(search.value);
+                      }
+                    }}
+                    className="flex-1 flex items-center gap-2 text-left"
+                  >
+                    {search.type === 'user' && <User className="w-3.5 h-3.5 text-primary" />}
+                    {search.type === 'keyword' && <SearchIcon className="w-3.5 h-3.5 text-muted-foreground" />}
+                    {search.type === 'date' && <Calendar className="w-3.5 h-3.5 text-purple-500" />}
+                    <span className="text-sm flex-1 truncate">{search.label}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {search.type === 'date' ? '📅' : search.type === 'user' ? '👤' : '🔍'}
+                    </span>
+                  </button>
+                  {/* Individual X to remove this search */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeRecentSearch(i);
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
               ))}
             </div>
           </CardContent>
