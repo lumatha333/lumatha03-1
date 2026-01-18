@@ -22,6 +22,7 @@ const menuItems = [
   { title: 'Messages', url: '/chat', emoji: '💬', color: 'text-green-500', desc: 'Chat + VC + Groups' },
   { title: 'FunPun', url: '/funpun', emoji: '🎮', color: 'text-orange-500', desc: 'Games for Fresh Mind' },
   { title: 'Adventure', url: '/music-adventure', emoji: '🏔️', color: 'text-teal-500', desc: 'Challenges + Discover + Travel' },
+  { title: 'Random Connect', url: '/random-connect', emoji: '💙', color: 'text-blue-400', desc: 'Share a moment, not a profile' },
   { title: 'Marketplace', url: '/marketplace', emoji: '🛒', color: 'text-pink-500', desc: 'Buy/Sell/Local Business' },
   { title: 'Settings', url: '/settings', emoji: '⚙️', color: 'text-gray-500', desc: 'Controls + Privacy' },
 ];

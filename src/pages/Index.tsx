@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import Home from '@/pages/Home';
 import Education from '@/pages/Education';
 import MusicAdventure from '@/pages/MusicAdventure';
+import RandomConnect from '@/pages/RandomConnect';
 import Marketplace from '@/pages/Marketplace';
 import Settings from '@/pages/Settings';
 import Auth from '@/pages/Auth';
@@ -31,6 +32,7 @@ export default function Index() {
               <Route path="/" element={<Home />} />
               <Route path="/education" element={<Education />} />
               <Route path="/music-adventure" element={<MusicAdventure />} />
+              <Route path="/random-connect" element={<RandomConnect />} />
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/profile/:userId" element={<Profile />} />
