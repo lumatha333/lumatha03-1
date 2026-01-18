@@ -334,7 +334,8 @@ export default function Home() {
                         userAvatar: p.profiles?.avatar_url || undefined,
                         userId: p.user_id,
                         likesCount: likeCounts[p.id] || 0,
-                        isLiked: likedPosts.has(p.id)
+                        isLiked: likedPosts.has(p.id),
+                        isSaved: savedPosts.has(p.id)
                       })).filter(v => v.url);
                       if (shortVideos.length > 0) {
                         setShortsData(shortVideos);
@@ -412,6 +413,7 @@ export default function Home() {
           initialIndex={0}
           onClose={() => setShowShortsViewer(false)}
           onLike={(videoId) => toggleLike(videoId)}
+          onSave={(videoId) => toggleSave(videoId)}
           onComment={(videoId) => {
             setSelectedPostId(videoId);
             setCommentDialogOpen(true);
