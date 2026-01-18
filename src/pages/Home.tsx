@@ -335,7 +335,8 @@ export default function Home() {
                         userId: p.user_id,
                         likesCount: likeCounts[p.id] || 0,
                         isLiked: likedPosts.has(p.id),
-                        isSaved: savedPosts.has(p.id)
+                        isSaved: savedPosts.has(p.id),
+                        isOwner: p.user_id === user.id
                       })).filter(v => v.url);
                       if (shortVideos.length > 0) {
                         setShortsData(shortVideos);
@@ -414,6 +415,16 @@ export default function Home() {
           onClose={() => setShowShortsViewer(false)}
           onLike={(videoId) => toggleLike(videoId)}
           onSave={(videoId) => toggleSave(videoId)}
+          onDelete={(videoId) => {
+            deletePost(videoId);
+            // Remove from shortsData
+            const newData = shortsData.filter((v: any) => v.id !== videoId);
+            if (newData.length === 0) {
+              setShowShortsViewer(false);
+            } else {
+              setShortsData(newData);
+            }
+          }}
           onComment={(videoId) => {
             setSelectedPostId(videoId);
             setCommentDialogOpen(true);
