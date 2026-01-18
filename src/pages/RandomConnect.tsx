@@ -31,7 +31,8 @@ const RandomConnect: React.FC = () => {
     cancelSearch,
     endSession,
     skipToNext,
-    sendMessage
+    sendMessage,
+    recordViolation
   } = useRandomConnect();
 
   if (!user) {
@@ -85,6 +86,7 @@ const RandomConnect: React.FC = () => {
               conversationStarter={conversationStarter}
               onSkip={skipToNext}
               onEnd={endSession}
+              onViolation={recordViolation}
             />
           )}
 
@@ -95,6 +97,7 @@ const RandomConnect: React.FC = () => {
               conversationStarter={conversationStarter}
               onSkip={skipToNext}
               onEnd={endSession}
+              onViolation={recordViolation}
             />
           )}
 
@@ -107,6 +110,7 @@ const RandomConnect: React.FC = () => {
               onSendMessage={sendMessage}
               onSkip={skipToNext}
               onEnd={endSession}
+              onViolation={recordViolation}
             />
           )}
 
