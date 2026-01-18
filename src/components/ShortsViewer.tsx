@@ -334,113 +334,102 @@ export function ShortsViewer({
           </Button>
         </div>
 
-        {/* Right Side Actions - Optimized Compact Size */}
-        <div className="absolute right-1.5 bottom-16 flex flex-col items-center gap-2.5 z-50">
-          {/* Avatar - Tiny */}
-          <div className="relative mb-0.5">
-            <Avatar 
-              className="w-8 h-8 ring-1.5 ring-white cursor-pointer"
-              onClick={() => onProfileClick(currentVideo.userId)}
-            >
-              <AvatarImage src={currentVideo.userAvatar} />
-              <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-500 text-white text-[10px]">
-                {currentVideo.username[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-white text-[8px] font-bold border border-black">
-              +
-            </div>
-          </div>
-
-          {/* Like - Tiny */}
+        {/* Right Side Actions - Icons Only, Ultra Compact */}
+        <div className="absolute right-1.5 bottom-20 flex flex-col items-center gap-3 z-50">
+          {/* Like */}
           <button 
             onClick={() => handleLike(currentVideo.id)}
-            className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+            className="flex flex-col items-center active:scale-90 transition-transform"
           >
             <div className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center transition-all",
-              likedVideos.has(currentVideo.id) ? "bg-red-500 scale-110" : "bg-black/40 backdrop-blur-sm"
+              "w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg",
+              likedVideos.has(currentVideo.id) ? "bg-red-500 scale-110" : "bg-black/50 backdrop-blur-sm"
             )}>
               <Heart className={cn(
-                "w-4 h-4 text-white transition-transform",
+                "w-5 h-5 text-white transition-transform",
                 likedVideos.has(currentVideo.id) && "fill-current"
               )} />
             </div>
-            <span className="text-white text-[9px] font-medium">{likeCounts[currentVideo.id] || 0}</span>
+            <span className="text-white text-[10px] font-semibold mt-0.5 drop-shadow">{likeCounts[currentVideo.id] || 0}</span>
           </button>
 
-          {/* Comment - Tiny */}
+          {/* Comment - Icon Only */}
           <button 
             onClick={() => onComment(currentVideo.id)}
-            className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+            className="active:scale-90 transition-transform"
           >
-            <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-              <MessageCircle className="w-4 h-4 text-white" />
+            <div className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center shadow-lg">
+              <MessageCircle className="w-5 h-5 text-white" />
             </div>
-            <span className="text-white text-[9px] font-medium">Chat</span>
           </button>
 
-          {/* Save/Bookmark - Tiny */}
+          {/* Save/Bookmark - Icon Only */}
           <button 
             onClick={() => handleSave(currentVideo.id)}
-            className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+            className="active:scale-90 transition-transform"
           >
             <div className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center transition-all",
-              savedVideos.has(currentVideo.id) ? "bg-yellow-500" : "bg-black/40 backdrop-blur-sm"
+              "w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg",
+              savedVideos.has(currentVideo.id) ? "bg-yellow-500" : "bg-black/50 backdrop-blur-sm"
             )}>
               {savedVideos.has(currentVideo.id) 
-                ? <BookmarkCheck className="w-4 h-4 text-white" />
-                : <Bookmark className="w-4 h-4 text-white" />
+                ? <BookmarkCheck className="w-5 h-5 text-white" />
+                : <Bookmark className="w-5 h-5 text-white" />
               }
             </div>
-            <span className="text-white text-[9px] font-medium">Save</span>
           </button>
 
-          {/* Share - Tiny */}
+          {/* Share - Icon Only */}
           <button 
             onClick={() => onShare(currentVideo.id)}
-            className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+            className="active:scale-90 transition-transform"
           >
-            <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-              <Share2 className="w-4 h-4 text-white" />
+            <div className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center shadow-lg">
+              <Share2 className="w-5 h-5 text-white" />
             </div>
-            <span className="text-white text-[9px] font-medium">Share</span>
           </button>
 
-          {/* Sound - Tiny */}
+          {/* Sound - Icon Only */}
           <button 
             onClick={() => setIsMuted(!isMuted)}
-            className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+            className="active:scale-90 transition-transform"
           >
-            <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-              {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
+            <div className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center shadow-lg">
+              {isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
             </div>
           </button>
         </div>
 
-        {/* Bottom User Info - Compact */}
-        <div className="absolute left-1.5 right-12 bottom-3 z-50">
+        {/* Bottom User Info - Profile Picture + Name Side by Side */}
+        <div className="absolute left-2 right-14 bottom-4 z-50">
           <div 
-            className="flex items-center gap-1 mb-0.5 cursor-pointer"
+            className="flex items-center gap-2 cursor-pointer"
             onClick={() => onProfileClick(currentVideo.userId)}
           >
-            <span className="text-white text-xs font-semibold">@{currentVideo.username}</span>
+            <Avatar className="w-9 h-9 ring-2 ring-white/80 shadow-lg">
+              <AvatarImage src={currentVideo.userAvatar} />
+              <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-500 text-white text-xs font-bold">
+                {currentVideo.username[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col">
+              <span className="text-white text-sm font-bold drop-shadow">@{currentVideo.username}</span>
+              <p className="text-white/80 text-xs line-clamp-1 leading-tight drop-shadow">{currentVideo.title}</p>
+            </div>
           </div>
-          <p className="text-white/90 text-[11px] line-clamp-2 leading-tight">{currentVideo.title}</p>
         </div>
 
-        {/* Video Counter - Tiny */}
-        <div className="absolute top-8 right-1.5 z-50 bg-black/40 backdrop-blur-sm rounded-full px-1.5 py-0.5">
-          <span className="text-white text-[9px] font-medium">{currentIndex + 1}/{videos.length}</span>
+        {/* Video Counter - Top Right */}
+        <div className="absolute top-9 right-1.5 z-50 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5 shadow">
+          <span className="text-white text-[10px] font-semibold">{currentIndex + 1}/{videos.length}</span>
         </div>
 
         {/* Swipe Hint - Only show on first video */}
         {currentIndex === 0 && videos.length > 1 && (
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 animate-bounce">
+          <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-50 animate-bounce">
             <div className="flex flex-col items-center gap-0.5 text-white/70">
-              <ChevronUp className="w-4 h-4" />
-              <span className="text-[9px]">Swipe up</span>
+              <ChevronUp className="w-5 h-5" />
+              <span className="text-[10px]">Swipe</span>
             </div>
           </div>
         )}
