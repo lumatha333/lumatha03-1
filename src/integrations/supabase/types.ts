@@ -762,6 +762,167 @@ export type Database = {
         }
         Relationships: []
       }
+      random_connect_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          sender_pseudo_name: string
+          session_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          sender_pseudo_name: string
+          session_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          sender_pseudo_name?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "random_connect_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "random_connect_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      random_connect_queue: {
+        Row: {
+          created_at: string
+          id: string
+          language: string | null
+          mode: string
+          pseudo_name: string
+          region: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          language?: string | null
+          mode: string
+          pseudo_name: string
+          region?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          language?: string | null
+          mode?: string
+          pseudo_name?: string
+          region?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      random_connect_sessions: {
+        Row: {
+          conversation_starter: string | null
+          ended_at: string | null
+          id: string
+          mode: string
+          started_at: string
+          status: string
+          user1_id: string
+          user1_pseudo_name: string
+          user2_id: string
+          user2_pseudo_name: string
+        }
+        Insert: {
+          conversation_starter?: string | null
+          ended_at?: string | null
+          id?: string
+          mode: string
+          started_at?: string
+          status?: string
+          user1_id: string
+          user1_pseudo_name: string
+          user2_id: string
+          user2_pseudo_name: string
+        }
+        Update: {
+          conversation_starter?: string | null
+          ended_at?: string | null
+          id?: string
+          mode?: string
+          started_at?: string
+          status?: string
+          user1_id?: string
+          user1_pseudo_name?: string
+          user2_id?: string
+          user2_pseudo_name?: string
+        }
+        Relationships: []
+      }
+      random_connect_text_memory: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          is_own_message: boolean
+          session_index: number
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          is_own_message?: boolean
+          session_index: number
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          is_own_message?: boolean
+          session_index?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      random_connect_violations: {
+        Row: {
+          banned_until: string | null
+          created_at: string
+          id: string
+          last_violation_at: string
+          permanent_ban: boolean | null
+          user_id: string
+          violation_count: number
+          violation_type: string
+        }
+        Insert: {
+          banned_until?: string | null
+          created_at?: string
+          id?: string
+          last_violation_at?: string
+          permanent_ban?: boolean | null
+          user_id: string
+          violation_count?: number
+          violation_type: string
+        }
+        Update: {
+          banned_until?: string | null
+          created_at?: string
+          id?: string
+          last_violation_at?: string
+          permanent_ban?: boolean | null
+          user_id?: string
+          violation_count?: number
+          violation_type?: string
+        }
+        Relationships: []
+      }
       reviews: {
         Row: {
           comment: string | null
