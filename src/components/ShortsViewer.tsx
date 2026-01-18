@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ArrowLeft, Heart, MessageCircle, Share2, Volume2, VolumeX, MoreVertical, Play, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Heart, MessageCircle, Share2, Volume2, VolumeX, MoreVertical, Play, ChevronUp, ChevronDown, Bookmark, BookmarkCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ interface ShortVideo {
   userId: string;
   likesCount: number;
   isLiked: boolean;
+  isSaved?: boolean;
 }
 
 interface ShortsViewerProps {
@@ -20,6 +21,7 @@ interface ShortsViewerProps {
   initialIndex?: number;
   onClose: () => void;
   onLike: (videoId: string) => void;
+  onSave?: (videoId: string) => void;
   onComment: (videoId: string) => void;
   onShare: (videoId: string) => void;
   onProfileClick: (userId: string) => void;
@@ -30,6 +32,7 @@ export function ShortsViewer({
   initialIndex = 0,
   onClose,
   onLike,
+  onSave,
   onComment,
   onShare,
   onProfileClick,
@@ -39,16 +42,21 @@ export function ShortsViewer({
   const [isPlaying, setIsPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
   const [likedVideos, setLikedVideos] = useState<Set<string>>(new Set(videos.filter(v => v.isLiked).map(v => v.id)));
+  const [savedVideos, setSavedVideos] = useState<Set<string>>(new Set(videos.filter(v => v.isSaved).map(v => v.id)));
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>(() => {
     const counts: Record<string, number> = {};
     videos.forEach(v => { counts[v.id] = v.likesCount; });
     return counts;
   });
+  const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  const [heartPosition, setHeartPosition] = useState({ x: 0, y: 0 });
   
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
+  const lastTapTime = useRef(0);
+  const lastTapPosition = useRef({ x: 0, y: 0 });
 
   const currentVideo = videos[currentIndex];
 
@@ -146,6 +154,32 @@ export function ShortsViewer({
     }
   }, [currentIndex]);
 
+  // Double tap to like with animation
+  const handleDoubleTap = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const now = Date.now();
+    const position = 'touches' in e 
+      ? { x: e.touches[0]?.clientX || lastTapPosition.current.x, y: e.touches[0]?.clientY || lastTapPosition.current.y }
+      : { x: e.clientX, y: e.clientY };
+    
+    if (now - lastTapTime.current < 300) {
+      // Double tap detected
+      const videoId = currentVideo?.id;
+      if (videoId && !likedVideos.has(videoId)) {
+        setLikedVideos(prev => new Set(prev).add(videoId));
+        setLikeCounts(prev => ({ ...prev, [videoId]: (prev[videoId] || 0) + 1 }));
+        onLike(videoId);
+      }
+      
+      // Show heart animation
+      setHeartPosition(position);
+      setShowHeartAnimation(true);
+      setTimeout(() => setShowHeartAnimation(false), 800);
+    }
+    
+    lastTapTime.current = now;
+    lastTapPosition.current = position;
+  }, [currentVideo?.id, likedVideos, onLike]);
+
   const handleLike = (videoId: string) => {
     const isLiked = likedVideos.has(videoId);
     if (isLiked) {
@@ -156,6 +190,16 @@ export function ShortsViewer({
       setLikeCounts(prev => ({ ...prev, [videoId]: (prev[videoId] || 0) + 1 }));
     }
     onLike(videoId);
+  };
+
+  const handleSave = (videoId: string) => {
+    const isSaved = savedVideos.has(videoId);
+    if (isSaved) {
+      setSavedVideos(prev => { const next = new Set(prev); next.delete(videoId); return next; });
+    } else {
+      setSavedVideos(prev => new Set(prev).add(videoId));
+    }
+    onSave?.(videoId);
   };
 
   const goToPrev = () => {
@@ -182,34 +226,34 @@ export function ShortsViewer({
       onTouchEnd={handleTouchEnd}
     >
       {/* Progress Bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-white/20 z-[60]">
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/20 z-[60]">
         <div 
-          className="h-full bg-white transition-all duration-100"
+          className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-100"
           style={{ width: `${progress}%` }}
         />
       </div>
 
-      {/* Header - Compact */}
-      <div className="absolute top-1 left-0 right-0 z-50 flex items-center justify-between px-2 py-1">
+      {/* Header - Ultra Compact */}
+      <div className="absolute top-0.5 left-0 right-0 z-50 flex items-center justify-between px-1.5 py-0.5 safe-area-inset-top">
         <Button
           variant="ghost"
           size="sm"
-          className="text-white hover:bg-white/20 rounded-full h-8 w-8 p-0"
+          className="text-white hover:bg-white/20 rounded-full h-7 w-7 p-0"
           onClick={onClose}
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4" />
         </Button>
-        <span className="text-white text-sm font-medium">Shorts</span>
+        <span className="text-white text-xs font-semibold">Shorts</span>
         <Button
           variant="ghost"
           size="sm"
-          className="text-white hover:bg-white/20 rounded-full h-8 w-8 p-0"
+          className="text-white hover:bg-white/20 rounded-full h-7 w-7 p-0"
         >
-          <MoreVertical className="w-5 h-5" />
+          <MoreVertical className="w-4 h-4" />
         </Button>
       </div>
 
-      {/* Video Container */}
+      {/* Video Container - Optimized Full Screen */}
       <div className="flex-1 relative overflow-hidden">
         {videos.map((video, index) => (
           <div
@@ -219,6 +263,7 @@ export function ShortsViewer({
               index === currentIndex ? "translate-y-0 opacity-100 z-10" :
               index < currentIndex ? "-translate-y-full opacity-0 z-0" : "translate-y-full opacity-0 z-0"
             )}
+            onClick={handleDoubleTap}
           >
             <video
               ref={(el) => {
@@ -229,7 +274,6 @@ export function ShortsViewer({
               loop
               playsInline
               muted={isMuted}
-              onClick={togglePlay}
               poster=""
             />
             
@@ -237,140 +281,185 @@ export function ShortsViewer({
             {!isPlaying && index === currentIndex && (
               <div 
                 className="absolute inset-0 flex items-center justify-center bg-black/20"
-                onClick={togglePlay}
+                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
               >
-                <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
-                  <Play className="w-7 h-7 text-white ml-0.5" fill="white" />
+                <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                  <Play className="w-6 h-6 text-white ml-0.5" fill="white" />
                 </div>
               </div>
             )}
           </div>
         ))}
 
+        {/* Double Tap Heart Animation */}
+        {showHeartAnimation && (
+          <div 
+            className="fixed z-[200] pointer-events-none animate-heart-pop"
+            style={{ 
+              left: heartPosition.x - 40, 
+              top: heartPosition.y - 40 
+            }}
+          >
+            <Heart className="w-20 h-20 text-red-500 fill-red-500 drop-shadow-lg" />
+          </div>
+        )}
+
         {/* Navigation Arrows - Desktop/Tablet */}
-        <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 top-16 z-50">
+        <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 top-12 z-50">
           <Button
             variant="ghost"
             size="sm"
             className={cn(
-              "text-white hover:bg-white/20 rounded-full h-8 w-8 p-0",
+              "text-white hover:bg-white/20 rounded-full h-7 w-7 p-0",
               currentIndex === 0 && "opacity-30 pointer-events-none"
             )}
             onClick={goToPrev}
             disabled={currentIndex === 0}
           >
-            <ChevronUp className="w-5 h-5" />
+            <ChevronUp className="w-4 h-4" />
           </Button>
         </div>
-        <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 bottom-20 z-50">
+        <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 bottom-16 z-50">
           <Button
             variant="ghost"
             size="sm"
             className={cn(
-              "text-white hover:bg-white/20 rounded-full h-8 w-8 p-0",
+              "text-white hover:bg-white/20 rounded-full h-7 w-7 p-0",
               currentIndex === videos.length - 1 && "opacity-30 pointer-events-none"
             )}
             onClick={goToNext}
             disabled={currentIndex === videos.length - 1}
           >
-            <ChevronDown className="w-5 h-5" />
+            <ChevronDown className="w-4 h-4" />
           </Button>
         </div>
 
-        {/* Right Side Actions - Compact */}
-        <div className="absolute right-2 bottom-20 flex flex-col items-center gap-3 z-50">
-          {/* Avatar - Small */}
-          <div className="relative mb-1">
+        {/* Right Side Actions - Optimized Compact Size */}
+        <div className="absolute right-1.5 bottom-16 flex flex-col items-center gap-2.5 z-50">
+          {/* Avatar - Tiny */}
+          <div className="relative mb-0.5">
             <Avatar 
-              className="w-9 h-9 ring-2 ring-white cursor-pointer"
+              className="w-8 h-8 ring-1.5 ring-white cursor-pointer"
               onClick={() => onProfileClick(currentVideo.userId)}
             >
               <AvatarImage src={currentVideo.userAvatar} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+              <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-500 text-white text-[10px]">
                 {currentVideo.username[0]?.toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-white text-[10px] font-bold">
+            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center text-white text-[8px] font-bold border border-black">
               +
             </div>
           </div>
 
-          {/* Like - Compact */}
+          {/* Like - Tiny */}
           <button 
             onClick={() => handleLike(currentVideo.id)}
             className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
           >
             <div className={cn(
-              "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
-              likedVideos.has(currentVideo.id) ? "bg-red-500" : "bg-black/40 backdrop-blur-sm"
+              "w-8 h-8 rounded-full flex items-center justify-center transition-all",
+              likedVideos.has(currentVideo.id) ? "bg-red-500 scale-110" : "bg-black/40 backdrop-blur-sm"
             )}>
               <Heart className={cn(
-                "w-5 h-5 text-white transition-transform",
-                likedVideos.has(currentVideo.id) && "fill-current scale-110"
+                "w-4 h-4 text-white transition-transform",
+                likedVideos.has(currentVideo.id) && "fill-current"
               )} />
             </div>
-            <span className="text-white text-[10px] font-medium">{likeCounts[currentVideo.id] || 0}</span>
+            <span className="text-white text-[9px] font-medium">{likeCounts[currentVideo.id] || 0}</span>
           </button>
 
-          {/* Comment - Compact */}
+          {/* Comment - Tiny */}
           <button 
             onClick={() => onComment(currentVideo.id)}
             className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
           >
-            <div className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-              <MessageCircle className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+              <MessageCircle className="w-4 h-4 text-white" />
             </div>
-            <span className="text-white text-[10px] font-medium">Chat</span>
+            <span className="text-white text-[9px] font-medium">Chat</span>
           </button>
 
-          {/* Share - Compact */}
+          {/* Save/Bookmark - Tiny */}
+          <button 
+            onClick={() => handleSave(currentVideo.id)}
+            className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
+          >
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center transition-all",
+              savedVideos.has(currentVideo.id) ? "bg-yellow-500" : "bg-black/40 backdrop-blur-sm"
+            )}>
+              {savedVideos.has(currentVideo.id) 
+                ? <BookmarkCheck className="w-4 h-4 text-white" />
+                : <Bookmark className="w-4 h-4 text-white" />
+              }
+            </div>
+            <span className="text-white text-[9px] font-medium">Save</span>
+          </button>
+
+          {/* Share - Tiny */}
           <button 
             onClick={() => onShare(currentVideo.id)}
             className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
           >
-            <div className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-              <Share2 className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+              <Share2 className="w-4 h-4 text-white" />
             </div>
-            <span className="text-white text-[10px] font-medium">Share</span>
+            <span className="text-white text-[9px] font-medium">Share</span>
           </button>
 
-          {/* Sound - Compact */}
+          {/* Sound - Tiny */}
           <button 
             onClick={() => setIsMuted(!isMuted)}
             className="flex flex-col items-center gap-0.5 active:scale-90 transition-transform"
           >
-            <div className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-              {isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
+            <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
+              {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
             </div>
           </button>
         </div>
 
         {/* Bottom User Info - Compact */}
-        <div className="absolute left-2 right-14 bottom-4 z-50">
+        <div className="absolute left-1.5 right-12 bottom-3 z-50">
           <div 
-            className="flex items-center gap-1.5 mb-1 cursor-pointer"
+            className="flex items-center gap-1 mb-0.5 cursor-pointer"
             onClick={() => onProfileClick(currentVideo.userId)}
           >
-            <span className="text-white text-sm font-semibold">@{currentVideo.username}</span>
+            <span className="text-white text-xs font-semibold">@{currentVideo.username}</span>
           </div>
-          <p className="text-white/90 text-xs line-clamp-2 leading-relaxed">{currentVideo.title}</p>
+          <p className="text-white/90 text-[11px] line-clamp-2 leading-tight">{currentVideo.title}</p>
         </div>
 
-        {/* Video Counter */}
-        <div className="absolute top-12 right-2 z-50 bg-black/40 backdrop-blur-sm rounded-full px-2 py-0.5">
-          <span className="text-white text-[10px] font-medium">{currentIndex + 1}/{videos.length}</span>
+        {/* Video Counter - Tiny */}
+        <div className="absolute top-8 right-1.5 z-50 bg-black/40 backdrop-blur-sm rounded-full px-1.5 py-0.5">
+          <span className="text-white text-[9px] font-medium">{currentIndex + 1}/{videos.length}</span>
         </div>
 
         {/* Swipe Hint - Only show on first video */}
         {currentIndex === 0 && videos.length > 1 && (
-          <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-50 animate-bounce">
-            <div className="flex flex-col items-center gap-1 text-white/70">
-              <ChevronUp className="w-5 h-5" />
-              <span className="text-[10px]">Swipe up</span>
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 animate-bounce">
+            <div className="flex flex-col items-center gap-0.5 text-white/70">
+              <ChevronUp className="w-4 h-4" />
+              <span className="text-[9px]">Swipe up</span>
             </div>
           </div>
         )}
       </div>
+
+      {/* Heart Animation Styles */}
+      <style>{`
+        @keyframes heart-pop {
+          0% { transform: scale(0); opacity: 0; }
+          15% { transform: scale(1.2); opacity: 1; }
+          30% { transform: scale(0.95); opacity: 1; }
+          45% { transform: scale(1.1); opacity: 1; }
+          80% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1); opacity: 0; }
+        }
+        .animate-heart-pop {
+          animation: heart-pop 0.8s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 }
