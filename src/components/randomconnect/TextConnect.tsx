@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { SkipForward, X, Send, Shield, Check, CheckCheck, BookOpen } from 'lucide-react';
+import { SkipForward, X, Send, Shield, Check, CheckCheck, BookOpen, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSecurityDetection } from '@/hooks/useSecurityDetection';
@@ -8,6 +8,8 @@ import { useSignaling } from '@/hooks/useSignaling';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { TextMemory } from './TextMemory';
+import { ReportDialog } from './ReportDialog';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -26,9 +28,9 @@ interface TextConnectProps {
   textMemory: { content: string; isOwn: boolean }[];
   onSendMessage: (content: string) => void;
   onSkip: () => void;
-  onEnd: () => void;
   onViolation?: (type: 'screenshot' | 'recording') => void;
   onClearMemory?: () => void;
+  onReport?: (reason: string) => void;
 }
 
 const MANDATORY_STAY_SECONDS = 33;
@@ -42,9 +44,9 @@ export const TextConnect: React.FC<TextConnectProps> = ({
   textMemory,
   onSendMessage,
   onSkip,
-  onEnd,
   onViolation,
-  onClearMemory
+  onClearMemory,
+  onReport
 }) => {
   const { user } = useAuth();
   const [inputValue, setInputValue] = useState('');
@@ -53,6 +55,7 @@ export const TextConnect: React.FC<TextConnectProps> = ({
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const [readMessageIds, setReadMessageIds] = useState<Set<string>>(new Set());
   const [partnerPresence, setPartnerPresence] = useState<'online' | 'away'>('online');
+  const [showReportDialog, setShowReportDialog] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingSentRef = useRef<number>(0);
@@ -72,7 +75,6 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     onTyping: (data) => {
       if (data.fromPseudoName !== myPseudoName) {
         setIsPartnerTyping(data.isTyping);
-        // Auto-clear typing after 3 seconds
         if (data.isTyping) {
           if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
@@ -143,11 +145,9 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     scrollToBottom();
   }, [messages, isPartnerTyping]);
 
-  // Handle input change with typing indicator
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
     
-    // Send typing indicator with throttle (max once per second)
     const now = Date.now();
     if (isConnected && e.target.value.length > 0 && now - lastTypingSentRef.current > 1000) {
       sendTyping(true);
@@ -158,7 +158,6 @@ export const TextConnect: React.FC<TextConnectProps> = ({
   const handleSend = () => {
     if (!inputValue.trim()) return;
     
-    // Stop typing indicator
     if (isConnected) {
       sendTyping(false);
     }
@@ -174,7 +173,6 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     }
   };
 
-  // Handle blur to stop typing
   const handleInputBlur = useCallback(() => {
     if (isConnected && inputValue.length > 0) {
       sendTyping(false);
@@ -187,14 +185,19 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Get read status for a message
   const getMessageReadStatus = (message: Message) => {
     if (message.sender_pseudo_name !== myPseudoName) return null;
     return readMessageIds.has(message.id) ? 'read' : 'sent';
   };
 
+  const handleReport = (reason: string) => {
+    onReport?.(reason);
+    setShowReportDialog(false);
+    toast.success('Report submitted. Thank you for keeping the community safe.');
+  };
+
   return (
-    <div className="flex flex-col h-[80vh] random-connect-protected">
+    <div className="flex flex-col h-[85vh] random-connect-protected">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
@@ -202,13 +205,12 @@ export const TextConnect: React.FC<TextConnectProps> = ({
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-secondary/30 to-secondary/10 flex items-center justify-center">
               <span className="text-base">💙</span>
             </div>
-            {/* Presence indicator */}
             <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-card ${
               partnerPresence === 'online' ? 'bg-green-500' : 'bg-yellow-500'
             }`} />
           </div>
           <div>
-            <p className="font-medium text-sm text-foreground">{partnerPseudoName}</p>
+            <p className="font-medium text-sm text-foreground">{partnerPseudoName.split('-')[0]}</p>
             <div className="flex items-center gap-1.5">
               {isPartnerTyping ? (
                 <p className="text-[10px] text-primary animate-pulse">typing...</p>
@@ -225,7 +227,6 @@ export const TextConnect: React.FC<TextConnectProps> = ({
         </div>
         
         <div className="flex items-center gap-1">
-          {/* Text Memory Button */}
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
@@ -236,6 +237,15 @@ export const TextConnect: React.FC<TextConnectProps> = ({
               <TextMemory memory={textMemory} onClear={onClearMemory} />
             </SheetContent>
           </Sheet>
+          
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full h-8 w-8"
+            onClick={() => setShowReportDialog(true)}
+          >
+            <Flag className="w-4 h-4 text-muted-foreground hover:text-red-500" />
+          </Button>
           
           <SecurityTips compact />
           
@@ -249,14 +259,6 @@ export const TextConnect: React.FC<TextConnectProps> = ({
           >
             <SkipForward className="w-4 h-4" />
           </Button>
-          <Button 
-            onClick={onEnd} 
-            variant="ghost" 
-            size="icon" 
-            className="rounded-full h-8 w-8 text-destructive hover:text-destructive"
-          >
-            <X className="w-4 h-4" />
-          </Button>
         </div>
       </div>
 
@@ -264,7 +266,7 @@ export const TextConnect: React.FC<TextConnectProps> = ({
       {!canSkip && (
         <div className="px-3 py-1.5 bg-muted/50 text-center">
           <p className="text-[10px] text-muted-foreground">
-            Skip available in {Math.max(0, MANDATORY_STAY_SECONDS - duration)}s • Take your time to connect
+            ⏱️ Skip available in {Math.max(0, MANDATORY_STAY_SECONDS - duration)}s • Take your time to connect
           </p>
         </div>
       )}
@@ -300,7 +302,6 @@ export const TextConnect: React.FC<TextConnectProps> = ({
                     {message.content}
                   </p>
                 </div>
-                {/* Read receipt for own messages */}
                 {isOwn && (
                   <div className="flex justify-end mt-0.5 mr-1">
                     {readStatus === 'read' ? (
@@ -357,10 +358,17 @@ export const TextConnect: React.FC<TextConnectProps> = ({
               <span className="text-green-500">● Connected</span>
             ) : (
               <span className="text-yellow-500">● Connecting...</span>
-            )} • Messages saved to memory (last 20)
+            )} • Messages saved to memory (last 10 sessions, 24h)
           </p>
         </div>
       </div>
+
+      {/* Report Dialog */}
+      <ReportDialog 
+        open={showReportDialog} 
+        onClose={() => setShowReportDialog(false)} 
+        onReport={handleReport}
+      />
     </div>
   );
 };
