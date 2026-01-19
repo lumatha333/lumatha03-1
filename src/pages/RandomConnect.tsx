@@ -23,6 +23,7 @@ const RandomConnect: React.FC = () => {
     setRegion,
     myPseudoName,
     partnerPseudoName,
+    session,
     messages,
     conversationStarter,
     textMemory,
@@ -32,7 +33,8 @@ const RandomConnect: React.FC = () => {
     endSession,
     skipToNext,
     sendMessage,
-    recordViolation
+    recordViolation,
+    clearTextMemory
   } = useRandomConnect();
 
   if (!user) {
@@ -107,10 +109,13 @@ const RandomConnect: React.FC = () => {
               partnerPseudoName={partnerPseudoName}
               conversationStarter={conversationStarter}
               messages={messages}
+              sessionId={session?.id || null}
+              textMemory={textMemory}
               onSendMessage={sendMessage}
               onSkip={skipToNext}
               onEnd={endSession}
               onViolation={recordViolation}
+              onClearMemory={clearTextMemory}
             />
           )}
 
