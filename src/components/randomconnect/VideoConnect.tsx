@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SkipForward, Eye, EyeOff, Camera, CameraOff, Mic, MicOff, Clock, Phone, Subtitles, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSecurityDetection } from '@/hooks/useSecurityDetection';
+import { useSignaling } from '@/hooks/useSignaling';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { ReportDialog } from './ReportDialog';
 
@@ -52,7 +54,8 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   sessionId,
   partnerId
 }) => {
-  const [blurEnabled, setBlurEnabled] = useState(true);
+  const { user } = useAuth();
+  const [blurEnabled, setBlurEnabled] = useState(false);
   const [duration, setDuration] = useState(0);
   const [canSkip, setCanSkip] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
@@ -71,6 +74,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechRecognitionRef = useRef<any>(null);
+  const isInitiatorRef = useRef<boolean>(false);
 
   // Security detection
   useSecurityDetection({
@@ -79,7 +83,70 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     onRecordingDetected: () => onViolation?.('recording')
   });
 
-  // Enable skip after mandatory stay
+  // Signaling for WebRTC connection
+  const { 
+    isConnected: signalingConnected, 
+    sendOffer, 
+    sendAnswer, 
+    sendIceCandidate 
+  } = useSignaling({
+    sessionId: sessionId || null,
+    userId: user?.id || '',
+    pseudoName: myPseudoName,
+    onPeerJoined: async (data) => {
+      console.log('Peer joined video call:', data.pseudoName);
+      // If we're the initiator, create and send offer
+      if (isInitiatorRef.current && peerConnectionRef.current) {
+        try {
+          const offer = await peerConnectionRef.current.createOffer();
+          await peerConnectionRef.current.setLocalDescription(offer);
+          sendOffer(offer);
+        } catch (error) {
+          console.error('Error creating offer:', error);
+        }
+      }
+    },
+    onOffer: async (data) => {
+      console.log('Received offer');
+      if (peerConnectionRef.current) {
+        try {
+          await peerConnectionRef.current.setRemoteDescription(data.sdp);
+          const answer = await peerConnectionRef.current.createAnswer();
+          await peerConnectionRef.current.setLocalDescription(answer);
+          sendAnswer(answer);
+        } catch (error) {
+          console.error('Error handling offer:', error);
+        }
+      }
+    },
+    onAnswer: async (data) => {
+      console.log('Received answer');
+      if (peerConnectionRef.current) {
+        try {
+          await peerConnectionRef.current.setRemoteDescription(data.sdp);
+        } catch (error) {
+          console.error('Error handling answer:', error);
+        }
+      }
+    },
+    onIceCandidate: async (data) => {
+      if (peerConnectionRef.current && data.candidate) {
+        try {
+          await peerConnectionRef.current.addIceCandidate(data.candidate);
+        } catch (error) {
+          console.error('Error adding ICE candidate:', error);
+        }
+      }
+    },
+    onPeerLeft: () => {
+      console.log('Peer left video call');
+      setConnectionStatus('disconnected');
+      setIsConnected(false);
+      toast.info('Your partner has left the call');
+    }
+  });
+
+  // Enable skip after mandatory stay (20 seconds)
   useEffect(() => {
     if (duration >= MANDATORY_STAY_SECONDS && !canSkip) {
       setCanSkip(true);
@@ -95,7 +162,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     
     if (duration >= MAX_VIDEO_DURATION) {
       toast.info('Video session limit reached (15 minutes)');
-      onSkip(); // Use skip to go to next person
+      onSkip();
     }
   }, [duration, timeWarningShown, onSkip]);
 
@@ -125,7 +192,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       const transcript = Array.from(event.results)
         .map((result: any) => result[0].transcript)
         .join(' ');
-      setCurrentCaption(transcript.slice(-100)); // Last 100 chars
+      setCurrentCaption(transcript.slice(-100));
     };
 
     recognition.onerror = () => {
@@ -145,6 +212,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   // Initialize WebRTC and camera
   useEffect(() => {
     let mounted = true;
+    isInitiatorRef.current = !partnerId; // First user to join is initiator
     
     const initializeVideoCall = async () => {
       try {
@@ -177,7 +245,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           myVideoRef.current.muted = true;
         }
 
-        // Create RTCPeerConnection
+        // Create RTCPeerConnection with TURN servers
         const pc = new RTCPeerConnection({ iceServers });
         peerConnectionRef.current = pc;
 
@@ -185,6 +253,13 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         stream.getTracks().forEach(track => {
           pc.addTrack(track, stream);
         });
+
+        // Handle ICE candidates
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            sendIceCandidate(event.candidate.toJSON());
+          }
+        };
 
         // Handle remote stream
         pc.ontrack = (event) => {
@@ -231,16 +306,18 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           }
         };
 
-        // Simulate partner connection for demo
-        setTimeout(() => {
-          if (mounted) {
-            setConnectionStatus('connected');
-            setIsConnected(true);
-            if (partnerVideoRef.current && localStreamRef.current) {
-              partnerVideoRef.current.srcObject = localStreamRef.current;
+        // For demo/testing: simulate partner connection if no real signaling
+        if (!sessionId) {
+          setTimeout(() => {
+            if (mounted) {
+              setConnectionStatus('connected');
+              setIsConnected(true);
+              if (partnerVideoRef.current && localStreamRef.current) {
+                partnerVideoRef.current.srcObject = localStreamRef.current;
+              }
             }
-          }
-        }, 2000);
+          }, 2000);
+        }
         
       } catch (err) {
         console.error('Failed to initialize video call:', err);
@@ -273,7 +350,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         speechRecognitionRef.current.stop();
       }
     };
-  }, []);
+  }, [sessionId, partnerId, sendIceCandidate]);
 
   // Duration timer
   useEffect(() => {
@@ -333,9 +410,9 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         </div>
       )}
 
-      {/* Main Split Screen Video Container */}
+      {/* Main Split Screen Video Container - FACE TO FACE */}
       <div className="relative flex-1 w-full max-w-lg rounded-2xl overflow-hidden bg-muted shadow-lg">
-        {/* Partner Video - Top Half (60%) */}
+        {/* Partner Video - Top Half (55%) - REAL FACE */}
         <div className="absolute top-0 left-0 right-0 h-[55%] bg-gradient-to-b from-card to-muted border-b-2 border-background">
           <video
             ref={partnerVideoRef}
@@ -380,7 +457,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           )}
         </div>
 
-        {/* My Video - Bottom Half (45%) */}
+        {/* My Video - Bottom Half (45%) - MY REAL FACE */}
         <div className="absolute bottom-0 left-0 right-0 h-[45%] bg-gradient-to-t from-card to-muted">
           <video
             ref={myVideoRef}
@@ -510,7 +587,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         </div>
       )}
 
-      {/* Skip Button Only */}
+      {/* Skip Button Only - Available after 20 seconds */}
       <div className="mt-4 w-full max-w-sm">
         {!canSkip && (
           <p className="text-center text-xs text-muted-foreground mb-2">
