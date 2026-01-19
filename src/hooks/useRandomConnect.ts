@@ -84,6 +84,18 @@ export const useRandomConnect = () => {
     }
   }, [user]);
 
+  // Clear text memory
+  const clearTextMemory = useCallback(async () => {
+    if (!user) return;
+    
+    await supabase
+      .from('random_connect_text_memory')
+      .delete()
+      .eq('user_id', user.id);
+    
+    setTextMemory([]);
+  }, [user]);
+
   useEffect(() => {
     checkViolationStatus();
     loadTextMemory();
@@ -434,6 +446,7 @@ export const useRandomConnect = () => {
     endSession,
     skipToNext,
     sendMessage,
-    recordViolation
+    recordViolation,
+    clearTextMemory
   };
 };
