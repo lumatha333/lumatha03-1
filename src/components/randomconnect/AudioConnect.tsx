@@ -26,6 +26,8 @@ const MANDATORY_STAY_SECONDS = 20; // 20 seconds before skip is available
 const iceServers: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
   // TURN servers for users behind restrictive NATs/firewalls
   {
     urls: 'turn:openrelay.metered.ca:80',
@@ -67,16 +69,19 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [currentCaption, setCurrentCaption] = useState('');
   const [showReportDialog, setShowReportDialog] = useState(false);
+  const [hasRemoteAudio, setHasRemoteAudio] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
+  const localAnalyserRef = useRef<AnalyserNode | null>(null);
+  const remoteAnalyserRef = useRef<AnalyserNode | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const speechRecognitionRef = useRef<any>(null);
-  const isInitiatorRef = useRef<boolean>(false);
+  const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
+  const hasCreatedOfferRef = useRef<boolean>(false);
   
   const { 
     currentSound, 
@@ -93,6 +98,180 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     onRecordingDetected: () => onViolation?.('recording')
   });
 
+  // Create peer connection
+  const createPeerConnection = useCallback(() => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+
+    const pc = new RTCPeerConnection({ 
+      iceServers,
+      iceCandidatePoolSize: 10
+    });
+    peerConnectionRef.current = pc;
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log('Sending ICE candidate');
+        sendIceCandidate(event.candidate.toJSON());
+      }
+    };
+
+    // Handle remote stream - THIS IS WHERE WE HEAR THE OTHER PERSON
+    pc.ontrack = (event) => {
+      console.log('Received remote audio track');
+      
+      const [remoteStream] = event.streams;
+      if (!remoteStream) return;
+      
+      remoteStreamRef.current = remoteStream;
+      setHasRemoteAudio(true);
+
+      // Create audio element for playback - REAL VOICE EXCHANGE
+      if (!remoteAudioRef.current) {
+        const audioElement = document.createElement('audio');
+        audioElement.autoplay = true;
+        audioElement.setAttribute('playsinline', 'true');
+        audioElement.volume = 1.0;
+        document.body.appendChild(audioElement);
+        remoteAudioRef.current = audioElement;
+      }
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch(e => console.log('Remote audio play error:', e));
+      
+      // Analyze remote audio for voice level visualization
+      if (audioContextRef.current) {
+        const remoteAnalyser = audioContextRef.current.createAnalyser();
+        const remoteSource = audioContextRef.current.createMediaStreamSource(remoteStream);
+        remoteSource.connect(remoteAnalyser);
+        remoteAnalyser.fftSize = 256;
+        remoteAnalyserRef.current = remoteAnalyser;
+      }
+      
+      setIsConnected(true);
+      setConnectionStatus('connected');
+    };
+
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+      console.log('Connection state:', pc.connectionState);
+      switch (pc.connectionState) {
+        case 'connected':
+          setConnectionStatus('connected');
+          setIsConnected(true);
+          break;
+        case 'disconnected':
+        case 'failed':
+          setConnectionStatus('disconnected');
+          setIsConnected(false);
+          toast.info('Connection lost. Trying to reconnect...');
+          break;
+        case 'closed':
+          setConnectionStatus('disconnected');
+          setIsConnected(false);
+          break;
+        default:
+          setConnectionStatus('connecting');
+      }
+    };
+
+    return pc;
+  }, []);
+
+  // Signaling handlers
+  const handlePeerJoined = useCallback(async (data: { userId: string; pseudoName: string }) => {
+    console.log('Peer joined audio call:', data.pseudoName);
+    
+    // Determine who creates the offer (user with "smaller" ID creates offer)
+    if (user?.id && data.userId && user.id < data.userId && !hasCreatedOfferRef.current) {
+      hasCreatedOfferRef.current = true;
+      
+      const pc = peerConnectionRef.current;
+      if (pc && localStreamRef.current) {
+        try {
+          console.log('Creating offer as initiator');
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: false
+          });
+          await pc.setLocalDescription(offer);
+          sendOffer(offer);
+        } catch (error) {
+          console.error('Error creating offer:', error);
+        }
+      }
+    }
+  }, [user?.id]);
+
+  const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
+    console.log('Received offer from:', data.fromPseudoName);
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      
+      // Process queued ICE candidates
+      while (iceCandidatesQueue.current.length > 0) {
+        const candidate = iceCandidatesQueue.current.shift();
+        if (candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      }
+      
+      console.log('Creating answer');
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      sendAnswer(answer);
+    } catch (error) {
+      console.error('Error handling offer:', error);
+    }
+  }, []);
+
+  const handleAnswer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string }) => {
+    console.log('Received answer');
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      
+      // Process queued ICE candidates
+      while (iceCandidatesQueue.current.length > 0) {
+        const candidate = iceCandidatesQueue.current.shift();
+        if (candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      }
+    } catch (error) {
+      console.error('Error handling answer:', error);
+    }
+  }, []);
+
+  const handleIceCandidate = useCallback(async (data: { candidate: RTCIceCandidateInit; fromUserId: string }) => {
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    
+    try {
+      if (pc.remoteDescription) {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } else {
+        iceCandidatesQueue.current.push(data.candidate);
+      }
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
+    }
+  }, []);
+
+  const handlePeerLeft = useCallback(() => {
+    console.log('Peer left audio call');
+    setConnectionStatus('disconnected');
+    setIsConnected(false);
+    setHasRemoteAudio(false);
+    toast.info('Your partner has left the call');
+  }, []);
+
   // Signaling for WebRTC connection
   const { 
     isConnected: signalingConnected, 
@@ -103,56 +282,11 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     sessionId: sessionId || null,
     userId: user?.id || '',
     pseudoName: myPseudoName,
-    onPeerJoined: async (data) => {
-      console.log('Peer joined audio call:', data.pseudoName);
-      if (isInitiatorRef.current && peerConnectionRef.current) {
-        try {
-          const offer = await peerConnectionRef.current.createOffer();
-          await peerConnectionRef.current.setLocalDescription(offer);
-          sendOffer(offer);
-        } catch (error) {
-          console.error('Error creating offer:', error);
-        }
-      }
-    },
-    onOffer: async (data) => {
-      console.log('Received offer');
-      if (peerConnectionRef.current) {
-        try {
-          await peerConnectionRef.current.setRemoteDescription(data.sdp);
-          const answer = await peerConnectionRef.current.createAnswer();
-          await peerConnectionRef.current.setLocalDescription(answer);
-          sendAnswer(answer);
-        } catch (error) {
-          console.error('Error handling offer:', error);
-        }
-      }
-    },
-    onAnswer: async (data) => {
-      console.log('Received answer');
-      if (peerConnectionRef.current) {
-        try {
-          await peerConnectionRef.current.setRemoteDescription(data.sdp);
-        } catch (error) {
-          console.error('Error handling answer:', error);
-        }
-      }
-    },
-    onIceCandidate: async (data) => {
-      if (peerConnectionRef.current && data.candidate) {
-        try {
-          await peerConnectionRef.current.addIceCandidate(data.candidate);
-        } catch (error) {
-          console.error('Error adding ICE candidate:', error);
-        }
-      }
-    },
-    onPeerLeft: () => {
-      console.log('Peer left audio call');
-      setConnectionStatus('disconnected');
-      setIsConnected(false);
-      toast.info('Your partner has left the call');
-    }
+    onPeerJoined: handlePeerJoined,
+    onOffer: handleOffer,
+    onAnswer: handleAnswer,
+    onIceCandidate: handleIceCandidate,
+    onPeerLeft: handlePeerLeft
   });
 
   // Animate road movement (visual only, no sound)
@@ -213,13 +347,50 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     };
   }, [captionsEnabled]);
 
+  // Voice level visualization loop
+  useEffect(() => {
+    const updateVoiceLevels = () => {
+      // Local voice level
+      if (localAnalyserRef.current && isMicOn) {
+        const dataArray = new Uint8Array(localAnalyserRef.current.frequencyBinCount);
+        localAnalyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        setMyVoiceLevel(Math.min(100, average * 1.5));
+      } else {
+        setMyVoiceLevel(0);
+      }
+      
+      // Remote voice level
+      if (remoteAnalyserRef.current && hasRemoteAudio) {
+        const dataArray = new Uint8Array(remoteAnalyserRef.current.frequencyBinCount);
+        remoteAnalyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        setPartnerVoiceLevel(Math.min(100, average * 1.5));
+      } else {
+        setPartnerVoiceLevel(0);
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(updateVoiceLevels);
+    };
+    
+    updateVoiceLevels();
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isMicOn, hasRemoteAudio]);
+
   // Initialize WebRTC audio call
   useEffect(() => {
     let mounted = true;
-    isInitiatorRef.current = !partnerId;
+    hasCreatedOfferRef.current = false;
+    iceCandidatesQueue.current = [];
 
     const initializeAudioCall = async () => {
       try {
+        console.log('Requesting microphone access...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
             echoCancellation: true,
@@ -236,114 +407,23 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         }
         
         localStreamRef.current = stream;
+        console.log('Got local audio stream');
         
-        // Set up audio analysis
+        // Set up audio analysis for voice level visualization
         audioContextRef.current = new AudioContext();
-        analyserRef.current = audioContextRef.current.createAnalyser();
+        localAnalyserRef.current = audioContextRef.current.createAnalyser();
         const source = audioContextRef.current.createMediaStreamSource(stream);
-        source.connect(analyserRef.current);
-        
-        analyserRef.current.fftSize = 256;
-        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-        
-        const updateVoiceLevel = () => {
-          if (!mounted) return;
-          
-          if (analyserRef.current) {
-            analyserRef.current.getByteFrequencyData(dataArray);
-            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-            setMyVoiceLevel(Math.min(100, average * 1.5));
-          }
-          animationFrameRef.current = requestAnimationFrame(updateVoiceLevel);
-        };
-        updateVoiceLevel();
+        source.connect(localAnalyserRef.current);
+        localAnalyserRef.current.fftSize = 256;
 
-        // Create RTCPeerConnection with TURN servers
-        const pc = new RTCPeerConnection({ iceServers });
-        peerConnectionRef.current = pc;
+        // Create RTCPeerConnection
+        const pc = createPeerConnection();
 
+        // Add audio track to peer connection
         stream.getAudioTracks().forEach(track => {
+          console.log('Adding audio track to peer connection');
           pc.addTrack(track, stream);
         });
-
-        // Handle ICE candidates
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            sendIceCandidate(event.candidate.toJSON());
-          }
-        };
-
-        pc.ontrack = (event) => {
-          if (!mounted) return;
-          
-          const [remoteStream] = event.streams;
-          remoteStreamRef.current = remoteStream;
-
-          if (!remoteAudioRef.current) {
-            const audioElement = document.createElement('audio');
-            audioElement.autoplay = true;
-            audioElement.setAttribute('playsinline', 'true');
-            document.body.appendChild(audioElement);
-            remoteAudioRef.current = audioElement;
-          }
-          remoteAudioRef.current.srcObject = remoteStream;
-          
-          // Analyze remote audio
-          if (audioContextRef.current) {
-            const remoteAnalyser = audioContextRef.current.createAnalyser();
-            const remoteSource = audioContextRef.current.createMediaStreamSource(remoteStream);
-            remoteSource.connect(remoteAnalyser);
-            remoteAnalyser.fftSize = 256;
-            const remoteDataArray = new Uint8Array(remoteAnalyser.frequencyBinCount);
-            
-            const updateRemoteLevel = () => {
-              if (!mounted) return;
-              remoteAnalyser.getByteFrequencyData(remoteDataArray);
-              const avg = remoteDataArray.reduce((a, b) => a + b) / remoteDataArray.length;
-              setPartnerVoiceLevel(Math.min(100, avg * 1.5));
-              requestAnimationFrame(updateRemoteLevel);
-            };
-            updateRemoteLevel();
-          }
-          
-          setIsConnected(true);
-          setConnectionStatus('connected');
-        };
-
-        pc.onconnectionstatechange = () => {
-          if (!mounted) return;
-          
-          switch (pc.connectionState) {
-            case 'connected':
-              setConnectionStatus('connected');
-              setIsConnected(true);
-              break;
-            case 'disconnected':
-            case 'failed':
-            case 'closed':
-              setConnectionStatus('disconnected');
-              setIsConnected(false);
-              break;
-            default:
-              setConnectionStatus('connecting');
-          }
-        };
-
-        // For demo/testing: simulate connection if no real signaling
-        if (!sessionId) {
-          setTimeout(() => {
-            if (mounted) {
-              setConnectionStatus('connected');
-              setIsConnected(true);
-              const simulatePartner = () => {
-                if (!mounted) return;
-                setPartnerVoiceLevel(Math.random() * 60 + (Math.random() > 0.7 ? 30 : 0));
-                setTimeout(simulatePartner, 150 + Math.random() * 200);
-              };
-              simulatePartner();
-            }
-          }, 2000);
-        }
         
       } catch (err) {
         console.error('Failed to initialize audio call:', err);
@@ -385,7 +465,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         speechRecognitionRef.current.stop();
       }
     };
-  }, [sessionId, partnerId, sendIceCandidate]);
+  }, [createPeerConnection]);
 
   // Duration timer
   useEffect(() => {
@@ -474,7 +554,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         </div>
       )}
 
-      {/* Car Interior UI - Two People in a Car */}
+      {/* Car Interior UI - Two People in a Car - BOTH HEAR EACH OTHER */}
       <div className="relative w-full max-w-md aspect-[4/3] rounded-3xl overflow-hidden shadow-xl">
         {/* Road View (Moving) - Visual only */}
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background to-card">
@@ -508,9 +588,9 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
 
         {/* Dashboard / Car Interior */}
         <div className="absolute bottom-0 left-0 right-0 h-3/4 bg-gradient-to-t from-card via-card/95 to-transparent rounded-t-[2rem]">
-          {/* Two Seats Layout */}
+          {/* Two Seats Layout - REAL VOICE EXCHANGE */}
           <div className="flex justify-around items-center h-full px-6 pt-8">
-            {/* Left Seat - You (Driver) */}
+            {/* Left Seat - You (Driver) - YOUR VOICE */}
             <div className="flex flex-col items-center gap-3 relative">
               {/* Seat back */}
               <div className="absolute -top-2 w-24 h-28 bg-muted/30 rounded-t-full rounded-b-lg -z-10" />
@@ -557,7 +637,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
               <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse shadow-lg`} />
             </div>
 
-            {/* Right Seat - Partner (Passenger) */}
+            {/* Right Seat - Partner (Passenger) - THEIR VOICE */}
             <div className="flex flex-col items-center gap-3 relative">
               {/* Seat back */}
               <div className="absolute -top-2 w-24 h-28 bg-muted/30 rounded-t-full rounded-b-lg -z-10" />
@@ -566,17 +646,17 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
               <div 
                 className="relative w-20 h-20 rounded-full bg-gradient-to-br from-secondary/40 to-secondary/10 flex items-center justify-center transition-all duration-75 border-2 border-secondary/20"
                 style={{
-                  boxShadow: isConnected ? `0 0 ${partnerVoiceLevel / 2}px ${partnerVoiceLevel / 3}px hsl(var(--secondary) / ${Math.min(0.6, partnerVoiceLevel / 100)})` : 'none',
-                  transform: isConnected ? `scale(${1 + partnerVoiceLevel / 300})` : 'scale(1)'
+                  boxShadow: hasRemoteAudio ? `0 0 ${partnerVoiceLevel / 2}px ${partnerVoiceLevel / 3}px hsl(var(--secondary) / ${Math.min(0.6, partnerVoiceLevel / 100)})` : 'none',
+                  transform: hasRemoteAudio ? `scale(${1 + partnerVoiceLevel / 300})` : 'scale(1)'
                 }}
               >
-                {partnerVoiceLevel > 20 && isConnected && (
+                {partnerVoiceLevel > 20 && hasRemoteAudio && (
                   <div 
                     className="absolute inset-0 rounded-full border-2 border-secondary/50 animate-ping"
                     style={{ animationDuration: '0.6s' }}
                   />
                 )}
-                <Volume2 className={`w-8 h-8 ${isConnected ? 'text-secondary' : 'text-muted-foreground'}`} />
+                <Volume2 className={`w-8 h-8 ${hasRemoteAudio ? 'text-secondary' : 'text-muted-foreground'}`} />
               </div>
               
               <div className="text-center">
@@ -588,7 +668,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
               <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-secondary rounded-full transition-all duration-75"
-                  style={{ width: isConnected ? `${partnerVoiceLevel}%` : '0%' }}
+                  style={{ width: hasRemoteAudio ? `${partnerVoiceLevel}%` : '0%' }}
                 />
               </div>
             </div>
