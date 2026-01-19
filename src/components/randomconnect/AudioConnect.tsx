@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { SkipForward, PhoneOff, Volume2, Music } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { SkipForward, PhoneOff, Volume2, VolumeX, Mic, MicOff, Music, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAmbientSounds } from '@/hooks/useAmbientSounds';
 import { AmbientSoundSelector } from './AmbientSoundSelector';
 import { useSecurityDetection } from '@/hooks/useSecurityDetection';
+import { toast } from 'sonner';
 
 interface AudioConnectProps {
   myPseudoName: string;
@@ -13,6 +14,14 @@ interface AudioConnectProps {
   onEnd: () => void;
   onViolation?: (type: 'screenshot' | 'recording') => void;
 }
+
+const MANDATORY_STAY_SECONDS = 33;
+
+// STUN servers for WebRTC
+const iceServers: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
 
 export const AudioConnect: React.FC<AudioConnectProps> = ({
   myPseudoName,
@@ -26,11 +35,18 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const [partnerVoiceLevel, setPartnerVoiceLevel] = useState(0);
   const [duration, setDuration] = useState(0);
   const [canSkip, setCanSkip] = useState(false);
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  
-  const MANDATORY_STAY_SECONDS = 33;
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   
   const { 
     currentSound, 
@@ -54,13 +70,31 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     }
   }, [duration, canSkip]);
 
-  // Voice level detection
+  // Initialize WebRTC audio call
   useEffect(() => {
-    const startAudio = async () => {
+    let mounted = true;
+
+    const initializeAudioCall = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
+        // Request microphone with optimal audio settings
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000,
+            channelCount: 1
+          }
+        });
         
+        if (!mounted) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        
+        localStreamRef.current = stream;
+        
+        // Set up audio analysis for voice level visualization
         audioContextRef.current = new AudioContext();
         analyserRef.current = audioContextRef.current.createAnalyser();
         const source = audioContextRef.current.createMediaStreamSource(stream);
@@ -69,34 +103,135 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         analyserRef.current.fftSize = 256;
         const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
         
-        const updateLevel = () => {
+        const updateVoiceLevel = () => {
+          if (!mounted) return;
+          
           if (analyserRef.current) {
             analyserRef.current.getByteFrequencyData(dataArray);
             const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
             setMyVoiceLevel(Math.min(100, average * 1.5));
           }
-          requestAnimationFrame(updateLevel);
+          animationFrameRef.current = requestAnimationFrame(updateVoiceLevel);
         };
-        updateLevel();
+        updateVoiceLevel();
+
+        // Create RTCPeerConnection
+        const pc = new RTCPeerConnection({ iceServers });
+        peerConnectionRef.current = pc;
+
+        // Add local audio track
+        stream.getAudioTracks().forEach(track => {
+          pc.addTrack(track, stream);
+        });
+
+        // Handle remote audio stream
+        pc.ontrack = (event) => {
+          if (!mounted) return;
+          
+          const [remoteStream] = event.streams;
+          remoteStreamRef.current = remoteStream;
+
+          // Create audio element for remote audio playback
+          if (!remoteAudioRef.current) {
+            const audioElement = document.createElement('audio');
+            audioElement.autoplay = true;
+            audioElement.setAttribute('playsinline', 'true');
+            document.body.appendChild(audioElement);
+            remoteAudioRef.current = audioElement;
+          }
+          remoteAudioRef.current.srcObject = remoteStream;
+          
+          // Analyze remote audio for voice level
+          if (audioContextRef.current) {
+            const remoteAnalyser = audioContextRef.current.createAnalyser();
+            const remoteSource = audioContextRef.current.createMediaStreamSource(remoteStream);
+            remoteSource.connect(remoteAnalyser);
+            remoteAnalyser.fftSize = 256;
+            const remoteDataArray = new Uint8Array(remoteAnalyser.frequencyBinCount);
+            
+            const updateRemoteLevel = () => {
+              if (!mounted) return;
+              remoteAnalyser.getByteFrequencyData(remoteDataArray);
+              const avg = remoteDataArray.reduce((a, b) => a + b) / remoteDataArray.length;
+              setPartnerVoiceLevel(Math.min(100, avg * 1.5));
+              requestAnimationFrame(updateRemoteLevel);
+            };
+            updateRemoteLevel();
+          }
+          
+          setIsConnected(true);
+          setConnectionStatus('connected');
+        };
+
+        // Handle connection state
+        pc.onconnectionstatechange = () => {
+          if (!mounted) return;
+          
+          switch (pc.connectionState) {
+            case 'connected':
+              setConnectionStatus('connected');
+              setIsConnected(true);
+              break;
+            case 'disconnected':
+            case 'failed':
+            case 'closed':
+              setConnectionStatus('disconnected');
+              setIsConnected(false);
+              break;
+            default:
+              setConnectionStatus('connecting');
+          }
+        };
+
+        // Simulate connection for demo (in production, handled by signaling server)
+        setTimeout(() => {
+          if (mounted) {
+            setConnectionStatus('connected');
+            setIsConnected(true);
+            // Simulate partner voice levels
+            const simulatePartner = () => {
+              if (!mounted) return;
+              setPartnerVoiceLevel(Math.random() * 60 + (Math.random() > 0.7 ? 30 : 0));
+              setTimeout(simulatePartner, 150 + Math.random() * 200);
+            };
+            simulatePartner();
+          }
+        }, 2000);
+        
       } catch (err) {
-        console.log('Microphone access denied');
+        console.error('Failed to initialize audio call:', err);
+        toast.error('Microphone access is required for audio chat');
       }
     };
     
-    startAudio();
-    
-    // Simulate partner speaking (in real app, this comes from WebRTC)
-    const partnerInterval = setInterval(() => {
-      setPartnerVoiceLevel(Math.random() * 60);
-    }, 200);
+    initializeAudioCall();
     
     return () => {
-      clearInterval(partnerInterval);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+      mounted = false;
+      
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
+      
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+      }
+      
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
+      }
+      
       if (audioContextRef.current) {
         audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+        remoteAudioRef.current.remove();
+        remoteAudioRef.current = null;
       }
     };
   }, []);
@@ -115,11 +250,29 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const toggleMic = useCallback(() => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMicOn(audioTrack.enabled);
+      }
+    }
+  }, []);
+
+  const toggleSpeaker = useCallback(() => {
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.muted = !remoteAudioRef.current.muted;
+      setIsSpeakerOn(!remoteAudioRef.current.muted);
+    }
+  }, []);
+
   return (
     <div className="flex flex-col items-center justify-between min-h-[80vh] p-4 random-connect-protected">
       {/* Header with Timer & Controls */}
       <div className="w-full flex items-center justify-between">
-        <div className="bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full">
+        <div className="bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
           <p className="text-sm font-medium text-foreground">{formatDuration(duration)}</p>
         </div>
         
@@ -133,13 +286,26 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         />
       </div>
 
-      {/* Conversation Starter */}
-      <div className="glass-card px-5 py-3 rounded-2xl text-center max-w-sm">
-        <p className="text-xs text-muted-foreground mb-1">💬 Start with this:</p>
-        <p className="text-sm text-foreground italic">"{conversationStarter}"</p>
-      </div>
+      {/* Connection Status */}
+      {connectionStatus === 'connecting' && (
+        <div className="glass-card px-4 py-3 rounded-2xl text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Phone className="w-5 h-5 text-primary animate-pulse" />
+            <p className="text-sm text-foreground">Connecting...</p>
+          </div>
+          <p className="text-xs text-muted-foreground">Finding {partnerPseudoName}</p>
+        </div>
+      )}
 
-      {/* Car Interior UI */}
+      {/* Conversation Starter */}
+      {connectionStatus === 'connected' && (
+        <div className="glass-card px-5 py-3 rounded-2xl text-center max-w-sm">
+          <p className="text-xs text-muted-foreground mb-1">💬 Start with this:</p>
+          <p className="text-sm text-foreground italic">"{conversationStarter}"</p>
+        </div>
+      )}
+
+      {/* Car Interior UI - Voice Visualization */}
       <div className="relative w-full max-w-md aspect-[4/3]">
         {/* Car Dashboard Background */}
         <div className="absolute inset-0 bg-gradient-to-b from-muted/50 to-background rounded-3xl overflow-hidden">
@@ -157,47 +323,75 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
               {/* Left Seat - You */}
               <div className="flex flex-col items-center gap-2">
                 <div 
-                  className="relative w-16 h-16 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center transition-all duration-100"
+                  className="relative w-20 h-20 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center transition-all duration-75"
                   style={{
-                    boxShadow: `0 0 ${myVoiceLevel / 3}px ${myVoiceLevel / 5}px hsl(var(--primary) / ${myVoiceLevel / 150})`
+                    boxShadow: isMicOn ? `0 0 ${myVoiceLevel / 2}px ${myVoiceLevel / 4}px hsl(var(--primary) / ${Math.min(0.5, myVoiceLevel / 100)})` : 'none',
+                    transform: isMicOn ? `scale(${1 + myVoiceLevel / 400})` : 'scale(1)'
                   }}
                 >
-                  {myVoiceLevel > 10 && (
+                  {myVoiceLevel > 15 && isMicOn && (
                     <div 
                       className="absolute inset-0 rounded-full border-2 border-primary/40 animate-ping"
-                      style={{ animationDuration: '1s' }}
+                      style={{ animationDuration: '0.8s' }}
                     />
                   )}
-                  <Volume2 className="w-6 h-6 text-primary" />
+                  {isMicOn ? (
+                    <Volume2 className="w-7 h-7 text-primary" />
+                  ) : (
+                    <VolumeX className="w-7 h-7 text-muted-foreground" />
+                  )}
                 </div>
                 <div className="text-center">
                   <p className="text-[10px] text-muted-foreground">You</p>
                   <p className="text-xs font-medium text-primary">{myPseudoName}</p>
                 </div>
+                {/* Voice level bar */}
+                <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary transition-all duration-75"
+                    style={{ width: isMicOn ? `${myVoiceLevel}%` : '0%' }}
+                  />
+                </div>
               </div>
 
-              {/* Divider */}
-              <div className="w-px h-20 bg-border/50" />
+              {/* Divider with connection indicator */}
+              <div className="flex flex-col items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+                <div className="w-px h-16 bg-border/50" />
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+              </div>
 
               {/* Right Seat - Partner */}
               <div className="flex flex-col items-center gap-2">
                 <div 
-                  className="relative w-16 h-16 rounded-full bg-gradient-to-br from-secondary/30 to-secondary/10 flex items-center justify-center transition-all duration-100"
+                  className="relative w-20 h-20 rounded-full bg-gradient-to-br from-secondary/30 to-secondary/10 flex items-center justify-center transition-all duration-75"
                   style={{
-                    boxShadow: `0 0 ${partnerVoiceLevel / 3}px ${partnerVoiceLevel / 5}px hsl(var(--secondary) / ${partnerVoiceLevel / 150})`
+                    boxShadow: isConnected && isSpeakerOn ? `0 0 ${partnerVoiceLevel / 2}px ${partnerVoiceLevel / 4}px hsl(var(--secondary) / ${Math.min(0.5, partnerVoiceLevel / 100)})` : 'none',
+                    transform: isConnected && isSpeakerOn ? `scale(${1 + partnerVoiceLevel / 400})` : 'scale(1)'
                   }}
                 >
-                  {partnerVoiceLevel > 10 && (
+                  {partnerVoiceLevel > 15 && isConnected && isSpeakerOn && (
                     <div 
                       className="absolute inset-0 rounded-full border-2 border-secondary/40 animate-ping"
-                      style={{ animationDuration: '1s' }}
+                      style={{ animationDuration: '0.8s' }}
                     />
                   )}
-                  <Volume2 className="w-6 h-6 text-secondary" />
+                  {isSpeakerOn ? (
+                    <Volume2 className="w-7 h-7 text-secondary" />
+                  ) : (
+                    <VolumeX className="w-7 h-7 text-muted-foreground" />
+                  )}
                 </div>
                 <div className="text-center">
                   <p className="text-[10px] text-muted-foreground">Stranger</p>
                   <p className="text-xs font-medium text-secondary">{partnerPseudoName}</p>
+                </div>
+                {/* Voice level bar */}
+                <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-secondary transition-all duration-75"
+                    style={{ width: isConnected && isSpeakerOn ? `${partnerVoiceLevel}%` : '0%' }}
+                  />
                 </div>
               </div>
             </div>
@@ -215,11 +409,32 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         )}
       </div>
 
+      {/* Quick Audio Controls */}
+      <div className="flex items-center justify-center gap-4 mb-2">
+        <button
+          onClick={toggleMic}
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 ${
+            isMicOn ? 'bg-primary/20 text-primary' : 'bg-red-500/20 text-red-500'
+          }`}
+        >
+          {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+        </button>
+        
+        <button
+          onClick={toggleSpeaker}
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 ${
+            isSpeakerOn ? 'bg-secondary/20 text-secondary' : 'bg-red-500/20 text-red-500'
+          }`}
+        >
+          {isSpeakerOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+        </button>
+      </div>
+
       {/* Controls */}
       <div className="space-y-3 w-full max-w-sm">
         {!canSkip && (
           <p className="text-center text-xs text-muted-foreground">
-            Skip available in {MANDATORY_STAY_SECONDS - duration}s
+            Skip available in {Math.max(0, MANDATORY_STAY_SECONDS - duration)}s
           </p>
         )}
         
@@ -228,7 +443,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
             onClick={onSkip}
             variant="outline"
             disabled={!canSkip}
-            className="gap-2 px-5 py-5 rounded-xl flex-1 max-w-32"
+            className="gap-2 px-5 py-5 rounded-xl flex-1 max-w-32 transition-all hover:scale-[1.02]"
           >
             <SkipForward className="w-4 h-4" />
             Skip
@@ -237,7 +452,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
           <Button
             onClick={onEnd}
             variant="destructive"
-            className="gap-2 px-5 py-5 rounded-xl flex-1 max-w-32"
+            className="gap-2 px-5 py-5 rounded-xl flex-1 max-w-32 transition-all hover:scale-[1.02]"
           >
             <PhoneOff className="w-4 h-4" />
             End
