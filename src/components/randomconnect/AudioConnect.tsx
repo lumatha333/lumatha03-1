@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { useAmbientSounds } from '@/hooks/useAmbientSounds';
 import { AmbientSoundSelector } from './AmbientSoundSelector';
 import { useSecurityDetection } from '@/hooks/useSecurityDetection';
+import { useSignaling } from '@/hooks/useSignaling';
+import { useAuth } from '@/contexts/AuthContext';
 import { ReportDialog } from './ReportDialog';
 import { toast } from 'sonner';
 
@@ -52,6 +54,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   sessionId,
   partnerId
 }) => {
+  const { user } = useAuth();
   const [myVoiceLevel, setMyVoiceLevel] = useState(0);
   const [partnerVoiceLevel, setPartnerVoiceLevel] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -73,6 +76,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const speechRecognitionRef = useRef<any>(null);
+  const isInitiatorRef = useRef<boolean>(false);
   
   const { 
     currentSound, 
@@ -89,6 +93,68 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     onRecordingDetected: () => onViolation?.('recording')
   });
 
+  // Signaling for WebRTC connection
+  const { 
+    isConnected: signalingConnected, 
+    sendOffer, 
+    sendAnswer, 
+    sendIceCandidate 
+  } = useSignaling({
+    sessionId: sessionId || null,
+    userId: user?.id || '',
+    pseudoName: myPseudoName,
+    onPeerJoined: async (data) => {
+      console.log('Peer joined audio call:', data.pseudoName);
+      if (isInitiatorRef.current && peerConnectionRef.current) {
+        try {
+          const offer = await peerConnectionRef.current.createOffer();
+          await peerConnectionRef.current.setLocalDescription(offer);
+          sendOffer(offer);
+        } catch (error) {
+          console.error('Error creating offer:', error);
+        }
+      }
+    },
+    onOffer: async (data) => {
+      console.log('Received offer');
+      if (peerConnectionRef.current) {
+        try {
+          await peerConnectionRef.current.setRemoteDescription(data.sdp);
+          const answer = await peerConnectionRef.current.createAnswer();
+          await peerConnectionRef.current.setLocalDescription(answer);
+          sendAnswer(answer);
+        } catch (error) {
+          console.error('Error handling offer:', error);
+        }
+      }
+    },
+    onAnswer: async (data) => {
+      console.log('Received answer');
+      if (peerConnectionRef.current) {
+        try {
+          await peerConnectionRef.current.setRemoteDescription(data.sdp);
+        } catch (error) {
+          console.error('Error handling answer:', error);
+        }
+      }
+    },
+    onIceCandidate: async (data) => {
+      if (peerConnectionRef.current && data.candidate) {
+        try {
+          await peerConnectionRef.current.addIceCandidate(data.candidate);
+        } catch (error) {
+          console.error('Error adding ICE candidate:', error);
+        }
+      }
+    },
+    onPeerLeft: () => {
+      console.log('Peer left audio call');
+      setConnectionStatus('disconnected');
+      setIsConnected(false);
+      toast.info('Your partner has left the call');
+    }
+  });
+
   // Animate road movement (visual only, no sound)
   useEffect(() => {
     const roadInterval = setInterval(() => {
@@ -97,7 +163,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     return () => clearInterval(roadInterval);
   }, []);
 
-  // Enable skip after mandatory stay
+  // Enable skip after mandatory stay (20 seconds)
   useEffect(() => {
     if (duration >= MANDATORY_STAY_SECONDS && !canSkip) {
       setCanSkip(true);
@@ -150,6 +216,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   // Initialize WebRTC audio call
   useEffect(() => {
     let mounted = true;
+    isInitiatorRef.current = !partnerId;
 
     const initializeAudioCall = async () => {
       try {
@@ -191,13 +258,20 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         };
         updateVoiceLevel();
 
-        // Create RTCPeerConnection
+        // Create RTCPeerConnection with TURN servers
         const pc = new RTCPeerConnection({ iceServers });
         peerConnectionRef.current = pc;
 
         stream.getAudioTracks().forEach(track => {
           pc.addTrack(track, stream);
         });
+
+        // Handle ICE candidates
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            sendIceCandidate(event.candidate.toJSON());
+          }
+        };
 
         pc.ontrack = (event) => {
           if (!mounted) return;
@@ -255,19 +329,21 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
           }
         };
 
-        // Simulate connection for demo
-        setTimeout(() => {
-          if (mounted) {
-            setConnectionStatus('connected');
-            setIsConnected(true);
-            const simulatePartner = () => {
-              if (!mounted) return;
-              setPartnerVoiceLevel(Math.random() * 60 + (Math.random() > 0.7 ? 30 : 0));
-              setTimeout(simulatePartner, 150 + Math.random() * 200);
-            };
-            simulatePartner();
-          }
-        }, 2000);
+        // For demo/testing: simulate connection if no real signaling
+        if (!sessionId) {
+          setTimeout(() => {
+            if (mounted) {
+              setConnectionStatus('connected');
+              setIsConnected(true);
+              const simulatePartner = () => {
+                if (!mounted) return;
+                setPartnerVoiceLevel(Math.random() * 60 + (Math.random() > 0.7 ? 30 : 0));
+                setTimeout(simulatePartner, 150 + Math.random() * 200);
+              };
+              simulatePartner();
+            }
+          }, 2000);
+        }
         
       } catch (err) {
         console.error('Failed to initialize audio call:', err);
@@ -309,7 +385,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         speechRecognitionRef.current.stop();
       }
     };
-  }, []);
+  }, [sessionId, partnerId, sendIceCandidate]);
 
   // Duration timer
   useEffect(() => {
@@ -490,33 +566,29 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
               <div 
                 className="relative w-20 h-20 rounded-full bg-gradient-to-br from-secondary/40 to-secondary/10 flex items-center justify-center transition-all duration-75 border-2 border-secondary/20"
                 style={{
-                  boxShadow: isConnected && isSpeakerOn ? `0 0 ${partnerVoiceLevel / 2}px ${partnerVoiceLevel / 3}px hsl(var(--secondary) / ${Math.min(0.6, partnerVoiceLevel / 100)})` : 'none',
-                  transform: isConnected && isSpeakerOn ? `scale(${1 + partnerVoiceLevel / 300})` : 'scale(1)'
+                  boxShadow: isConnected ? `0 0 ${partnerVoiceLevel / 2}px ${partnerVoiceLevel / 3}px hsl(var(--secondary) / ${Math.min(0.6, partnerVoiceLevel / 100)})` : 'none',
+                  transform: isConnected ? `scale(${1 + partnerVoiceLevel / 300})` : 'scale(1)'
                 }}
               >
-                {partnerVoiceLevel > 20 && isConnected && isSpeakerOn && (
+                {partnerVoiceLevel > 20 && isConnected && (
                   <div 
                     className="absolute inset-0 rounded-full border-2 border-secondary/50 animate-ping"
                     style={{ animationDuration: '0.6s' }}
                   />
                 )}
-                {isSpeakerOn ? (
-                  <Volume2 className="w-8 h-8 text-secondary" />
-                ) : (
-                  <VolumeX className="w-8 h-8 text-muted-foreground" />
-                )}
+                <Volume2 className={`w-8 h-8 ${isConnected ? 'text-secondary' : 'text-muted-foreground'}`} />
               </div>
               
               <div className="text-center">
                 <p className="text-xs font-bold text-secondary">{partnerPseudoName.split('-')[0]}</p>
-                <p className="text-[10px] text-muted-foreground">Stranger</p>
+                <p className="text-[10px] text-muted-foreground">Partner</p>
               </div>
               
               {/* Voice level bar */}
               <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-secondary rounded-full transition-all duration-75"
-                  style={{ width: isConnected && isSpeakerOn ? `${partnerVoiceLevel}%` : '0%' }}
+                  style={{ width: isConnected ? `${partnerVoiceLevel}%` : '0%' }}
                 />
               </div>
             </div>
@@ -525,29 +597,22 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
 
         {/* Live Captions Overlay */}
         {captionsEnabled && currentCaption && (
-          <div className="absolute bottom-28 left-4 right-4 z-20">
-            <div className="bg-black/80 backdrop-blur-sm px-4 py-2 rounded-lg">
-              <p className="text-white text-sm text-center">{currentCaption}</p>
+          <div className="absolute bottom-4 left-4 right-4 z-20">
+            <div className="bg-black/80 backdrop-blur-sm px-4 py-2 rounded-lg mx-auto max-w-xs">
+              <p className="text-white text-sm text-center leading-relaxed">{currentCaption}</p>
             </div>
           </div>
         )}
-
-        {/* Report Button */}
-        <button
-          onClick={() => setShowReportDialog(true)}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-red-500/20 hover:scale-105 shadow-md"
-          title="Report user"
-        >
-          <Flag className="w-4 h-4 text-muted-foreground hover:text-red-500" />
-        </button>
       </div>
 
-      {/* Quick Audio Controls */}
-      <div className="flex items-center justify-center gap-4 mt-4">
+      {/* Controls */}
+      <div className="flex items-center gap-4 mt-4">
         <button
           onClick={toggleMic}
           className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-lg ${
-            isMicOn ? 'bg-primary/20 text-primary border-2 border-primary/30' : 'bg-red-500/20 text-red-500 border-2 border-red-500/30'
+            isMicOn 
+              ? 'bg-primary text-primary-foreground' 
+              : 'bg-red-500 text-white'
           }`}
         >
           {isMicOn ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
@@ -556,14 +621,23 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         <button
           onClick={toggleSpeaker}
           className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-lg ${
-            isSpeakerOn ? 'bg-secondary/20 text-secondary border-2 border-secondary/30' : 'bg-red-500/20 text-red-500 border-2 border-red-500/30'
+            isSpeakerOn 
+              ? 'bg-secondary text-secondary-foreground' 
+              : 'bg-muted text-muted-foreground'
           }`}
         >
           {isSpeakerOn ? <Volume2 className="w-6 h-6" /> : <VolumeX className="w-6 h-6" />}
         </button>
+        
+        <button
+          onClick={() => setShowReportDialog(true)}
+          className="w-10 h-10 rounded-full bg-muted flex items-center justify-center transition-all hover:bg-red-500/20 hover:scale-105"
+        >
+          <Flag className="w-4 h-4 text-muted-foreground" />
+        </button>
       </div>
 
-      {/* Skip Button Only */}
+      {/* Skip Button - Available after 20 seconds */}
       <div className="w-full max-w-sm mt-4">
         {!canSkip && (
           <p className="text-center text-xs text-muted-foreground mb-2">
@@ -575,7 +649,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
           onClick={onSkip}
           variant="outline"
           disabled={!canSkip}
-          className="w-full gap-2 py-6 rounded-xl transition-all hover:scale-[1.02]"
+          className="w-full gap-2 py-5 rounded-xl"
         >
           <SkipForward className="w-5 h-5" />
           {canSkip ? 'Skip to Next Person' : `Wait ${Math.max(0, MANDATORY_STAY_SECONDS - duration)}s...`}

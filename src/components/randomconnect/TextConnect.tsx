@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { SkipForward, X, Send, Shield, Check, CheckCheck, BookOpen, Flag } from 'lucide-react';
+import { SkipForward, Send, Shield, Check, CheckCheck, BookOpen, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSecurityDetection } from '@/hooks/useSecurityDetection';
@@ -101,7 +101,7 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     }
   });
 
-  // Enable skip after mandatory stay
+  // Enable skip after mandatory stay (20 seconds)
   useEffect(() => {
     if (duration >= MANDATORY_STAY_SECONDS && !canSkip) {
       setCanSkip(true);
