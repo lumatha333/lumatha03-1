@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.random-connect-signaling]
 verify_jwt = false
+
+[functions.cleanup-random-connect]
+verify_jwt = false

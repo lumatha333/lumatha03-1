@@ -31,6 +31,7 @@ interface TextConnectProps {
   onViolation?: (type: 'screenshot' | 'recording') => void;
   onClearMemory?: () => void;
   onReport?: (reason: string) => void;
+  partnerId?: string;
 }
 
 const MANDATORY_STAY_SECONDS = 33;
@@ -46,7 +47,8 @@ export const TextConnect: React.FC<TextConnectProps> = ({
   onSkip,
   onViolation,
   onClearMemory,
-  onReport
+  onReport,
+  partnerId
 }) => {
   const { user } = useAuth();
   const [inputValue, setInputValue] = useState('');

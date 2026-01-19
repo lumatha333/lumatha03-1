@@ -12,6 +12,8 @@ interface VideoConnectProps {
   onSkip: () => void;
   onViolation?: (type: 'screenshot' | 'recording') => void;
   onReport?: (reason: string) => void;
+  sessionId?: string;
+  partnerId?: string;
 }
 
 const MAX_VIDEO_DURATION = 15 * 60; // 15 minutes in seconds
@@ -30,7 +32,9 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   conversationStarter,
   onSkip,
   onViolation,
-  onReport
+  onReport,
+  sessionId,
+  partnerId
 }) => {
   const [blurEnabled, setBlurEnabled] = useState(true);
   const [duration, setDuration] = useState(0);
