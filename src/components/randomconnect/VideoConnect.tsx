@@ -26,6 +26,8 @@ const iceServers: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
   // TURN servers for users behind restrictive NATs/firewalls
   {
     urls: 'turn:openrelay.metered.ca:80',
@@ -66,6 +68,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [currentCaption, setCurrentCaption] = useState('');
   const [showReportDialog, setShowReportDialog] = useState(false);
+  const [hasRemoteStream, setHasRemoteStream] = useState(false);
   
   const myVideoRef = useRef<HTMLVideoElement>(null);
   const partnerVideoRef = useRef<HTMLVideoElement>(null);
@@ -75,6 +78,8 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechRecognitionRef = useRef<any>(null);
   const isInitiatorRef = useRef<boolean>(false);
+  const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
+  const hasCreatedOfferRef = useRef<boolean>(false);
 
   // Security detection
   useSecurityDetection({
@@ -82,6 +87,183 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     onScreenshotDetected: () => onViolation?.('screenshot'),
     onRecordingDetected: () => onViolation?.('recording')
   });
+
+  // Create peer connection
+  const createPeerConnection = useCallback(() => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+
+    const pc = new RTCPeerConnection({ 
+      iceServers,
+      iceCandidatePoolSize: 10
+    });
+    peerConnectionRef.current = pc;
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log('Sending ICE candidate');
+        sendIceCandidate(event.candidate.toJSON());
+      }
+    };
+
+    // Handle remote stream - THIS IS WHERE WE SEE THE OTHER PERSON
+    pc.ontrack = (event) => {
+      console.log('Received remote track:', event.track.kind);
+      
+      const [remoteStream] = event.streams;
+      if (!remoteStream) return;
+      
+      remoteStreamRef.current = remoteStream;
+      setHasRemoteStream(true);
+      
+      // Display partner's video - REAL FACE TO FACE
+      if (partnerVideoRef.current) {
+        partnerVideoRef.current.srcObject = remoteStream;
+        partnerVideoRef.current.play().catch(e => console.log('Partner video play error:', e));
+      }
+
+      // Create separate audio element for clear audio playback - REAL VOICE
+      if (!remoteAudioRef.current) {
+        const audioElement = document.createElement('audio');
+        audioElement.autoplay = true;
+        audioElement.setAttribute('playsinline', 'true');
+        audioElement.volume = 1.0;
+        document.body.appendChild(audioElement);
+        remoteAudioRef.current = audioElement;
+      }
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch(e => console.log('Remote audio play error:', e));
+      
+      setIsConnected(true);
+      setConnectionStatus('connected');
+    };
+
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+      console.log('Connection state:', pc.connectionState);
+      switch (pc.connectionState) {
+        case 'connected':
+          setConnectionStatus('connected');
+          setIsConnected(true);
+          break;
+        case 'disconnected':
+        case 'failed':
+          setConnectionStatus('disconnected');
+          setIsConnected(false);
+          toast.info('Connection lost. Trying to reconnect...');
+          break;
+        case 'closed':
+          setConnectionStatus('disconnected');
+          setIsConnected(false);
+          break;
+        default:
+          setConnectionStatus('connecting');
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE connection state:', pc.iceConnectionState);
+    };
+
+    return pc;
+  }, []);
+
+  // Signaling handlers
+  const handlePeerJoined = useCallback(async (data: { userId: string; pseudoName: string }) => {
+    console.log('Peer joined video call:', data.pseudoName);
+    
+    // Determine who creates the offer (user with "smaller" ID creates offer)
+    if (user?.id && data.userId && user.id < data.userId && !hasCreatedOfferRef.current) {
+      isInitiatorRef.current = true;
+      hasCreatedOfferRef.current = true;
+      
+      const pc = peerConnectionRef.current;
+      if (pc && localStreamRef.current) {
+        try {
+          console.log('Creating offer as initiator');
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+          });
+          await pc.setLocalDescription(offer);
+          sendOffer(offer);
+        } catch (error) {
+          console.error('Error creating offer:', error);
+        }
+      }
+    }
+  }, [user?.id]);
+
+  const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
+    console.log('Received offer from:', data.fromPseudoName);
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      
+      // Process queued ICE candidates
+      while (iceCandidatesQueue.current.length > 0) {
+        const candidate = iceCandidatesQueue.current.shift();
+        if (candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      }
+      
+      console.log('Creating answer');
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      sendAnswer(answer);
+    } catch (error) {
+      console.error('Error handling offer:', error);
+    }
+  }, []);
+
+  const handleAnswer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string }) => {
+    console.log('Received answer');
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      
+      // Process queued ICE candidates
+      while (iceCandidatesQueue.current.length > 0) {
+        const candidate = iceCandidatesQueue.current.shift();
+        if (candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      }
+    } catch (error) {
+      console.error('Error handling answer:', error);
+    }
+  }, []);
+
+  const handleIceCandidate = useCallback(async (data: { candidate: RTCIceCandidateInit; fromUserId: string }) => {
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    
+    try {
+      if (pc.remoteDescription) {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } else {
+        // Queue candidate if remote description not set yet
+        iceCandidatesQueue.current.push(data.candidate);
+      }
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
+    }
+  }, []);
+
+  const handlePeerLeft = useCallback(() => {
+    console.log('Peer left video call');
+    setConnectionStatus('disconnected');
+    setIsConnected(false);
+    setHasRemoteStream(false);
+    toast.info('Your partner has left the call');
+  }, []);
 
   // Signaling for WebRTC connection
   const { 
@@ -93,57 +275,11 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     sessionId: sessionId || null,
     userId: user?.id || '',
     pseudoName: myPseudoName,
-    onPeerJoined: async (data) => {
-      console.log('Peer joined video call:', data.pseudoName);
-      // If we're the initiator, create and send offer
-      if (isInitiatorRef.current && peerConnectionRef.current) {
-        try {
-          const offer = await peerConnectionRef.current.createOffer();
-          await peerConnectionRef.current.setLocalDescription(offer);
-          sendOffer(offer);
-        } catch (error) {
-          console.error('Error creating offer:', error);
-        }
-      }
-    },
-    onOffer: async (data) => {
-      console.log('Received offer');
-      if (peerConnectionRef.current) {
-        try {
-          await peerConnectionRef.current.setRemoteDescription(data.sdp);
-          const answer = await peerConnectionRef.current.createAnswer();
-          await peerConnectionRef.current.setLocalDescription(answer);
-          sendAnswer(answer);
-        } catch (error) {
-          console.error('Error handling offer:', error);
-        }
-      }
-    },
-    onAnswer: async (data) => {
-      console.log('Received answer');
-      if (peerConnectionRef.current) {
-        try {
-          await peerConnectionRef.current.setRemoteDescription(data.sdp);
-        } catch (error) {
-          console.error('Error handling answer:', error);
-        }
-      }
-    },
-    onIceCandidate: async (data) => {
-      if (peerConnectionRef.current && data.candidate) {
-        try {
-          await peerConnectionRef.current.addIceCandidate(data.candidate);
-        } catch (error) {
-          console.error('Error adding ICE candidate:', error);
-        }
-      }
-    },
-    onPeerLeft: () => {
-      console.log('Peer left video call');
-      setConnectionStatus('disconnected');
-      setIsConnected(false);
-      toast.info('Your partner has left the call');
-    }
+    onPeerJoined: handlePeerJoined,
+    onOffer: handleOffer,
+    onAnswer: handleAnswer,
+    onIceCandidate: handleIceCandidate,
+    onPeerLeft: handlePeerLeft
   });
 
   // Enable skip after mandatory stay (20 seconds)
@@ -212,23 +348,26 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   // Initialize WebRTC and camera
   useEffect(() => {
     let mounted = true;
-    isInitiatorRef.current = !partnerId; // First user to join is initiator
+    hasCreatedOfferRef.current = false;
+    iceCandidatesQueue.current = [];
     
     const initializeVideoCall = async () => {
       try {
-        // Request camera and microphone with optimal settings
+        // Request camera and microphone with optimal settings for real-time communication
+        console.log('Requesting camera and microphone access...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: {
             width: { ideal: 1280, min: 640 },
             height: { ideal: 720, min: 480 },
             facingMode: 'user',
-            frameRate: { ideal: 30 }
+            frameRate: { ideal: 30, min: 15 }
           }, 
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            sampleRate: 48000
+            sampleRate: 48000,
+            channelCount: 1
           }
         });
         
@@ -238,86 +377,23 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         }
         
         localStreamRef.current = stream;
+        console.log('Got local stream with', stream.getTracks().length, 'tracks');
         
-        // Set local video
+        // Set local video - THIS IS YOUR OWN FACE
         if (myVideoRef.current) {
           myVideoRef.current.srcObject = stream;
-          myVideoRef.current.muted = true;
+          myVideoRef.current.muted = true; // Mute local playback to prevent echo
+          myVideoRef.current.play().catch(e => console.log('Local video play error:', e));
         }
 
-        // Create RTCPeerConnection with TURN servers
-        const pc = new RTCPeerConnection({ iceServers });
-        peerConnectionRef.current = pc;
+        // Create RTCPeerConnection
+        const pc = createPeerConnection();
 
-        // Add local stream tracks
+        // Add local stream tracks to peer connection
         stream.getTracks().forEach(track => {
+          console.log('Adding track to peer connection:', track.kind);
           pc.addTrack(track, stream);
         });
-
-        // Handle ICE candidates
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            sendIceCandidate(event.candidate.toJSON());
-          }
-        };
-
-        // Handle remote stream
-        pc.ontrack = (event) => {
-          if (!mounted) return;
-          
-          const [remoteStream] = event.streams;
-          remoteStreamRef.current = remoteStream;
-          
-          if (partnerVideoRef.current) {
-            partnerVideoRef.current.srcObject = remoteStream;
-          }
-
-          // Create separate audio element for clear playback
-          if (!remoteAudioRef.current) {
-            const audioElement = document.createElement('audio');
-            audioElement.autoplay = true;
-            audioElement.setAttribute('playsinline', 'true');
-            document.body.appendChild(audioElement);
-            remoteAudioRef.current = audioElement;
-          }
-          remoteAudioRef.current.srcObject = remoteStream;
-          
-          setIsConnected(true);
-          setConnectionStatus('connected');
-        };
-
-        // Handle connection state changes
-        pc.onconnectionstatechange = () => {
-          if (!mounted) return;
-          
-          switch (pc.connectionState) {
-            case 'connected':
-              setConnectionStatus('connected');
-              setIsConnected(true);
-              break;
-            case 'disconnected':
-            case 'failed':
-            case 'closed':
-              setConnectionStatus('disconnected');
-              setIsConnected(false);
-              break;
-            default:
-              setConnectionStatus('connecting');
-          }
-        };
-
-        // For demo/testing: simulate partner connection if no real signaling
-        if (!sessionId) {
-          setTimeout(() => {
-            if (mounted) {
-              setConnectionStatus('connected');
-              setIsConnected(true);
-              if (partnerVideoRef.current && localStreamRef.current) {
-                partnerVideoRef.current.srcObject = localStreamRef.current;
-              }
-            }
-          }, 2000);
-        }
         
       } catch (err) {
         console.error('Failed to initialize video call:', err);
@@ -350,7 +426,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         speechRecognitionRef.current.stop();
       }
     };
-  }, [sessionId, partnerId, sendIceCandidate]);
+  }, [createPeerConnection]);
 
   // Duration timer
   useEffect(() => {
@@ -410,9 +486,9 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         </div>
       )}
 
-      {/* Main Split Screen Video Container - FACE TO FACE */}
+      {/* Main Split Screen Video Container - FACE TO FACE - BOTH REAL FACES */}
       <div className="relative flex-1 w-full max-w-lg rounded-2xl overflow-hidden bg-muted shadow-lg">
-        {/* Partner Video - Top Half (55%) - REAL FACE */}
+        {/* Partner Video - Top Half (55%) - THEIR REAL FACE */}
         <div className="absolute top-0 left-0 right-0 h-[55%] bg-gradient-to-b from-card to-muted border-b-2 border-background">
           <video
             ref={partnerVideoRef}
@@ -422,7 +498,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           />
           
           {/* Partner placeholder when no video */}
-          {!isConnected && (
+          {!hasRemoteStream && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-secondary/20 to-secondary/5">
               <div className="w-20 h-20 rounded-full bg-secondary/20 flex items-center justify-center mb-3 animate-pulse">
                 <span className="text-3xl">👤</span>
@@ -433,7 +509,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           )}
           
           {/* Partner name badge */}
-          {isConnected && (
+          {hasRemoteStream && (
             <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <p className="text-xs font-medium text-secondary">{partnerPseudoName}</p>
@@ -441,7 +517,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           )}
 
           {/* Audio indicator when partner is speaking */}
-          {isConnected && (
+          {hasRemoteStream && (
             <div className="absolute bottom-3 right-3 flex items-center gap-0.5">
               {[...Array(4)].map((_, i) => (
                 <div 

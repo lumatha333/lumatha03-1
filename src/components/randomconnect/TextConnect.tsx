@@ -69,7 +69,7 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     onRecordingDetected: () => onViolation?.('recording')
   });
 
-  // Signaling for typing indicators and read receipts
+  // Signaling for typing indicators and read receipts - REAL TWO-WAY TEXT
   const { isConnected, sendTyping, sendRead, sendPresence } = useSignaling({
     sessionId,
     userId: user?.id || '',
@@ -164,6 +164,7 @@ export const TextConnect: React.FC<TextConnectProps> = ({
       sendTyping(false);
     }
     
+    // This sends the message to the database and partner sees it in real-time
     onSendMessage(inputValue.trim());
     setInputValue('');
   };
@@ -281,7 +282,7 @@ export const TextConnect: React.FC<TextConnectProps> = ({
         </div>
       </div>
 
-      {/* Messages */}
+      {/* Messages - REAL TWO-WAY TEXT EXCHANGE */}
       <div className="flex-1 overflow-y-auto px-3 space-y-2.5">
         {messages.map((message) => {
           const isOwn = message.sender_pseudo_name === myPseudoName;
