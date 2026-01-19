@@ -762,6 +762,47 @@ export type Database = {
         }
         Relationships: []
       }
+      random_connect_memories: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          expires_at: string
+          id: string
+          mode: string
+          partner_pseudo_name: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          expires_at?: string
+          id?: string
+          mode: string
+          partner_pseudo_name: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          expires_at?: string
+          id?: string
+          mode?: string
+          partner_pseudo_name?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "random_connect_memories_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "random_connect_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       random_connect_messages: {
         Row: {
           content: string
@@ -823,6 +864,79 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      random_connect_reconnect_requests: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          receiver_id: string
+          requester_id: string
+          session_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          receiver_id: string
+          requester_id: string
+          session_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          receiver_id?: string
+          requester_id?: string
+          session_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "random_connect_reconnect_requests_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "random_connect_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      random_connect_reports: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string
+          reported_user_id: string
+          reporter_id: string
+          session_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason: string
+          reported_user_id: string
+          reporter_id: string
+          session_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string
+          reported_user_id?: string
+          reporter_id?: string
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "random_connect_reports_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "random_connect_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       random_connect_sessions: {
         Row: {
@@ -897,6 +1011,7 @@ export type Database = {
           id: string
           last_violation_at: string
           permanent_ban: boolean | null
+          report_ban: boolean | null
           user_id: string
           violation_count: number
           violation_type: string
@@ -907,6 +1022,7 @@ export type Database = {
           id?: string
           last_violation_at?: string
           permanent_ban?: boolean | null
+          report_ban?: boolean | null
           user_id: string
           violation_count?: number
           violation_type: string
@@ -917,6 +1033,7 @@ export type Database = {
           id?: string
           last_violation_at?: string
           permanent_ban?: boolean | null
+          report_ban?: boolean | null
           user_id?: string
           violation_count?: number
           violation_type?: string
@@ -1126,6 +1243,14 @@ export type Database = {
       are_friends: {
         Args: { user1_id: string; user2_id: string }
         Returns: boolean
+      }
+      check_random_connect_ban: {
+        Args: { check_user_id: string }
+        Returns: boolean
+      }
+      get_random_connect_report_count: {
+        Args: { check_user_id: string }
+        Returns: number
       }
     }
     Enums: {

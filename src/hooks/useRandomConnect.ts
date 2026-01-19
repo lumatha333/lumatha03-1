@@ -30,6 +30,7 @@ interface ViolationStatus {
   count: number;
   bannedUntil: Date | null;
   permanentBan: boolean;
+  reportBan: boolean;
 }
 
 export const useRandomConnect = () => {
@@ -43,13 +44,18 @@ export const useRandomConnect = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<TextMessage[]>([]);
   const [conversationStarter, setConversationStarter] = useState('');
-  const [violationStatus, setViolationStatus] = useState<ViolationStatus>({ count: 0, bannedUntil: null, permanentBan: false });
+  const [violationStatus, setViolationStatus] = useState<ViolationStatus>({ 
+    count: 0, 
+    bannedUntil: null, 
+    permanentBan: false,
+    reportBan: false
+  });
   const [textMemory, setTextMemory] = useState<{ content: string; isOwn: boolean }[]>([]);
   
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Check violation status
+  // Check violation status (including report-based bans)
   const checkViolationStatus = useCallback(async () => {
     if (!user) return;
     
@@ -63,24 +69,50 @@ export const useRandomConnect = () => {
       setViolationStatus({
         count: data.violation_count || 0,
         bannedUntil: data.banned_until ? new Date(data.banned_until) : null,
-        permanentBan: data.permanent_ban || false
+        permanentBan: data.permanent_ban || false,
+        reportBan: data.report_ban || false
       });
+    } else {
+      // Also check report-based ban via function
+      const { data: reportCount } = await supabase.rpc('get_random_connect_report_count', {
+        check_user_id: user.id
+      });
+      
+      if (reportCount && reportCount >= 3) {
+        setViolationStatus(prev => ({ ...prev, reportBan: true, permanentBan: true }));
+      }
     }
   }, [user]);
 
-  // Load text memory
+  // Load text memory (last 10 sessions, limited to entries from last 24 hours)
   const loadTextMemory = useCallback(async () => {
     if (!user) return;
+    
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     
     const { data } = await supabase
       .from('random_connect_text_memory')
       .select('*')
       .eq('user_id', user.id)
+      .gte('created_at', twentyFourHoursAgo)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(200); // Limit to reasonable amount
     
     if (data) {
-      setTextMemory(data.map(m => ({ content: m.content, isOwn: m.is_own_message })).reverse());
+      // Group by session_index and take only last 10 sessions
+      const sessionGroups = new Map<number, typeof data>();
+      data.forEach(m => {
+        if (!sessionGroups.has(m.session_index)) {
+          sessionGroups.set(m.session_index, []);
+        }
+        sessionGroups.get(m.session_index)!.push(m);
+      });
+      
+      // Get last 10 session indices
+      const sessionIndices = Array.from(sessionGroups.keys()).sort((a, b) => b - a).slice(0, 10);
+      const limitedMemory = sessionIndices.flatMap(idx => sessionGroups.get(idx) || []);
+      
+      setTextMemory(limitedMemory.map(m => ({ content: m.content, isOwn: m.is_own_message })).reverse());
     }
   }, [user]);
 
@@ -104,11 +136,12 @@ export const useRandomConnect = () => {
   // Check if user is banned
   const isBanned = useCallback(() => {
     if (violationStatus.permanentBan) return true;
+    if (violationStatus.reportBan) return true;
     if (violationStatus.bannedUntil && new Date() < violationStatus.bannedUntil) return true;
     return false;
   }, [violationStatus]);
 
-  // Record violation
+  // Record violation (screenshot/recording)
   const recordViolation = useCallback(async (type: 'screenshot' | 'recording') => {
     if (!user) return;
     
@@ -154,7 +187,7 @@ export const useRandomConnect = () => {
         });
     }
     
-    setViolationStatus({ count: newCount, bannedUntil, permanentBan });
+    setViolationStatus({ count: newCount, bannedUntil, permanentBan, reportBan: false });
     
     if (permanentBan || bannedUntil) {
       endSession();
@@ -368,16 +401,28 @@ export const useRandomConnect = () => {
     
     // Save to memory (only for text mode)
     if (mode === 'text') {
+      // Get current session count for indexing
+      const { data: existingMemory } = await supabase
+        .from('random_connect_text_memory')
+        .select('session_index')
+        .eq('user_id', user.id)
+        .order('session_index', { ascending: false })
+        .limit(1);
+      
+      const sessionIndex = existingMemory && existingMemory.length > 0 
+        ? existingMemory[0].session_index 
+        : 0;
+      
       await supabase
         .from('random_connect_text_memory')
         .insert({
           user_id: user.id,
           content,
           is_own_message: true,
-          session_index: textMemory.length
+          session_index: sessionIndex
         });
     }
-  }, [session, user, myPseudoName, mode, textMemory.length]);
+  }, [session, user, myPseudoName, mode]);
 
   // Subscribe to messages
   useEffect(() => {
@@ -390,19 +435,31 @@ export const useRandomConnect = () => {
         schema: 'public',
         table: 'random_connect_messages',
         filter: `session_id=eq.${session.id}`
-      }, (payload) => {
+      }, async (payload) => {
         const newMessage = payload.new as TextMessage;
         setMessages(prev => [...prev, newMessage]);
         
         // Save received messages to memory
         if (mode === 'text' && user && newMessage.sender_pseudo_name !== myPseudoName) {
-          supabase
+          // Get current session count for indexing
+          const { data: existingMemory } = await supabase
+            .from('random_connect_text_memory')
+            .select('session_index')
+            .eq('user_id', user.id)
+            .order('session_index', { ascending: false })
+            .limit(1);
+          
+          const sessionIndex = existingMemory && existingMemory.length > 0 
+            ? existingMemory[0].session_index 
+            : 0;
+          
+          await supabase
             .from('random_connect_text_memory')
             .insert({
               user_id: user.id,
               content: newMessage.content,
               is_own_message: false,
-              session_index: textMemory.length
+              session_index: sessionIndex
             });
         }
       })
@@ -411,7 +468,7 @@ export const useRandomConnect = () => {
     return () => {
       channel.unsubscribe();
     };
-  }, [session, mode, user, myPseudoName, textMemory.length]);
+  }, [session, mode, user, myPseudoName]);
 
   // Cleanup on unmount
   useEffect(() => {

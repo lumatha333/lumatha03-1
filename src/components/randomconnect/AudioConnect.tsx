@@ -14,6 +14,8 @@ interface AudioConnectProps {
   onSkip: () => void;
   onViolation?: (type: 'screenshot' | 'recording') => void;
   onReport?: (reason: string) => void;
+  sessionId?: string;
+  partnerId?: string;
 }
 
 const MANDATORY_STAY_SECONDS = 33;
@@ -30,7 +32,9 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   conversationStarter,
   onSkip,
   onViolation,
-  onReport
+  onReport,
+  sessionId,
+  partnerId
 }) => {
   const [myVoiceLevel, setMyVoiceLevel] = useState(0);
   const [partnerVoiceLevel, setPartnerVoiceLevel] = useState(0);

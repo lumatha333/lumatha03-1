@@ -1,18 +1,21 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRandomConnect } from '@/hooks/useRandomConnect';
+import { useRandomConnectMemories } from '@/hooks/useRandomConnectMemories';
 import { ModeSelector } from '@/components/randomconnect/ModeSelector';
 import { SearchingView } from '@/components/randomconnect/SearchingView';
 import { AudioConnect } from '@/components/randomconnect/AudioConnect';
 import { VideoConnect } from '@/components/randomconnect/VideoConnect';
 import { TextConnect } from '@/components/randomconnect/TextConnect';
 import { EndedView } from '@/components/randomconnect/EndedView';
-import { TextMemory } from '@/components/randomconnect/TextMemory';
+import { SavedMemories } from '@/components/randomconnect/SavedMemories';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, BookOpen } from 'lucide-react';
+import { Heart, Clock } from 'lucide-react';
 
 const RandomConnect: React.FC = () => {
   const { user } = useAuth();
+  const sessionStartRef = useRef<number>(0);
+  
   const {
     status,
     mode,
@@ -30,12 +33,36 @@ const RandomConnect: React.FC = () => {
     isBanned,
     startSearching,
     cancelSearch,
-    endSession,
     skipToNext,
     sendMessage,
     recordViolation,
     clearTextMemory
   } = useRandomConnect();
+
+  const {
+    memories,
+    saveMemory,
+    clearMemory,
+    clearAllMemories,
+    sendReconnectRequest,
+    respondToReconnect
+  } = useRandomConnectMemories();
+
+  // Track session start time
+  React.useEffect(() => {
+    if (status === 'connected') {
+      sessionStartRef.current = Date.now();
+    }
+  }, [status]);
+
+  // Save memory when session ends (via skip)
+  const handleSkip = useCallback(() => {
+    if (session && partnerPseudoName) {
+      const durationSeconds = Math.floor((Date.now() - sessionStartRef.current) / 1000);
+      saveMemory(session.id, partnerPseudoName, mode, durationSeconds);
+    }
+    skipToNext();
+  }, [session, partnerPseudoName, mode, skipToNext, saveMemory]);
 
   if (!user) {
     return (
@@ -55,7 +82,7 @@ const RandomConnect: React.FC = () => {
             <Heart className="w-4 h-4" /> Connect
           </TabsTrigger>
           <TabsTrigger value="memory" className="gap-2">
-            <BookOpen className="w-4 h-4" /> Memory
+            <Clock className="w-4 h-4" /> Memories
           </TabsTrigger>
         </TabsList>
 
@@ -86,8 +113,10 @@ const RandomConnect: React.FC = () => {
               myPseudoName={myPseudoName}
               partnerPseudoName={partnerPseudoName}
               conversationStarter={conversationStarter}
-              onSkip={skipToNext}
+              onSkip={handleSkip}
               onViolation={recordViolation}
+              sessionId={session?.id}
+              partnerId={session?.user1_id === user.id ? session?.user2_id : session?.user1_id}
             />
           )}
 
@@ -96,8 +125,10 @@ const RandomConnect: React.FC = () => {
               myPseudoName={myPseudoName}
               partnerPseudoName={partnerPseudoName}
               conversationStarter={conversationStarter}
-              onSkip={skipToNext}
+              onSkip={handleSkip}
               onViolation={recordViolation}
+              sessionId={session?.id}
+              partnerId={session?.user1_id === user.id ? session?.user2_id : session?.user1_id}
             />
           )}
 
@@ -110,9 +141,10 @@ const RandomConnect: React.FC = () => {
               sessionId={session?.id || null}
               textMemory={textMemory}
               onSendMessage={sendMessage}
-              onSkip={skipToNext}
+              onSkip={handleSkip}
               onViolation={recordViolation}
               onClearMemory={clearTextMemory}
+              partnerId={session?.user1_id === user.id ? session?.user2_id : session?.user1_id}
             />
           )}
 
@@ -122,7 +154,13 @@ const RandomConnect: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="memory" className="mt-0 h-[70vh]">
-          <TextMemory memory={textMemory} />
+          <SavedMemories
+            memories={memories}
+            onClearMemory={clearMemory}
+            onClearAll={clearAllMemories}
+            onSendReconnect={sendReconnectRequest}
+            onRespondReconnect={respondToReconnect}
+          />
         </TabsContent>
       </Tabs>
     </div>
