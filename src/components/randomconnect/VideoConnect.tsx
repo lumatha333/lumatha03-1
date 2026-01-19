@@ -17,13 +17,29 @@ interface VideoConnectProps {
 }
 
 const MAX_VIDEO_DURATION = 15 * 60; // 15 minutes in seconds
-const MANDATORY_STAY_SECONDS = 33;
+const MANDATORY_STAY_SECONDS = 20; // 20 seconds before skip is available
 
-// STUN/TURN servers for WebRTC
+// STUN/TURN servers for WebRTC - includes TURN for NAT traversal
 const iceServers: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
+  // TURN servers for users behind restrictive NATs/firewalls
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
 ];
 
 export const VideoConnect: React.FC<VideoConnectProps> = ({

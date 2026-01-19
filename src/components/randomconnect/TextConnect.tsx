@@ -34,7 +34,7 @@ interface TextConnectProps {
   partnerId?: string;
 }
 
-const MANDATORY_STAY_SECONDS = 33;
+const MANDATORY_STAY_SECONDS = 20; // 20 seconds before skip is available
 
 export const TextConnect: React.FC<TextConnectProps> = ({
   myPseudoName,
