@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { SkipForward, PhoneOff, Eye, EyeOff, Camera, CameraOff, Mic, MicOff, Clock, Phone } from 'lucide-react';
+import { SkipForward, Eye, EyeOff, Camera, CameraOff, Mic, MicOff, Clock, Phone, Subtitles, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSecurityDetection } from '@/hooks/useSecurityDetection';
 import { toast } from 'sonner';
+import { ReportDialog } from './ReportDialog';
 
 interface VideoConnectProps {
   myPseudoName: string;
   partnerPseudoName: string;
   conversationStarter: string;
   onSkip: () => void;
-  onEnd: () => void;
   onViolation?: (type: 'screenshot' | 'recording') => void;
+  onReport?: (reason: string) => void;
 }
 
 const MAX_VIDEO_DURATION = 15 * 60; // 15 minutes in seconds
@@ -28,8 +29,8 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   partnerPseudoName,
   conversationStarter,
   onSkip,
-  onEnd,
-  onViolation
+  onViolation,
+  onReport
 }) => {
   const [blurEnabled, setBlurEnabled] = useState(true);
   const [duration, setDuration] = useState(0);
@@ -39,6 +40,9 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   const [timeWarningShown, setTimeWarningShown] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [currentCaption, setCurrentCaption] = useState('');
+  const [showReportDialog, setShowReportDialog] = useState(false);
   
   const myVideoRef = useRef<HTMLVideoElement>(null);
   const partnerVideoRef = useRef<HTMLVideoElement>(null);
@@ -46,6 +50,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
 
   // Security detection
   useSecurityDetection({
@@ -61,7 +66,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     }
   }, [duration, canSkip]);
 
-  // Check for time limit
+  // Check for time limit - auto end at 15 mins
   useEffect(() => {
     if (duration >= MAX_VIDEO_DURATION - 60 && !timeWarningShown) {
       setTimeWarningShown(true);
@@ -70,9 +75,52 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     
     if (duration >= MAX_VIDEO_DURATION) {
       toast.info('Video session limit reached (15 minutes)');
-      onEnd();
+      onSkip(); // Use skip to go to next person
     }
-  }, [duration, timeWarningShown, onEnd]);
+  }, [duration, timeWarningShown, onSkip]);
+
+  // Initialize Live Captions (Speech Recognition)
+  useEffect(() => {
+    if (!captionsEnabled) {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+      setCurrentCaption('');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Live captions not supported in this browser');
+      setCaptionsEnabled(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0].transcript)
+        .join(' ');
+      setCurrentCaption(transcript.slice(-100)); // Last 100 chars
+    };
+
+    recognition.onerror = () => {
+      setCurrentCaption('');
+    };
+
+    recognition.start();
+    speechRecognitionRef.current = recognition;
+
+    return () => {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+    };
+  }, [captionsEnabled]);
 
   // Initialize WebRTC and camera
   useEffect(() => {
@@ -80,7 +128,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     
     const initializeVideoCall = async () => {
       try {
-        // Request camera and microphone with optimal settings for video calls
+        // Request camera and microphone with optimal settings
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: {
             width: { ideal: 1280, min: 640 },
@@ -106,14 +154,14 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         // Set local video
         if (myVideoRef.current) {
           myVideoRef.current.srcObject = stream;
-          myVideoRef.current.muted = true; // Mute local video to prevent echo
+          myVideoRef.current.muted = true;
         }
 
         // Create RTCPeerConnection
         const pc = new RTCPeerConnection({ iceServers });
         peerConnectionRef.current = pc;
 
-        // Add local stream tracks to peer connection
+        // Add local stream tracks
         stream.getTracks().forEach(track => {
           pc.addTrack(track, stream);
         });
@@ -125,12 +173,11 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           const [remoteStream] = event.streams;
           remoteStreamRef.current = remoteStream;
           
-          // Set remote video
           if (partnerVideoRef.current) {
             partnerVideoRef.current.srcObject = remoteStream;
           }
 
-          // Create separate audio element for clear remote audio playback
+          // Create separate audio element for clear playback
           if (!remoteAudioRef.current) {
             const audioElement = document.createElement('audio');
             audioElement.autoplay = true;
@@ -164,19 +211,11 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           }
         };
 
-        // Handle ICE connection state
-        pc.oniceconnectionstatechange = () => {
-          console.log('ICE Connection State:', pc.iceConnectionState);
-        };
-
-        // For demo purposes: simulate partner connection after a delay
-        // In production, this would be handled by a signaling server
+        // Simulate partner connection for demo
         setTimeout(() => {
           if (mounted) {
             setConnectionStatus('connected');
             setIsConnected(true);
-            // Simulate partner video with a mirrored version of local stream
-            // In production, this would be the actual remote stream
             if (partnerVideoRef.current && localStreamRef.current) {
               partnerVideoRef.current.srcObject = localStreamRef.current;
             }
@@ -194,23 +233,24 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     return () => {
       mounted = false;
       
-      // Cleanup local stream
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
         localStreamRef.current = null;
       }
       
-      // Cleanup peer connection
       if (peerConnectionRef.current) {
         peerConnectionRef.current.close();
         peerConnectionRef.current = null;
       }
       
-      // Cleanup remote audio element
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = null;
         remoteAudioRef.current.remove();
         remoteAudioRef.current = null;
+      }
+
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
       }
     };
   }, []);
@@ -255,11 +295,17 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     }
   }, []);
 
+  const handleReport = (reason: string) => {
+    onReport?.(reason);
+    setShowReportDialog(false);
+    toast.success('Report submitted. Thank you for keeping the community safe.');
+  };
+
   return (
-    <div className="flex flex-col items-center min-h-[80vh] p-3 random-connect-protected">
+    <div className="flex flex-col items-center min-h-[85vh] p-2 random-connect-protected">
       {/* Connection Status */}
       {connectionStatus === 'connecting' && (
-        <div className="glass-card px-4 py-2 rounded-xl text-center mb-3 z-10">
+        <div className="glass-card px-4 py-2 rounded-xl text-center mb-2 z-10">
           <div className="flex items-center gap-2">
             <Phone className="w-4 h-4 text-primary animate-pulse" />
             <p className="text-xs text-muted-foreground">Connecting to {partnerPseudoName}...</p>
@@ -267,17 +313,10 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         </div>
       )}
 
-      {/* Conversation Starter - Only show when connected */}
-      {connectionStatus === 'connected' && (
-        <div className="glass-card px-4 py-2 rounded-xl text-center max-w-sm mb-3 z-10">
-          <p className="text-xs text-muted-foreground">💬 "{conversationStarter}"</p>
-        </div>
-      )}
-
-      {/* Split Screen Video - Messenger Style */}
-      <div className="relative flex-1 w-full max-w-sm aspect-[9/16] rounded-2xl overflow-hidden bg-muted">
-        {/* Partner Video (Top Half - Main Focus) */}
-        <div className="absolute top-0 left-0 right-0 h-[60%] bg-gradient-to-b from-card to-muted border-b border-border">
+      {/* Main Split Screen Video Container */}
+      <div className="relative flex-1 w-full max-w-lg rounded-2xl overflow-hidden bg-muted shadow-lg">
+        {/* Partner Video - Top Half (60%) */}
+        <div className="absolute top-0 left-0 right-0 h-[55%] bg-gradient-to-b from-card to-muted border-b-2 border-background">
           <video
             ref={partnerVideoRef}
             autoPlay
@@ -287,7 +326,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           
           {/* Partner placeholder when no video */}
           {!isConnected && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-secondary/20 to-secondary/5">
               <div className="w-20 h-20 rounded-full bg-secondary/20 flex items-center justify-center mb-3 animate-pulse">
                 <span className="text-3xl">👤</span>
               </div>
@@ -298,14 +337,31 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           
           {/* Partner name badge */}
           {isConnected && (
-            <div className="absolute bottom-3 left-3 bg-background/70 backdrop-blur-sm px-2.5 py-1 rounded-full">
+            <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <p className="text-xs font-medium text-secondary">{partnerPseudoName}</p>
+            </div>
+          )}
+
+          {/* Audio indicator when partner is speaking */}
+          {isConnected && (
+            <div className="absolute bottom-3 right-3 flex items-center gap-0.5">
+              {[...Array(4)].map((_, i) => (
+                <div 
+                  key={i}
+                  className="w-1 bg-green-400 rounded-full animate-pulse"
+                  style={{ 
+                    height: `${6 + Math.random() * 12}px`,
+                    animationDelay: `${i * 0.1}s`
+                  }}
+                />
+              ))}
             </div>
           )}
         </div>
 
-        {/* My Video (Bottom Right - Picture-in-Picture Style) */}
-        <div className="absolute bottom-20 right-3 w-28 h-40 rounded-xl overflow-hidden border-2 border-background shadow-lg z-10">
+        {/* My Video - Bottom Half (45%) */}
+        <div className="absolute bottom-0 left-0 right-0 h-[45%] bg-gradient-to-t from-card to-muted">
           <video
             ref={myVideoRef}
             autoPlay
@@ -313,33 +369,54 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
             playsInline
             className={`w-full h-full object-cover ${blurEnabled ? 'blur-lg' : ''}`}
           />
+          
+          {/* Camera off state */}
           {!isCameraOn && (
-            <div className="absolute inset-0 bg-muted flex items-center justify-center">
-              <CameraOff className="w-6 h-6 text-muted-foreground" />
+            <div className="absolute inset-0 bg-muted flex flex-col items-center justify-center">
+              <CameraOff className="w-10 h-10 text-muted-foreground mb-2" />
+              <p className="text-xs text-muted-foreground">Camera Off</p>
             </div>
           )}
-          <div className="absolute bottom-1 left-1/2 -translate-x-1/2">
-            <p className="text-[10px] font-medium text-primary bg-background/60 px-1.5 py-0.5 rounded-full">You</p>
+          
+          {/* My name badge */}
+          <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary" />
+            <p className="text-xs font-medium text-primary">You • {myPseudoName.split('-')[0]}</p>
           </div>
+
+          {/* My audio indicator */}
+          {isMicOn && (
+            <div className="absolute bottom-3 right-3 flex items-center gap-0.5">
+              {[...Array(3)].map((_, i) => (
+                <div 
+                  key={i}
+                  className="w-1 bg-primary rounded-full animate-pulse"
+                  style={{ 
+                    height: `${5 + Math.random() * 10}px`,
+                    animationDelay: `${i * 0.1}s`
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Timer & Remaining Time */}
+        {/* Timer & Remaining Time - Top Center */}
         <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
-          <div className="bg-background/80 backdrop-blur-sm px-2.5 py-1 rounded-full flex items-center gap-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
-            <p className="text-xs font-medium text-foreground">{formatDuration(duration)}</p>
-          </div>
-          <div className="bg-background/80 backdrop-blur-sm px-2.5 py-1 rounded-full flex items-center gap-1">
+          <div className="bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+            <p className="text-xs font-semibold text-foreground">{formatDuration(duration)}</p>
+            <span className="text-muted-foreground">|</span>
             <Clock className="w-3 h-3 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">{getRemainingTime()}</p>
           </div>
         </div>
 
-        {/* Control Buttons (Right Side) */}
-        <div className="absolute top-14 right-2 flex flex-col gap-2 z-20">
+        {/* Control Buttons - Right Side */}
+        <div className="absolute top-16 right-2 flex flex-col gap-2 z-20">
           <button
             onClick={() => setBlurEnabled(!blurEnabled)}
-            className="w-10 h-10 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-background hover:scale-105"
+            className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-background hover:scale-105 shadow-md"
             title={blurEnabled ? 'Remove blur' : 'Add blur'}
           >
             {blurEnabled ? (
@@ -351,8 +428,8 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           
           <button
             onClick={toggleCamera}
-            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 ${
-              isCameraOn ? 'bg-background/80 hover:bg-background' : 'bg-red-500/90 hover:bg-red-500'
+            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 shadow-md ${
+              isCameraOn ? 'bg-background/90 hover:bg-background' : 'bg-red-500/90 hover:bg-red-500'
             }`}
             title={isCameraOn ? 'Turn off camera' : 'Turn on camera'}
           >
@@ -365,8 +442,8 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           
           <button
             onClick={toggleMic}
-            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 ${
-              isMicOn ? 'bg-background/80 hover:bg-background' : 'bg-red-500/90 hover:bg-red-500'
+            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 shadow-md ${
+              isMicOn ? 'bg-background/90 hover:bg-background' : 'bg-red-500/90 hover:bg-red-500'
             }`}
             title={isMicOn ? 'Mute' : 'Unmute'}
           >
@@ -376,56 +453,68 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
               <MicOff className="w-4 h-4 text-white" />
             )}
           </button>
+
+          <button
+            onClick={() => setCaptionsEnabled(!captionsEnabled)}
+            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 shadow-md ${
+              captionsEnabled ? 'bg-primary/90 hover:bg-primary' : 'bg-background/90 hover:bg-background'
+            }`}
+            title={captionsEnabled ? 'Disable captions' : 'Enable live captions'}
+          >
+            <Subtitles className={`w-4 h-4 ${captionsEnabled ? 'text-white' : 'text-foreground'}`} />
+          </button>
+
+          <button
+            onClick={() => setShowReportDialog(true)}
+            className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-red-500/20 hover:scale-105 shadow-md"
+            title="Report user"
+          >
+            <Flag className="w-4 h-4 text-muted-foreground hover:text-red-500" />
+          </button>
         </div>
 
-        {/* Audio indicator when partner is speaking */}
-        {isConnected && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-1">
-            <div className="flex items-center gap-0.5">
-              {[...Array(3)].map((_, i) => (
-                <div 
-                  key={i}
-                  className="w-0.5 bg-green-400 rounded-full animate-pulse"
-                  style={{ 
-                    height: `${8 + Math.random() * 8}px`,
-                    animationDelay: `${i * 0.1}s`
-                  }}
-                />
-              ))}
+        {/* Live Captions Overlay */}
+        {captionsEnabled && currentCaption && (
+          <div className="absolute bottom-[46%] left-2 right-2 z-20">
+            <div className="bg-black/80 backdrop-blur-sm px-4 py-2 rounded-lg mx-auto max-w-xs">
+              <p className="text-white text-sm text-center leading-relaxed">{currentCaption}</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Controls */}
-      <div className="mt-4 space-y-2 w-full max-w-sm">
+      {/* Conversation Starter - Below video */}
+      {connectionStatus === 'connected' && (
+        <div className="glass-card px-4 py-2 rounded-xl text-center max-w-sm mt-3">
+          <p className="text-xs text-muted-foreground">💬 "{conversationStarter}"</p>
+        </div>
+      )}
+
+      {/* Skip Button Only */}
+      <div className="mt-4 w-full max-w-sm">
         {!canSkip && (
-          <p className="text-center text-xs text-muted-foreground">
-            Skip available in {Math.max(0, MANDATORY_STAY_SECONDS - duration)}s
+          <p className="text-center text-xs text-muted-foreground mb-2">
+            ⏱️ Skip available in {Math.max(0, MANDATORY_STAY_SECONDS - duration)}s
           </p>
         )}
         
-        <div className="flex gap-3">
-          <Button
-            onClick={onSkip}
-            variant="outline"
-            disabled={!canSkip}
-            className="gap-2 px-5 py-5 rounded-xl flex-1 transition-all hover:scale-[1.02]"
-          >
-            <SkipForward className="w-4 h-4" />
-            Skip
-          </Button>
-          
-          <Button
-            onClick={onEnd}
-            variant="destructive"
-            className="gap-2 px-5 py-5 rounded-xl flex-1 transition-all hover:scale-[1.02]"
-          >
-            <PhoneOff className="w-4 h-4" />
-            End
-          </Button>
-        </div>
+        <Button
+          onClick={onSkip}
+          variant="outline"
+          disabled={!canSkip}
+          className="w-full gap-2 py-6 rounded-xl transition-all hover:scale-[1.02]"
+        >
+          <SkipForward className="w-5 h-5" />
+          {canSkip ? 'Skip to Next Person' : `Wait ${Math.max(0, MANDATORY_STAY_SECONDS - duration)}s...`}
+        </Button>
       </div>
+
+      {/* Report Dialog */}
+      <ReportDialog 
+        open={showReportDialog} 
+        onClose={() => setShowReportDialog(false)} 
+        onReport={handleReport}
+      />
     </div>
   );
 };

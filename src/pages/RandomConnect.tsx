@@ -87,7 +87,6 @@ const RandomConnect: React.FC = () => {
               partnerPseudoName={partnerPseudoName}
               conversationStarter={conversationStarter}
               onSkip={skipToNext}
-              onEnd={endSession}
               onViolation={recordViolation}
             />
           )}
@@ -98,7 +97,6 @@ const RandomConnect: React.FC = () => {
               partnerPseudoName={partnerPseudoName}
               conversationStarter={conversationStarter}
               onSkip={skipToNext}
-              onEnd={endSession}
               onViolation={recordViolation}
             />
           )}
@@ -113,7 +111,6 @@ const RandomConnect: React.FC = () => {
               textMemory={textMemory}
               onSendMessage={sendMessage}
               onSkip={skipToNext}
-              onEnd={endSession}
               onViolation={recordViolation}
               onClearMemory={clearTextMemory}
             />

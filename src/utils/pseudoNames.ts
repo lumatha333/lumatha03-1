@@ -1,5 +1,5 @@
-// Pseudo Name Generator - Adjective + Nature/Object pattern
-// Each session generates a new unique name
+// Pseudo Name Generator - Adjective + Nature/Object + Random Number pattern
+// Generates millions of unique combinations for each session
 
 const adjectives = [
   'Quiet', 'Gentle', 'Soft', 'Calm', 'Warm', 'Silent', 'Blue', 'Golden',
@@ -7,7 +7,13 @@ const adjectives = [
   'Whispering', 'Floating', 'Distant', 'Hidden', 'Wandering', 'Fading',
   'Glowing', 'Velvet', 'Amber', 'Silver', 'Crimson', 'Ivory', 'Jade',
   'Dusky', 'Twilight', 'Moonlit', 'Starlit', 'Dawning', 'Evening',
-  'Morning', 'Autumn', 'Winter', 'Spring', 'Summer', 'Cosmic', 'Endless'
+  'Morning', 'Autumn', 'Winter', 'Spring', 'Summer', 'Cosmic', 'Endless',
+  'Crystal', 'Sapphire', 'Ruby', 'Emerald', 'Pearl', 'Azure', 'Coral',
+  'Midnight', 'Sunrise', 'Sunset', 'Aurora', 'Polar', 'Tropical', 'Arctic',
+  'Oceanic', 'Meadow', 'Desert', 'Forest', 'Mountain', 'Valley', 'Coastal',
+  'Mystic', 'Sacred', 'Ancient', 'Eternal', 'Infinite', 'Boundless', 'Free',
+  'Wild', 'Noble', 'Pure', 'Bright', 'Deep', 'Light', 'Dark', 'Clear',
+  'Fresh', 'Sweet', 'Cool', 'Vivid', 'Radiant', 'Luminous', 'Tranquil'
 ];
 
 const natureObjects = [
@@ -16,10 +22,26 @@ const natureObjects = [
   'Rain', 'Snow', 'Wind', 'Breeze', 'Storm', 'Thunder', 'Lightning',
   'Leaf', 'Flower', 'Petal', 'Garden', 'Path', 'Road', 'Trail',
   'Sky', 'Horizon', 'Shadow', 'Light', 'Echo', 'Wave', 'Tide',
-  'Mist', 'Fog', 'Dew', 'Frost', 'Ember', 'Flame', 'Spark'
+  'Mist', 'Fog', 'Dew', 'Frost', 'Ember', 'Flame', 'Spark',
+  'Canyon', 'Cliff', 'Island', 'Bay', 'Harbor', 'Cove', 'Peninsula',
+  'Glacier', 'Volcano', 'Plateau', 'Plain', 'Marsh', 'Swamp', 'Oasis',
+  'Waterfall', 'Spring', 'Creek', 'Pond', 'Lagoon', 'Delta', 'Fjord',
+  'Cave', 'Grotto', 'Cavern', 'Gorge', 'Ravine', 'Bluff', 'Dune',
+  'Pebble', 'Stone', 'Rock', 'Crystal', 'Gem', 'Diamond', 'Sapphire',
+  'Feather', 'Wing', 'Nest', 'Shell', 'Coral', 'Reed', 'Fern'
 ];
 
+// Generate pseudo name with random number for millions of combinations
+// Format: AdjectiveObject-12345 (e.g., SilentForest-48291)
 export const generatePseudoName = (): string => {
+  const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const object = natureObjects[Math.floor(Math.random() * natureObjects.length)];
+  const number = Math.floor(Math.random() * 99999) + 1; // 1-99999
+  return `${adjective}${object}-${number}`;
+};
+
+// Generate a shorter pseudo name for display (without number)
+export const generateShortPseudoName = (): string => {
   const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
   const object = natureObjects[Math.floor(Math.random() * natureObjects.length)];
   return `${adjective}${object}`;

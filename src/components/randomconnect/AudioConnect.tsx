@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { SkipForward, PhoneOff, Volume2, VolumeX, Mic, MicOff, Music, Phone } from 'lucide-react';
+import { SkipForward, Volume2, VolumeX, Mic, MicOff, Phone, Flag, Subtitles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAmbientSounds } from '@/hooks/useAmbientSounds';
 import { AmbientSoundSelector } from './AmbientSoundSelector';
 import { useSecurityDetection } from '@/hooks/useSecurityDetection';
+import { ReportDialog } from './ReportDialog';
 import { toast } from 'sonner';
 
 interface AudioConnectProps {
@@ -11,8 +12,8 @@ interface AudioConnectProps {
   partnerPseudoName: string;
   conversationStarter: string;
   onSkip: () => void;
-  onEnd: () => void;
   onViolation?: (type: 'screenshot' | 'recording') => void;
+  onReport?: (reason: string) => void;
 }
 
 const MANDATORY_STAY_SECONDS = 33;
@@ -28,8 +29,8 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   partnerPseudoName,
   conversationStarter,
   onSkip,
-  onEnd,
-  onViolation
+  onViolation,
+  onReport
 }) => {
   const [myVoiceLevel, setMyVoiceLevel] = useState(0);
   const [partnerVoiceLevel, setPartnerVoiceLevel] = useState(0);
@@ -39,6 +40,10 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [roadPosition, setRoadPosition] = useState(0);
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [currentCaption, setCurrentCaption] = useState('');
+  const [showReportDialog, setShowReportDialog] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -47,6 +52,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
   
   const { 
     currentSound, 
@@ -63,6 +69,14 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     onRecordingDetected: () => onViolation?.('recording')
   });
 
+  // Animate road movement (visual only, no sound)
+  useEffect(() => {
+    const roadInterval = setInterval(() => {
+      setRoadPosition(p => (p + 1) % 100);
+    }, 50);
+    return () => clearInterval(roadInterval);
+  }, []);
+
   // Enable skip after mandatory stay
   useEffect(() => {
     if (duration >= MANDATORY_STAY_SECONDS && !canSkip) {
@@ -70,13 +84,55 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     }
   }, [duration, canSkip]);
 
+  // Initialize Live Captions
+  useEffect(() => {
+    if (!captionsEnabled) {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+      setCurrentCaption('');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Live captions not supported in this browser');
+      setCaptionsEnabled(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0].transcript)
+        .join(' ');
+      setCurrentCaption(transcript.slice(-100));
+    };
+
+    recognition.onerror = () => {
+      setCurrentCaption('');
+    };
+
+    recognition.start();
+    speechRecognitionRef.current = recognition;
+
+    return () => {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+    };
+  }, [captionsEnabled]);
+
   // Initialize WebRTC audio call
   useEffect(() => {
     let mounted = true;
 
     const initializeAudioCall = async () => {
       try {
-        // Request microphone with optimal audio settings
         const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
             echoCancellation: true,
@@ -94,7 +150,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         
         localStreamRef.current = stream;
         
-        // Set up audio analysis for voice level visualization
+        // Set up audio analysis
         audioContextRef.current = new AudioContext();
         analyserRef.current = audioContextRef.current.createAnalyser();
         const source = audioContextRef.current.createMediaStreamSource(stream);
@@ -119,19 +175,16 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         const pc = new RTCPeerConnection({ iceServers });
         peerConnectionRef.current = pc;
 
-        // Add local audio track
         stream.getAudioTracks().forEach(track => {
           pc.addTrack(track, stream);
         });
 
-        // Handle remote audio stream
         pc.ontrack = (event) => {
           if (!mounted) return;
           
           const [remoteStream] = event.streams;
           remoteStreamRef.current = remoteStream;
 
-          // Create audio element for remote audio playback
           if (!remoteAudioRef.current) {
             const audioElement = document.createElement('audio');
             audioElement.autoplay = true;
@@ -141,7 +194,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
           }
           remoteAudioRef.current.srcObject = remoteStream;
           
-          // Analyze remote audio for voice level
+          // Analyze remote audio
           if (audioContextRef.current) {
             const remoteAnalyser = audioContextRef.current.createAnalyser();
             const remoteSource = audioContextRef.current.createMediaStreamSource(remoteStream);
@@ -163,7 +216,6 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
           setConnectionStatus('connected');
         };
 
-        // Handle connection state
         pc.onconnectionstatechange = () => {
           if (!mounted) return;
           
@@ -183,12 +235,11 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
           }
         };
 
-        // Simulate connection for demo (in production, handled by signaling server)
+        // Simulate connection for demo
         setTimeout(() => {
           if (mounted) {
             setConnectionStatus('connected');
             setIsConnected(true);
-            // Simulate partner voice levels
             const simulatePartner = () => {
               if (!mounted) return;
               setPartnerVoiceLevel(Math.random() * 60 + (Math.random() > 0.7 ? 30 : 0));
@@ -233,6 +284,10 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         remoteAudioRef.current.remove();
         remoteAudioRef.current = null;
       }
+
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
     };
   }, []);
 
@@ -267,23 +322,41 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     }
   }, []);
 
+  const handleReport = (reason: string) => {
+    onReport?.(reason);
+    setShowReportDialog(false);
+    toast.success('Report submitted. Thank you for keeping the community safe.');
+  };
+
   return (
-    <div className="flex flex-col items-center justify-between min-h-[80vh] p-4 random-connect-protected">
-      {/* Header with Timer & Controls */}
+    <div className="flex flex-col items-center justify-between min-h-[85vh] p-4 random-connect-protected">
+      {/* Header */}
       <div className="w-full flex items-center justify-between">
-        <div className="bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+        <div className="bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2 shadow-md">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
           <p className="text-sm font-medium text-foreground">{formatDuration(duration)}</p>
         </div>
         
-        <AmbientSoundSelector
-          currentSound={currentSound}
-          volume={volume}
-          isPlaying={isPlaying}
-          onSelectSound={playSound}
-          onVolumeChange={updateVolume}
-          compact
-        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCaptionsEnabled(!captionsEnabled)}
+            className={`w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 shadow-md ${
+              captionsEnabled ? 'bg-primary/90' : 'bg-background/80'
+            }`}
+            title={captionsEnabled ? 'Disable captions' : 'Enable live captions'}
+          >
+            <Subtitles className={`w-4 h-4 ${captionsEnabled ? 'text-white' : 'text-foreground'}`} />
+          </button>
+          
+          <AmbientSoundSelector
+            currentSound={currentSound}
+            volume={volume}
+            isPlaying={isPlaying}
+            onSelectSound={playSound}
+            onVolumeChange={updateVolume}
+            compact
+          />
+        </div>
       </div>
 
       {/* Connection Status */}
@@ -305,160 +378,196 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         </div>
       )}
 
-      {/* Car Interior UI - Voice Visualization */}
-      <div className="relative w-full max-w-md aspect-[4/3]">
-        {/* Car Dashboard Background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-muted/50 to-background rounded-3xl overflow-hidden">
-          {/* Road View (Top) */}
-          <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-primary/10 to-transparent">
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-8 bg-muted-foreground/20 animate-pulse" />
-            <div className="absolute bottom-4 left-1/3 w-0.5 h-4 bg-muted-foreground/10 animate-pulse" style={{ animationDelay: '0.3s' }} />
-            <div className="absolute bottom-4 right-1/3 w-0.5 h-4 bg-muted-foreground/10 animate-pulse" style={{ animationDelay: '0.6s' }} />
+      {/* Car Interior UI - Two People in a Car */}
+      <div className="relative w-full max-w-md aspect-[4/3] rounded-3xl overflow-hidden shadow-xl">
+        {/* Road View (Moving) - Visual only */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background to-card">
+          {/* Sky */}
+          <div className="absolute top-0 left-0 right-0 h-1/4 bg-gradient-to-b from-primary/10 to-transparent" />
+          
+          {/* Road markings (animated) */}
+          <div 
+            className="absolute top-8 left-1/2 -translate-x-1/2 flex flex-col gap-6 opacity-30"
+            style={{ transform: `translateX(-50%) translateY(${roadPosition}px)` }}
+          >
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="w-1 h-8 bg-muted-foreground/50 rounded-full" />
+            ))}
           </div>
           
-          {/* Dashboard */}
-          <div className="absolute bottom-0 left-0 right-0 h-2/3 bg-gradient-to-t from-card to-card/80 rounded-t-3xl border-t border-border/30">
-            {/* Two Seats */}
-            <div className="flex justify-around items-center h-full px-4">
-              {/* Left Seat - You */}
-              <div className="flex flex-col items-center gap-2">
-                <div 
-                  className="relative w-20 h-20 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center transition-all duration-75"
-                  style={{
-                    boxShadow: isMicOn ? `0 0 ${myVoiceLevel / 2}px ${myVoiceLevel / 4}px hsl(var(--primary) / ${Math.min(0.5, myVoiceLevel / 100)})` : 'none',
-                    transform: isMicOn ? `scale(${1 + myVoiceLevel / 400})` : 'scale(1)'
-                  }}
-                >
-                  {myVoiceLevel > 15 && isMicOn && (
-                    <div 
-                      className="absolute inset-0 rounded-full border-2 border-primary/40 animate-ping"
-                      style={{ animationDuration: '0.8s' }}
-                    />
-                  )}
-                  {isMicOn ? (
-                    <Volume2 className="w-7 h-7 text-primary" />
-                  ) : (
-                    <VolumeX className="w-7 h-7 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-muted-foreground">You</p>
-                  <p className="text-xs font-medium text-primary">{myPseudoName}</p>
-                </div>
-                {/* Voice level bar */}
-                <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-primary transition-all duration-75"
-                    style={{ width: isMicOn ? `${myVoiceLevel}%` : '0%' }}
-                  />
-                </div>
-              </div>
+          {/* Trees sliding (subtle) */}
+          <div 
+            className="absolute top-4 left-4 opacity-20"
+            style={{ transform: `translateY(${roadPosition * 0.5}px)` }}
+          >
+            <span className="text-2xl">🌲</span>
+          </div>
+          <div 
+            className="absolute top-8 right-4 opacity-20"
+            style={{ transform: `translateY(${(roadPosition + 30) * 0.5}px)` }}
+          >
+            <span className="text-xl">🌳</span>
+          </div>
+        </div>
 
-              {/* Divider with connection indicator */}
-              <div className="flex flex-col items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
-                <div className="w-px h-16 bg-border/50" />
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
-              </div>
-
-              {/* Right Seat - Partner */}
-              <div className="flex flex-col items-center gap-2">
-                <div 
-                  className="relative w-20 h-20 rounded-full bg-gradient-to-br from-secondary/30 to-secondary/10 flex items-center justify-center transition-all duration-75"
-                  style={{
-                    boxShadow: isConnected && isSpeakerOn ? `0 0 ${partnerVoiceLevel / 2}px ${partnerVoiceLevel / 4}px hsl(var(--secondary) / ${Math.min(0.5, partnerVoiceLevel / 100)})` : 'none',
-                    transform: isConnected && isSpeakerOn ? `scale(${1 + partnerVoiceLevel / 400})` : 'scale(1)'
-                  }}
-                >
-                  {partnerVoiceLevel > 15 && isConnected && isSpeakerOn && (
-                    <div 
-                      className="absolute inset-0 rounded-full border-2 border-secondary/40 animate-ping"
-                      style={{ animationDuration: '0.8s' }}
-                    />
-                  )}
-                  {isSpeakerOn ? (
-                    <Volume2 className="w-7 h-7 text-secondary" />
-                  ) : (
-                    <VolumeX className="w-7 h-7 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-muted-foreground">Stranger</p>
-                  <p className="text-xs font-medium text-secondary">{partnerPseudoName}</p>
-                </div>
-                {/* Voice level bar */}
-                <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
+        {/* Dashboard / Car Interior */}
+        <div className="absolute bottom-0 left-0 right-0 h-3/4 bg-gradient-to-t from-card via-card/95 to-transparent rounded-t-[2rem]">
+          {/* Two Seats Layout */}
+          <div className="flex justify-around items-center h-full px-6 pt-8">
+            {/* Left Seat - You (Driver) */}
+            <div className="flex flex-col items-center gap-3 relative">
+              {/* Seat back */}
+              <div className="absolute -top-2 w-24 h-28 bg-muted/30 rounded-t-full rounded-b-lg -z-10" />
+              
+              {/* Voice orb */}
+              <div 
+                className="relative w-20 h-20 rounded-full bg-gradient-to-br from-primary/40 to-primary/10 flex items-center justify-center transition-all duration-75 border-2 border-primary/20"
+                style={{
+                  boxShadow: isMicOn ? `0 0 ${myVoiceLevel / 2}px ${myVoiceLevel / 3}px hsl(var(--primary) / ${Math.min(0.6, myVoiceLevel / 100)})` : 'none',
+                  transform: isMicOn ? `scale(${1 + myVoiceLevel / 300})` : 'scale(1)'
+                }}
+              >
+                {myVoiceLevel > 20 && isMicOn && (
                   <div 
-                    className="h-full bg-secondary transition-all duration-75"
-                    style={{ width: isConnected && isSpeakerOn ? `${partnerVoiceLevel}%` : '0%' }}
+                    className="absolute inset-0 rounded-full border-2 border-primary/50 animate-ping"
+                    style={{ animationDuration: '0.6s' }}
                   />
-                </div>
+                )}
+                {isMicOn ? (
+                  <Mic className="w-8 h-8 text-primary" />
+                ) : (
+                  <MicOff className="w-8 h-8 text-muted-foreground" />
+                )}
+              </div>
+              
+              <div className="text-center">
+                <p className="text-xs font-bold text-primary">{myPseudoName.split('-')[0]}</p>
+                <p className="text-[10px] text-muted-foreground">You</p>
+              </div>
+              
+              {/* Voice level bar */}
+              <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary rounded-full transition-all duration-75"
+                  style={{ width: isMicOn ? `${myVoiceLevel}%` : '0%' }}
+                />
+              </div>
+            </div>
+
+            {/* Center - Connection Line */}
+            <div className="flex flex-col items-center gap-2 -mt-8">
+              <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse shadow-lg`} />
+              <div className="w-px h-20 bg-gradient-to-b from-primary/30 via-muted to-secondary/30" />
+              <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse shadow-lg`} />
+            </div>
+
+            {/* Right Seat - Partner (Passenger) */}
+            <div className="flex flex-col items-center gap-3 relative">
+              {/* Seat back */}
+              <div className="absolute -top-2 w-24 h-28 bg-muted/30 rounded-t-full rounded-b-lg -z-10" />
+              
+              {/* Voice orb */}
+              <div 
+                className="relative w-20 h-20 rounded-full bg-gradient-to-br from-secondary/40 to-secondary/10 flex items-center justify-center transition-all duration-75 border-2 border-secondary/20"
+                style={{
+                  boxShadow: isConnected && isSpeakerOn ? `0 0 ${partnerVoiceLevel / 2}px ${partnerVoiceLevel / 3}px hsl(var(--secondary) / ${Math.min(0.6, partnerVoiceLevel / 100)})` : 'none',
+                  transform: isConnected && isSpeakerOn ? `scale(${1 + partnerVoiceLevel / 300})` : 'scale(1)'
+                }}
+              >
+                {partnerVoiceLevel > 20 && isConnected && isSpeakerOn && (
+                  <div 
+                    className="absolute inset-0 rounded-full border-2 border-secondary/50 animate-ping"
+                    style={{ animationDuration: '0.6s' }}
+                  />
+                )}
+                {isSpeakerOn ? (
+                  <Volume2 className="w-8 h-8 text-secondary" />
+                ) : (
+                  <VolumeX className="w-8 h-8 text-muted-foreground" />
+                )}
+              </div>
+              
+              <div className="text-center">
+                <p className="text-xs font-bold text-secondary">{partnerPseudoName.split('-')[0]}</p>
+                <p className="text-[10px] text-muted-foreground">Stranger</p>
+              </div>
+              
+              {/* Voice level bar */}
+              <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-secondary rounded-full transition-all duration-75"
+                  style={{ width: isConnected && isSpeakerOn ? `${partnerVoiceLevel}%` : '0%' }}
+                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Ambient Sound Indicator */}
-        {isPlaying && currentSound !== 'none' && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-background/60 backdrop-blur-sm px-2 py-1 rounded-full">
-              <Music className="w-3 h-3 animate-pulse" />
-              <span className="capitalize">{currentSound}</span>
+        {/* Live Captions Overlay */}
+        {captionsEnabled && currentCaption && (
+          <div className="absolute bottom-28 left-4 right-4 z-20">
+            <div className="bg-black/80 backdrop-blur-sm px-4 py-2 rounded-lg">
+              <p className="text-white text-sm text-center">{currentCaption}</p>
             </div>
           </div>
         )}
+
+        {/* Report Button */}
+        <button
+          onClick={() => setShowReportDialog(true)}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-red-500/20 hover:scale-105 shadow-md"
+          title="Report user"
+        >
+          <Flag className="w-4 h-4 text-muted-foreground hover:text-red-500" />
+        </button>
       </div>
 
       {/* Quick Audio Controls */}
-      <div className="flex items-center justify-center gap-4 mb-2">
+      <div className="flex items-center justify-center gap-4 mt-4">
         <button
           onClick={toggleMic}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 ${
-            isMicOn ? 'bg-primary/20 text-primary' : 'bg-red-500/20 text-red-500'
+          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-lg ${
+            isMicOn ? 'bg-primary/20 text-primary border-2 border-primary/30' : 'bg-red-500/20 text-red-500 border-2 border-red-500/30'
           }`}
         >
-          {isMicOn ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+          {isMicOn ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
         </button>
         
         <button
           onClick={toggleSpeaker}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 ${
-            isSpeakerOn ? 'bg-secondary/20 text-secondary' : 'bg-red-500/20 text-red-500'
+          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-lg ${
+            isSpeakerOn ? 'bg-secondary/20 text-secondary border-2 border-secondary/30' : 'bg-red-500/20 text-red-500 border-2 border-red-500/30'
           }`}
         >
-          {isSpeakerOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          {isSpeakerOn ? <Volume2 className="w-6 h-6" /> : <VolumeX className="w-6 h-6" />}
         </button>
       </div>
 
-      {/* Controls */}
-      <div className="space-y-3 w-full max-w-sm">
+      {/* Skip Button Only */}
+      <div className="w-full max-w-sm mt-4">
         {!canSkip && (
-          <p className="text-center text-xs text-muted-foreground">
-            Skip available in {Math.max(0, MANDATORY_STAY_SECONDS - duration)}s
+          <p className="text-center text-xs text-muted-foreground mb-2">
+            ⏱️ Skip available in {Math.max(0, MANDATORY_STAY_SECONDS - duration)}s
           </p>
         )}
         
-        <div className="flex gap-3 justify-center">
-          <Button
-            onClick={onSkip}
-            variant="outline"
-            disabled={!canSkip}
-            className="gap-2 px-5 py-5 rounded-xl flex-1 max-w-32 transition-all hover:scale-[1.02]"
-          >
-            <SkipForward className="w-4 h-4" />
-            Skip
-          </Button>
-          
-          <Button
-            onClick={onEnd}
-            variant="destructive"
-            className="gap-2 px-5 py-5 rounded-xl flex-1 max-w-32 transition-all hover:scale-[1.02]"
-          >
-            <PhoneOff className="w-4 h-4" />
-            End
-          </Button>
-        </div>
+        <Button
+          onClick={onSkip}
+          variant="outline"
+          disabled={!canSkip}
+          className="w-full gap-2 py-6 rounded-xl transition-all hover:scale-[1.02]"
+        >
+          <SkipForward className="w-5 h-5" />
+          {canSkip ? 'Skip to Next Person' : `Wait ${Math.max(0, MANDATORY_STAY_SECONDS - duration)}s...`}
+        </Button>
       </div>
+
+      {/* Report Dialog */}
+      <ReportDialog 
+        open={showReportDialog} 
+        onClose={() => setShowReportDialog(false)} 
+        onReport={handleReport}
+      />
     </div>
   );
 };
