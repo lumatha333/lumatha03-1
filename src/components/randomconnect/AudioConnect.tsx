@@ -10,6 +10,7 @@ import { ReportDialog } from './ReportDialog';
 import { toast } from 'sonner';
 import { ConnectionQualityIndicator } from './ConnectionQualityIndicator';
 import { TwoWayConnectionStatus } from './TwoWayConnectionStatus';
+import { WebRTCDebugPanel } from './WebRTCDebugPanel';
 import { getIceServers } from '@/lib/turnServers';
 
 interface AudioConnectProps {
@@ -52,6 +53,9 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const [currentCaption, setCurrentCaption] = useState('');
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [hasRemoteAudio, setHasRemoteAudio] = useState(false);
+  const [offerSent, setOfferSent] = useState(false);
+  const [answerReceived, setAnswerReceived] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(true);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const localAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -65,6 +69,8 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
   const hasCreatedOfferRef = useRef<boolean>(false);
   const localStreamReadyRef = useRef<boolean>(false);
+  const iceReconnectAttemptedRef = useRef<boolean>(false);
+  const iceFailedTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const { 
     currentSound, 
@@ -116,11 +122,35 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       await pc.setLocalDescription(offer);
       console.log('Sending offer to partner');
       sendOffer(offer);
+      setOfferSent(true);
     } catch (error) {
       console.error('Error creating offer:', error);
       hasCreatedOfferRef.current = false;
     }
   }, [shouldBeInitiator]);
+
+  // ICE restart function for reconnection
+  const attemptIceRestart = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc || iceReconnectAttemptedRef.current) return;
+    
+    iceReconnectAttemptedRef.current = true;
+    console.log('Attempting ICE restart...');
+    toast.info('Reconnecting...');
+    
+    try {
+      // Create new offer with iceRestart flag
+      const offer = await pc.createOffer({ iceRestart: true });
+      await pc.setLocalDescription(offer);
+      sendOffer(offer);
+      setOfferSent(true);
+      console.log('ICE restart offer sent');
+    } catch (error) {
+      console.error('ICE restart failed:', error);
+      toast.error('Reconnection failed. Returning to lobby...');
+      onSkip();
+    }
+  }, [onSkip]);
 
   // Create peer connection
   const createPeerConnection = useCallback(() => {
@@ -216,6 +246,27 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
 
     pc.oniceconnectionstatechange = () => {
       console.log('ICE connection state:', pc.iceConnectionState);
+      
+      // Clear any pending reconnect timer
+      if (iceFailedTimerRef.current) {
+        clearTimeout(iceFailedTimerRef.current);
+        iceFailedTimerRef.current = null;
+      }
+      
+      // Handle ICE failures with automatic reconnect after 5 seconds
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        console.log('ICE state is', pc.iceConnectionState, '- starting 5s reconnect timer');
+        iceFailedTimerRef.current = setTimeout(() => {
+          if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            attemptIceRestart();
+          }
+        }, 5000);
+      }
+      
+      // Reset reconnect flag when connection is restored
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        iceReconnectAttemptedRef.current = false;
+      }
     };
 
     return pc;
@@ -273,6 +324,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     try {
       console.log('Setting remote description from answer...');
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      setAnswerReceived(true);
       
       // Process queued ICE candidates
       console.log('Processing', iceCandidatesQueue.current.length, 'queued ICE candidates');
@@ -838,6 +890,21 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         onClose={() => setShowReportDialog(false)} 
         onReport={handleReport}
       />
+
+      {/* WebRTC Debug Panel */}
+      {showDebugPanel && (
+        <WebRTCDebugPanel
+          signalingConnected={signalingConnected}
+          peerConnection={peerConnectionRef.current}
+          hasLocalStream={!!localStreamRef.current}
+          hasRemoteStream={hasRemoteAudio}
+          hasRemoteAudio={hasRemoteAudio}
+          hasRemoteVideo={false}
+          offerSent={offerSent}
+          answerReceived={answerReceived}
+          participantCount={participantCount}
+        />
+      )}
     </div>
   );
 };
