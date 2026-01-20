@@ -107,7 +107,7 @@ export const SavedMemories: React.FC<SavedMemoriesProps> = ({
       {/* Info Banner */}
       <div className="px-4 py-2 bg-muted/30 border-b border-border">
         <p className="text-[10px] text-muted-foreground text-center">
-          📝 Memories are READ-ONLY • Auto-delete after 24 hours • No reconnecting from here
+          📝 READ-ONLY memories • Auto-delete 24h • "Connect Again" needs mutual agreement
         </p>
       </div>
 

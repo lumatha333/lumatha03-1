@@ -218,7 +218,7 @@ export const useRandomConnectMemories = () => {
     }
   }, [user, memories, loadMemories]);
 
-  // Respond to reconnect request
+  // Respond to reconnect request - PUBG style accept/decline
   const respondToReconnect = useCallback(async (memoryId: string, accept: boolean) => {
     if (!user) return;
 
@@ -228,11 +228,20 @@ export const useRandomConnectMemories = () => {
     try {
       const { data: memoryData } = await supabase
         .from('random_connect_memories')
-        .select('session_id')
+        .select('session_id, mode, partner_pseudo_name')
         .eq('id', memoryId)
         .single();
 
       if (!memoryData) return;
+
+      // Get the original session to find the other user
+      const { data: originalSession } = await supabase
+        .from('random_connect_sessions')
+        .select('user1_id, user2_id, user1_pseudo_name, user2_pseudo_name, mode')
+        .eq('id', memoryData.session_id)
+        .single();
+
+      if (!originalSession) return;
 
       await supabase
         .from('random_connect_reconnect_requests')
@@ -241,8 +250,34 @@ export const useRandomConnectMemories = () => {
         .eq('receiver_id', user.id);
 
       if (accept) {
-        toast.success('Reconnect accepted! Waiting for match...');
-        // TODO: Trigger a new session with the same person
+        // Both accepted! Create a new session between the two users
+        const requesterId = originalSession.user1_id === user.id 
+          ? originalSession.user2_id 
+          : originalSession.user1_id;
+        
+        const myPseudoName = originalSession.user1_id === user.id 
+          ? originalSession.user1_pseudo_name 
+          : originalSession.user2_pseudo_name;
+        
+        const partnerPseudoName = originalSession.user1_id === user.id 
+          ? originalSession.user2_pseudo_name 
+          : originalSession.user1_pseudo_name;
+
+        // Create new reconnection session
+        await supabase
+          .from('random_connect_sessions')
+          .insert({
+            user1_id: requesterId, // requester becomes user1
+            user2_id: user.id, // acceptor becomes user2
+            user1_pseudo_name: partnerPseudoName,
+            user2_pseudo_name: myPseudoName,
+            mode: originalSession.mode,
+            conversation_starter: 'Welcome back! You both chose to reconnect. 💫'
+          });
+
+        toast.success('Reconnect accepted! New session starting...', {
+          description: 'Navigate to Connect tab to join the session'
+        });
       } else {
         toast.info('Reconnect declined');
       }
@@ -250,6 +285,7 @@ export const useRandomConnectMemories = () => {
       await loadMemories();
     } catch (error) {
       console.error('Error responding to reconnect:', error);
+      toast.error('Failed to respond to reconnect request');
     }
   }, [user, memories, loadMemories]);
 
