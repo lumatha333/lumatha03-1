@@ -8,6 +8,9 @@ import { useSignaling } from '@/hooks/useSignaling';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReportDialog } from './ReportDialog';
 import { toast } from 'sonner';
+import { ConnectionQualityIndicator } from './ConnectionQualityIndicator';
+import { TwoWayConnectionStatus } from './TwoWayConnectionStatus';
+import { getIceServers } from '@/lib/turnServers';
 
 interface AudioConnectProps {
   myPseudoName: string;
@@ -22,29 +25,8 @@ interface AudioConnectProps {
 
 const MANDATORY_STAY_SECONDS = 20; // 20 seconds before skip is available
 
-// STUN/TURN servers for WebRTC - includes TURN for NAT traversal
-const iceServers: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  // TURN servers for users behind restrictive NATs/firewalls
-  {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  }
-];
+// Use centralized TURN server configuration with fallback support
+const iceServers = getIceServers();
 
 export const AudioConnect: React.FC<AudioConnectProps> = ({
   myPseudoName,
@@ -604,11 +586,17 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
 
   return (
     <div className="flex flex-col items-center justify-between min-h-[85vh] p-4 random-connect-protected">
-      {/* Header */}
-      <div className="w-full flex items-center justify-between">
-        <div className="bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2 shadow-md">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
-          <p className="text-sm font-medium text-foreground">{formatDuration(duration)}</p>
+      {/* Header with Two-Way Status and Quality Indicator */}
+      <div className="w-full flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2 shadow-md">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+            <p className="text-sm font-medium text-foreground">{formatDuration(duration)}</p>
+          </div>
+          <ConnectionQualityIndicator
+            peerConnection={peerConnectionRef.current}
+            isConnected={isConnected}
+          />
         </div>
         
         <div className="flex items-center gap-2">
@@ -633,14 +621,24 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         </div>
       </div>
 
-      {/* Connection Status */}
-      {connectionStatus === 'connecting' && (
-        <div className="glass-card px-4 py-3 rounded-2xl text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <Phone className="w-5 h-5 text-primary animate-pulse" />
-            <p className="text-sm text-foreground">Connecting...</p>
-          </div>
-          <p className="text-xs text-muted-foreground">Finding {partnerPseudoName}</p>
+      {/* Two-Way Connection Status - Clear confirmation that BOTH can hear each other */}
+      <div className="w-full max-w-md mb-2">
+        <TwoWayConnectionStatus
+          mode="audio"
+          isMicOn={isMicOn}
+          hasRemoteAudio={hasRemoteAudio}
+          isConnected={isConnected}
+          connectionStatus={connectionStatus}
+          className="mx-auto"
+        />
+      </div>
+
+      {/* Connection explanation for users */}
+      {connectionStatus === 'connected' && hasRemoteAudio && (
+        <div className="glass-card px-4 py-2 rounded-xl text-center max-w-sm mb-2">
+          <p className="text-xs text-green-600 dark:text-green-400">
+            ✓ Voice call active • Both of you can speak and hear each other clearly in both ears
+          </p>
         </div>
       )}
 

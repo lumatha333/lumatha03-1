@@ -47,34 +47,34 @@ interface ModeInfo {
 
 const modes: ModeInfo[] = [
   { 
-    id: 'audio', 
-    icon: Mic, 
-    label: 'Audio', 
-    desc: 'Voice only', 
-    details: 'Like two people in a car - comfortable, no pressure',
-    color: 'text-blue-500',
-    gradient: 'from-blue-500 to-cyan-500',
-    features: ['Pure voice connection', 'Ambient sounds', 'No video pressure']
-  },
-  { 
     id: 'video', 
     icon: Video, 
     label: 'Video', 
     desc: 'Face to face', 
-    details: 'Split screen with optional blur for comfort',
+    details: 'Both of you see each other\'s real faces and hear each other\'s voices clearly',
     color: 'text-purple-500',
     gradient: 'from-purple-500 to-pink-500',
-    features: ['Blur option', '15 min limit', 'Camera toggle']
+    features: ['Real face-to-face', 'Two-way voice', 'Blur option', '15 min limit']
+  },
+  { 
+    id: 'audio', 
+    icon: Mic, 
+    label: 'Audio', 
+    desc: 'Voice only', 
+    details: 'Both of you speak and hear each other in both ears - like a phone call',
+    color: 'text-blue-500',
+    gradient: 'from-blue-500 to-cyan-500',
+    features: ['Crystal clear voice', 'Both ears', 'Ambient sounds', 'No video pressure']
   },
   { 
     id: 'text', 
     icon: MessageCircle, 
     label: 'Text', 
     desc: 'Thoughtful chat', 
-    details: 'Write thoughts freely with memory feature',
+    details: 'Instant two-way messaging with typing indicators',
     color: 'text-green-500',
     gradient: 'from-green-500 to-emerald-500',
-    features: ['No timestamps', 'Memory feature', 'Pressure-free']
+    features: ['Instant delivery', 'Typing indicator', 'Memory feature', 'Pressure-free']
   },
 ];
 
@@ -200,13 +200,42 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
         {isBanned ? '🔒 You are temporarily banned' : '💙 Start Connecting'}
       </Button>
 
-      {/* Privacy & Security Explanation */}
+      {/* How Connection Works - Simple Explanation */}
       <div className="space-y-3">
+        {/* Video/Audio explanation */}
+        {(mode === 'video' || mode === 'audio') && (
+          <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs font-semibold text-green-600 dark:text-green-400">
+                How it works
+              </span>
+            </div>
+            {mode === 'video' ? (
+              <ul className="text-[11px] text-muted-foreground space-y-1">
+                <li>✓ You see the other person's <strong>real face</strong> on screen</li>
+                <li>✓ They see your <strong>real face</strong> too (unless you turn camera off)</li>
+                <li>✓ When you speak, they hear you <strong>clearly in both ears</strong></li>
+                <li>✓ When they speak, you hear them <strong>clearly in both ears</strong></li>
+                <li>✓ It feels like sitting across from someone - natural and real</li>
+              </ul>
+            ) : (
+              <ul className="text-[11px] text-muted-foreground space-y-1">
+                <li>✓ When you speak, partner hears you <strong>clearly in both ears</strong></li>
+                <li>✓ When they speak, you hear them <strong>clearly in both ears</strong></li>
+                <li>✓ Just like a regular phone call or FaceTime audio</li>
+                <li>✓ Voice is balanced, clear, no echo or one-way issues</li>
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* Privacy note */}
         <div className="flex items-start gap-2 p-3 rounded-xl bg-muted/30">
           <Shield className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             Your identity is protected with a new random name each session. 
-            No following, no reconnecting, just genuine moments. 
+            No profile, no name, no history. Everything auto-deletes after 24 hours. 
             20 seconds minimum stay before skip.
           </p>
         </div>
