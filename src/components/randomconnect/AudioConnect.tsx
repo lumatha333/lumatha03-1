@@ -82,6 +82,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const speechRecognitionRef = useRef<any>(null);
   const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
   const hasCreatedOfferRef = useRef<boolean>(false);
+  const localStreamReadyRef = useRef<boolean>(false);
   
   const { 
     currentSound, 
@@ -98,12 +99,54 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     onRecordingDetected: () => onViolation?.('recording')
   });
 
+  // Determine if this user should create the offer (based on ID comparison)
+  const shouldBeInitiator = useCallback(() => {
+    if (!user?.id || !partnerId) return false;
+    return user.id < partnerId;
+  }, [user?.id, partnerId]);
+
+  // Try to create offer when conditions are met
+  const tryCreateOffer = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    
+    if (!pc || !localStreamReadyRef.current || hasCreatedOfferRef.current) {
+      console.log('Cannot create offer yet:', { 
+        hasPc: !!pc, 
+        localReady: localStreamReadyRef.current, 
+        alreadyCreated: hasCreatedOfferRef.current 
+      });
+      return;
+    }
+
+    if (!shouldBeInitiator()) {
+      console.log('Not initiator, waiting for offer from partner');
+      return;
+    }
+
+    hasCreatedOfferRef.current = true;
+    
+    try {
+      console.log('Creating WebRTC offer as initiator...');
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false
+      });
+      await pc.setLocalDescription(offer);
+      console.log('Sending offer to partner');
+      sendOffer(offer);
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      hasCreatedOfferRef.current = false;
+    }
+  }, [shouldBeInitiator]);
+
   // Create peer connection
   const createPeerConnection = useCallback(() => {
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
     }
 
+    console.log('Creating new RTCPeerConnection for audio...');
     const pc = new RTCPeerConnection({ 
       iceServers,
       iceCandidatePoolSize: 10
@@ -113,23 +156,27 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log('Sending ICE candidate');
+        console.log('Generated ICE candidate, sending to partner');
         sendIceCandidate(event.candidate.toJSON());
       }
     };
 
     // Handle remote stream - THIS IS WHERE WE HEAR THE OTHER PERSON
     pc.ontrack = (event) => {
-      console.log('Received remote audio track');
+      console.log('Received remote audio track:', event.track.kind, event.track.readyState);
       
       const [remoteStream] = event.streams;
-      if (!remoteStream) return;
+      if (!remoteStream) {
+        console.log('No remote stream in track event');
+        return;
+      }
       
       remoteStreamRef.current = remoteStream;
       setHasRemoteAudio(true);
 
       // Create audio element for playback - REAL VOICE EXCHANGE
       if (!remoteAudioRef.current) {
+        console.log('Creating audio element for remote audio playback');
         const audioElement = document.createElement('audio');
         audioElement.autoplay = true;
         audioElement.setAttribute('playsinline', 'true');
@@ -142,15 +189,20 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       
       // Analyze remote audio for voice level visualization
       if (audioContextRef.current) {
-        const remoteAnalyser = audioContextRef.current.createAnalyser();
-        const remoteSource = audioContextRef.current.createMediaStreamSource(remoteStream);
-        remoteSource.connect(remoteAnalyser);
-        remoteAnalyser.fftSize = 256;
-        remoteAnalyserRef.current = remoteAnalyser;
+        try {
+          const remoteAnalyser = audioContextRef.current.createAnalyser();
+          const remoteSource = audioContextRef.current.createMediaStreamSource(remoteStream);
+          remoteSource.connect(remoteAnalyser);
+          remoteAnalyser.fftSize = 256;
+          remoteAnalyserRef.current = remoteAnalyser;
+        } catch (e) {
+          console.log('Error setting up remote audio analyser:', e);
+        }
       }
       
       setIsConnected(true);
       setConnectionStatus('connected');
+      toast.success('Connected! You can now hear each other.');
     };
 
     // Handle connection state changes
@@ -162,10 +214,14 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
           setIsConnected(true);
           break;
         case 'disconnected':
+          setConnectionStatus('disconnected');
+          setIsConnected(false);
+          toast.info('Connection interrupted. Trying to reconnect...');
+          break;
         case 'failed':
           setConnectionStatus('disconnected');
           setIsConnected(false);
-          toast.info('Connection lost. Trying to reconnect...');
+          toast.error('Connection failed. Please try again.');
           break;
         case 'closed':
           setConnectionStatus('disconnected');
@@ -176,6 +232,10 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE connection state:', pc.iceConnectionState);
+    };
+
     return pc;
   }, []);
 
@@ -183,36 +243,26 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const handlePeerJoined = useCallback(async (data: { userId: string; pseudoName: string }) => {
     console.log('Peer joined audio call:', data.pseudoName);
     
-    // Determine who creates the offer (user with "smaller" ID creates offer)
-    if (user?.id && data.userId && user.id < data.userId && !hasCreatedOfferRef.current) {
-      hasCreatedOfferRef.current = true;
-      
-      const pc = peerConnectionRef.current;
-      if (pc && localStreamRef.current) {
-        try {
-          console.log('Creating offer as initiator');
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: false
-          });
-          await pc.setLocalDescription(offer);
-          sendOffer(offer);
-        } catch (error) {
-          console.error('Error creating offer:', error);
-        }
-      }
-    }
-  }, [user?.id]);
+    // Short delay to ensure both sides are ready
+    setTimeout(() => {
+      tryCreateOffer();
+    }, 500);
+  }, [tryCreateOffer]);
 
   const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
     console.log('Received offer from:', data.fromPseudoName);
     const pc = peerConnectionRef.current;
-    if (!pc) return;
+    if (!pc) {
+      console.error('No peer connection when receiving offer');
+      return;
+    }
     
     try {
+      console.log('Setting remote description from offer...');
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
       
       // Process queued ICE candidates
+      console.log('Processing', iceCandidatesQueue.current.length, 'queued ICE candidates');
       while (iceCandidatesQueue.current.length > 0) {
         const candidate = iceCandidatesQueue.current.shift();
         if (candidate) {
@@ -220,9 +270,10 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         }
       }
       
-      console.log('Creating answer');
+      console.log('Creating answer...');
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      console.log('Sending answer to partner');
       sendAnswer(answer);
     } catch (error) {
       console.error('Error handling offer:', error);
@@ -230,14 +281,19 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   }, []);
 
   const handleAnswer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string }) => {
-    console.log('Received answer');
+    console.log('Received answer from partner');
     const pc = peerConnectionRef.current;
-    if (!pc) return;
+    if (!pc) {
+      console.error('No peer connection when receiving answer');
+      return;
+    }
     
     try {
+      console.log('Setting remote description from answer...');
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
       
       // Process queued ICE candidates
+      console.log('Processing', iceCandidatesQueue.current.length, 'queued ICE candidates');
       while (iceCandidatesQueue.current.length > 0) {
         const candidate = iceCandidatesQueue.current.shift();
         if (candidate) {
@@ -251,12 +307,18 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
 
   const handleIceCandidate = useCallback(async (data: { candidate: RTCIceCandidateInit; fromUserId: string }) => {
     const pc = peerConnectionRef.current;
-    if (!pc) return;
+    if (!pc) {
+      console.log('Queuing ICE candidate - no peer connection yet');
+      iceCandidatesQueue.current.push(data.candidate);
+      return;
+    }
     
     try {
-      if (pc.remoteDescription) {
+      if (pc.remoteDescription && pc.remoteDescription.type) {
+        console.log('Adding ICE candidate');
         await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
       } else {
+        console.log('Queuing ICE candidate - no remote description yet');
         iceCandidatesQueue.current.push(data.candidate);
       }
     } catch (error) {
@@ -269,13 +331,26 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     setConnectionStatus('disconnected');
     setIsConnected(false);
     setHasRemoteAudio(false);
+    toast.info('Partner left. Returning to lobby...');
     // Partner skipped - automatically skip as well (both return to lobby)
     onSkip();
   }, [onSkip]);
 
+  const handleSignalingConnected = useCallback(() => {
+    console.log('Signaling connected for audio call');
+    
+    // Partner might already be in session, try to create offer after a short delay
+    setTimeout(() => {
+      if (localStreamReadyRef.current && !hasCreatedOfferRef.current) {
+        tryCreateOffer();
+      }
+    }, 1000);
+  }, [tryCreateOffer]);
+
   // Signaling for WebRTC connection
   const { 
     isConnected: signalingConnected, 
+    participantCount,
     sendOffer, 
     sendAnswer, 
     sendIceCandidate 
@@ -289,6 +364,14 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     onIceCandidate: handleIceCandidate,
     onPeerLeft: handlePeerLeft
   });
+
+  // When signaling connects and participantCount > 1, partner is already there
+  useEffect(() => {
+    if (signalingConnected && participantCount > 1) {
+      console.log('Partner already in session, participant count:', participantCount);
+      handleSignalingConnected();
+    }
+  }, [signalingConnected, participantCount, handleSignalingConnected]);
 
   // Animate road movement (visual only, no sound)
   useEffect(() => {
@@ -388,6 +471,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     let mounted = true;
     hasCreatedOfferRef.current = false;
     iceCandidatesQueue.current = [];
+    localStreamReadyRef.current = false;
 
     const initializeAudioCall = async () => {
       try {
@@ -408,7 +492,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         }
         
         localStreamRef.current = stream;
-        console.log('Got local audio stream');
+        console.log('Got local audio stream:', stream.getAudioTracks().map(t => `${t.kind}:${t.readyState}`).join(', '));
         
         // Set up audio analysis for voice level visualization
         audioContextRef.current = new AudioContext();
@@ -420,11 +504,21 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         // Create RTCPeerConnection
         const pc = createPeerConnection();
 
-        // Add audio track to peer connection
+        // Add audio track to peer connection - CRITICAL FOR TWO-WAY AUDIO
         stream.getAudioTracks().forEach(track => {
-          console.log('Adding audio track to peer connection');
+          console.log('Adding audio track to peer connection:', track.kind, track.readyState);
           pc.addTrack(track, stream);
         });
+        
+        localStreamReadyRef.current = true;
+        console.log('Local audio stream ready, checking if should create offer...');
+        
+        // If signaling is already connected and partner might be waiting, try to create offer
+        if (signalingConnected) {
+          setTimeout(() => {
+            tryCreateOffer();
+          }, 500);
+        }
         
       } catch (err) {
         console.error('Failed to initialize audio call:', err);
@@ -442,7 +536,10 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       }
       
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current.getTracks().forEach(track => {
+          track.stop();
+          console.log('Stopped audio track:', track.kind);
+        });
         localStreamRef.current = null;
       }
       
@@ -466,7 +563,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         speechRecognitionRef.current.stop();
       }
     };
-  }, [createPeerConnection]);
+  }, [createPeerConnection, signalingConnected, tryCreateOffer]);
 
   // Duration timer
   useEffect(() => {

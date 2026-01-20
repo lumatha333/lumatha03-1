@@ -59,6 +59,7 @@ export const TextConnect: React.FC<TextConnectProps> = ({
   const [partnerPresence, setPartnerPresence] = useState<'online' | 'away'>('online');
   const [showReportDialog, setShowReportDialog] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingSentRef = useRef<number>(0);
 
@@ -101,6 +102,7 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     },
     onPeerLeft: () => {
       // Partner skipped - automatically skip as well (both return to lobby)
+      toast.info('Partner left. Returning to lobby...');
       onSkip();
     }
   });
@@ -143,13 +145,24 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     }
   }, [messages, myPseudoName, isConnected, sendRead, readMessageIds]);
 
-  const scrollToBottom = () => {
+  // Auto-scroll to bottom when new messages arrive - IMPROVED
+  const scrollToBottom = useCallback(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
 
+  // Scroll when messages change or when typing indicator appears
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isPartnerTyping]);
+  }, [messages, isPartnerTyping, scrollToBottom]);
+
+  // Also scroll after a short delay to ensure DOM is updated
+  useEffect(() => {
+    const timeoutId = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timeoutId);
+  }, [messages.length, scrollToBottom]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
@@ -171,6 +184,9 @@ export const TextConnect: React.FC<TextConnectProps> = ({
     // This sends the message to the database and partner sees it in real-time
     onSendMessage(inputValue.trim());
     setInputValue('');
+    
+    // Scroll to bottom after sending
+    setTimeout(scrollToBottom, 50);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -286,8 +302,11 @@ export const TextConnect: React.FC<TextConnectProps> = ({
         </div>
       </div>
 
-      {/* Messages - REAL TWO-WAY TEXT EXCHANGE */}
-      <div className="flex-1 overflow-y-auto px-3 space-y-2.5">
+      {/* Messages - REAL TWO-WAY TEXT EXCHANGE with auto-scroll */}
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-3 space-y-2.5 scroll-smooth"
+      >
         {messages.map((message) => {
           const isOwn = message.sender_pseudo_name === myPseudoName;
           const readStatus = getMessageReadStatus(message);
