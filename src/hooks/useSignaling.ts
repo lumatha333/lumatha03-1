@@ -22,7 +22,7 @@ export const useSignaling = (config: SignalingConfig) => {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const connect = useCallback(() => {
-    if (!config.sessionId || wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (!config.sessionId || !config.userId || wsRef.current?.readyState === WebSocket.OPEN) return;
 
     try {
       // Build WebSocket URL from environment to work in all Lovable Cloud environments.
@@ -122,7 +122,7 @@ export const useSignaling = (config: SignalingConfig) => {
 
   // Connect when session is available
   useEffect(() => {
-    if (config.sessionId) {
+    if (config.sessionId && config.userId) {
       connect();
     }
 
@@ -139,6 +139,8 @@ export const useSignaling = (config: SignalingConfig) => {
 
   // Send signaling message
   const send = useCallback((type: string, payload?: any) => {
+    if (!config.sessionId || !config.userId) return;
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type,

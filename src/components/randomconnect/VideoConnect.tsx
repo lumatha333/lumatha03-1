@@ -86,12 +86,19 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   // Try to create offer when conditions are met
   const tryCreateOffer = useCallback(async () => {
     const pc = peerConnectionRef.current;
-    
+
+    // Do not create an offer until we KNOW the other peer is present.
+    // Otherwise the offer can be "lost" (broadcast to nobody) and both users will be stuck.
+    if (!peerPresentRef.current) {
+      console.log('Peer not present yet — waiting before creating offer');
+      return;
+    }
+
     if (!pc || !localStreamReadyRef.current || hasCreatedOfferRef.current) {
-      console.log('Cannot create offer yet:', { 
-        hasPc: !!pc, 
-        localReady: localStreamReadyRef.current, 
-        alreadyCreated: hasCreatedOfferRef.current 
+      console.log('Cannot create offer yet:', {
+        hasPc: !!pc,
+        localReady: localStreamReadyRef.current,
+        alreadyCreated: hasCreatedOfferRef.current
       });
       return;
     }
@@ -103,7 +110,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
 
     hasCreatedOfferRef.current = true;
     isInitiatorRef.current = true;
-    
+
     try {
       console.log('Creating WebRTC offer as initiator...');
       const offer = await pc.createOffer({
@@ -118,17 +125,17 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       console.error('Error creating offer:', error);
       hasCreatedOfferRef.current = false;
     }
-  }, [shouldBeInitiator]);
+  }, [shouldBeInitiator, sendOffer]);
 
   // ICE restart function for reconnection
   const attemptIceRestart = useCallback(async () => {
     const pc = peerConnectionRef.current;
     if (!pc || iceReconnectAttemptedRef.current) return;
-    
+
     iceReconnectAttemptedRef.current = true;
     console.log('Attempting ICE restart...');
     toast.info('Reconnecting...');
-    
+
     try {
       // Create new offer with iceRestart flag
       const offer = await pc.createOffer({ iceRestart: true });
@@ -141,7 +148,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       toast.error('Reconnection failed. Returning to lobby...');
       onSkip();
     }
-  }, [onSkip]);
+  }, [onSkip, sendOffer]);
 
   // Create peer connection
   const createPeerConnection = useCallback(() => {
@@ -150,7 +157,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     }
 
     console.log('Creating new RTCPeerConnection...');
-    const pc = new RTCPeerConnection({ 
+    const pc = new RTCPeerConnection({
       iceServers,
       iceCandidatePoolSize: 10
     });
@@ -171,16 +178,16 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     // Handle remote stream - THIS IS WHERE WE SEE AND HEAR THE OTHER PERSON
     pc.ontrack = (event) => {
       console.log('Received remote track:', event.track.kind, event.track.readyState);
-      
+
       const [remoteStream] = event.streams;
       if (!remoteStream) {
         console.log('No remote stream in track event');
         return;
       }
-      
+
       remoteStreamRef.current = remoteStream;
       setHasRemoteStream(true);
-      
+
       // Display partner's video - REAL FACE TO FACE
       if (partnerVideoRef.current) {
         console.log('Setting partner video source');
@@ -200,7 +207,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       }
       remoteAudioRef.current.srcObject = remoteStream;
       remoteAudioRef.current.play().catch(e => console.log('Remote audio play error:', e));
-      
+
       setIsConnected(true);
       setConnectionStatus('connected');
       toast.success('Connected! You can now see and hear each other.');
@@ -235,13 +242,13 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
 
     pc.oniceconnectionstatechange = () => {
       console.log('ICE connection state:', pc.iceConnectionState);
-      
+
       // Clear any pending reconnect timer
       if (iceFailedTimerRef.current) {
         clearTimeout(iceFailedTimerRef.current);
         iceFailedTimerRef.current = null;
       }
-      
+
       // Handle ICE failures with automatic reconnect after 5 seconds
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
         console.log('ICE state is', pc.iceConnectionState, '- starting 5s reconnect timer');
@@ -251,7 +258,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           }
         }, 5000);
       }
-      
+
       // Reset reconnect flag when connection is restored
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
         iceReconnectAttemptedRef.current = false;
@@ -263,18 +270,27 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     };
 
     return pc;
-  }, []);
+  }, [attemptIceRestart, sendIceCandidate]);
 
   // Signaling handlers
   const handlePeerJoined = useCallback(async (data: { userId: string; pseudoName: string }) => {
     console.log('Peer joined video call:', data.pseudoName, 'userId:', data.userId);
     peerPresentRef.current = true;
-    
+
+    const pc = peerConnectionRef.current;
+    // If we already created an offer earlier, re-send it now that the peer is definitely present.
+    if (pc?.localDescription?.type === 'offer' && !answerReceived) {
+      console.log('Re-sending existing offer to newly joined peer');
+      sendOffer(pc.localDescription);
+      setOfferSent(true);
+      return;
+    }
+
     // Short delay to ensure both sides are ready
     setTimeout(() => {
       tryCreateOffer();
     }, 500);
-  }, [tryCreateOffer]);
+  }, [tryCreateOffer, answerReceived, sendOffer]);
 
   const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
     console.log('Received offer from:', data.fromPseudoName);
@@ -283,11 +299,11 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       console.error('No peer connection when receiving offer');
       return;
     }
-    
+
     try {
       console.log('Setting remote description from offer...');
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-      
+
       // Process queued ICE candidates
       console.log('Processing', iceCandidatesQueue.current.length, 'queued ICE candidates');
       while (iceCandidatesQueue.current.length > 0) {
@@ -296,7 +312,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
         }
       }
-      
+
       console.log('Creating answer...');
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -305,7 +321,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     } catch (error) {
       console.error('Error handling offer:', error);
     }
-  }, []);
+  }, [sendAnswer]);
 
   const handleAnswer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string }) => {
     console.log('Received answer from partner');
@@ -523,13 +539,13 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         localStreamReadyRef.current = true;
         console.log('Local stream ready, checking if should create offer...');
         
-        // If signaling is already connected and partner might be waiting, try to create offer
-        if (signalingConnected) {
+        // If signaling is already connected and partner is present, try to create offer
+        if (signalingConnected && peerPresentRef.current) {
           setTimeout(() => {
             tryCreateOffer();
           }, 500);
         }
-        
+
       } catch (err) {
         console.error('Failed to initialize video call:', err);
         toast.error('Camera and microphone access is required for video chat');
