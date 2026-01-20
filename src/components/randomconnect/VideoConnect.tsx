@@ -258,12 +258,13 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   }, []);
 
   const handlePeerLeft = useCallback(() => {
-    console.log('Peer left video call');
+    console.log('Peer left video call - returning to lobby');
     setConnectionStatus('disconnected');
     setIsConnected(false);
     setHasRemoteStream(false);
-    toast.info('Your partner has left the call');
-  }, []);
+    // Partner skipped - automatically skip as well (both return to lobby)
+    onSkip();
+  }, [onSkip]);
 
   // Signaling for WebRTC connection
   const { 

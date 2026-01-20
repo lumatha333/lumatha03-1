@@ -191,10 +191,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
         </div>
       </div>
 
-      {/* Security Tips */}
-      <SecurityTips />
-
-      {/* Start Button */}
+      {/* Start Button - FIRST, above security tips */}
       <Button
         onClick={onStart}
         disabled={isBanned}
@@ -203,14 +200,19 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
         {isBanned ? '🔒 You are temporarily banned' : '💙 Start Connecting'}
       </Button>
 
-      {/* Privacy Note */}
-      <div className="flex items-start gap-2 p-3 rounded-xl bg-muted/30">
-        <Shield className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Your identity is protected with a new random name each session. 
-          No following, no reconnecting, just genuine moments. 
-          33 seconds minimum stay before skip.
-        </p>
+      {/* Privacy & Security Explanation */}
+      <div className="space-y-3">
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-muted/30">
+          <Shield className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Your identity is protected with a new random name each session. 
+            No following, no reconnecting, just genuine moments. 
+            20 seconds minimum stay before skip.
+          </p>
+        </div>
+        
+        {/* Security Tips */}
+        <SecurityTips />
       </div>
     </div>
   );
