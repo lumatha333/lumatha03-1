@@ -596,6 +596,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
           <video
             ref={partnerVideoRef}
             autoPlay
+            muted
             playsInline
             className={`w-full h-full object-cover ${blurEnabled ? 'blur-xl' : ''}`}
           />

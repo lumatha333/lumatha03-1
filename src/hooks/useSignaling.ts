@@ -25,8 +25,12 @@ export const useSignaling = (config: SignalingConfig) => {
     if (!config.sessionId || wsRef.current?.readyState === WebSocket.OPEN) return;
 
     try {
-      // Use secure WebSocket for the edge function
-      const wsUrl = `wss://ufkacqdvrmapqpsisqai.supabase.co/functions/v1/random-connect-signaling`;
+      // Build WebSocket URL from environment to work in all Lovable Cloud environments.
+      // IMPORTANT: WebSockets cannot send custom headers, so we pass the publishable key as a query param.
+      const baseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
+      const wsBase = baseUrl.replace(/^http(s?):\/\//, 'wss://');
+      const apikey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ?? '';
+      const wsUrl = `${wsBase}/functions/v1/random-connect-signaling?apikey=${encodeURIComponent(apikey)}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
