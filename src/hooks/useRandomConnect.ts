@@ -347,9 +347,10 @@ export const useRandomConnect = () => {
     setStatus('idle');
   }, [user]);
 
-  // End session
+  // End session - BOTH USERS RETURN TO LOBBY
   const endSession = useCallback(async () => {
     if (session && user) {
+      // Update session status - this triggers realtime for both users
       await supabase
         .from('random_connect_sessions')
         .update({ status: 'ended', ended_at: new Date().toISOString() })
@@ -363,29 +364,28 @@ export const useRandomConnect = () => {
     setSession(null);
     setPartnerPseudoName('');
     setMessages([]);
-    setStatus('ended');
-    
-    // Reset after showing ended state
-    setTimeout(() => setStatus('idle'), 2000);
+    setStatus('idle'); // Return to lobby immediately
   }, [session, user]);
 
-  // Skip to next person
+  // Skip to next person - BOTH USERS RETURN TO LOBBY AUTOMATICALLY
   const skipToNext = useCallback(async () => {
     if (session && user) {
+      // Update session status - the other user will see this via realtime subscription
       await supabase
         .from('random_connect_sessions')
         .update({ status: 'skipped', ended_at: new Date().toISOString() })
         .eq('id', session.id);
     }
     
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+    }
+    
     setSession(null);
     setPartnerPseudoName('');
     setMessages([]);
-    setStatus('idle');
-    
-    // Immediately start searching again
-    setTimeout(() => startSearching(), 500);
-  }, [session, user, startSearching]);
+    setStatus('idle'); // Return to lobby - both users go back to matching lobby
+  }, [session, user]);
 
   // Send text message
   const sendMessage = useCallback(async (content: string) => {
@@ -424,12 +424,13 @@ export const useRandomConnect = () => {
     }
   }, [session, user, myPseudoName, mode]);
 
-  // Subscribe to messages
+  // Subscribe to messages AND session status changes
   useEffect(() => {
     if (!session) return;
     
     const channel = supabase
-      .channel(`session-messages-${session.id}`)
+      .channel(`session-${session.id}`)
+      // Listen for message inserts
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -441,7 +442,6 @@ export const useRandomConnect = () => {
         
         // Save received messages to memory
         if (mode === 'text' && user && newMessage.sender_pseudo_name !== myPseudoName) {
-          // Get current session count for indexing
           const { data: existingMemory } = await supabase
             .from('random_connect_text_memory')
             .select('session_index')
@@ -461,6 +461,22 @@ export const useRandomConnect = () => {
               is_own_message: false,
               session_index: sessionIndex
             });
+        }
+      })
+      // Listen for session status updates (when partner skips/ends)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'random_connect_sessions',
+        filter: `id=eq.${session.id}`
+      }, (payload) => {
+        const updatedSession = payload.new as any;
+        // If session was ended or skipped by the other user, return to lobby
+        if (updatedSession.status === 'ended' || updatedSession.status === 'skipped') {
+          setSession(null);
+          setPartnerPseudoName('');
+          setMessages([]);
+          setStatus('idle'); // Return to lobby automatically
         }
       })
       .subscribe();

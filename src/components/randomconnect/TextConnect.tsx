@@ -98,6 +98,10 @@ export const TextConnect: React.FC<TextConnectProps> = ({
       if (data.fromPseudoName !== myPseudoName) {
         setPartnerPresence(data.status as 'online' | 'away');
       }
+    },
+    onPeerLeft: () => {
+      // Partner skipped - automatically skip as well (both return to lobby)
+      onSkip();
     }
   });
 

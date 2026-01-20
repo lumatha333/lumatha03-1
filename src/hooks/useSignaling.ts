@@ -59,6 +59,11 @@ export const useSignaling = (config: SignalingConfig) => {
             case 'peer-left':
               setParticipantCount(prev => Math.max(0, prev - 1));
               config.onPeerLeft?.(message);
+              // Close the WebSocket when peer leaves - session ended
+              if (wsRef.current) {
+                wsRef.current.close();
+                wsRef.current = null;
+              }
               break;
             case 'offer':
               config.onOffer?.(message);
