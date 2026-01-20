@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { SkipForward, Eye, EyeOff, Camera, CameraOff, Mic, MicOff, Clock, Phone, Subtitles, Flag } from 'lucide-react';
+import { SkipForward, Eye, EyeOff, Camera, CameraOff, Mic, MicOff, Clock, Subtitles, Flag, Video, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSecurityDetection } from '@/hooks/useSecurityDetection';
 import { useSignaling } from '@/hooks/useSignaling';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { ReportDialog } from './ReportDialog';
-
+import { ConnectionQualityIndicator } from './ConnectionQualityIndicator';
+import { TwoWayConnectionStatus } from './TwoWayConnectionStatus';
+import { getIceServers } from '@/lib/turnServers';
 interface VideoConnectProps {
   myPseudoName: string;
   partnerPseudoName: string;
@@ -21,30 +23,8 @@ interface VideoConnectProps {
 const MAX_VIDEO_DURATION = 15 * 60; // 15 minutes in seconds
 const MANDATORY_STAY_SECONDS = 20; // 20 seconds before skip is available
 
-// STUN/TURN servers for WebRTC - includes TURN for NAT traversal
-const iceServers: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun4.l.google.com:19302' },
-  // TURN servers for users behind restrictive NATs/firewalls
-  {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  }
-];
+// Use centralized TURN server configuration with fallback support
+const iceServers = getIceServers();
 
 export const VideoConnect: React.FC<VideoConnectProps> = ({
   myPseudoName,
@@ -582,19 +562,36 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
 
   return (
     <div className="flex flex-col items-center min-h-[85vh] p-2 random-connect-protected">
-      {/* Connection Status */}
-      {connectionStatus === 'connecting' && (
-        <div className="glass-card px-4 py-2 rounded-xl text-center mb-2 z-10">
-          <div className="flex items-center gap-2">
-            <Phone className="w-4 h-4 text-primary animate-pulse" />
-            <p className="text-xs text-muted-foreground">Connecting to {partnerPseudoName}...</p>
-          </div>
+      {/* Two-Way Connection Status - Clear confirmation that BOTH can see/hear each other */}
+      <div className="w-full max-w-lg flex items-center justify-between mb-2 px-1">
+        <TwoWayConnectionStatus
+          mode="video"
+          isCameraOn={isCameraOn}
+          isMicOn={isMicOn}
+          hasRemoteVideo={hasRemoteStream}
+          hasRemoteAudio={hasRemoteStream}
+          isConnected={isConnected}
+          connectionStatus={connectionStatus}
+        />
+        <ConnectionQualityIndicator
+          peerConnection={peerConnectionRef.current}
+          isConnected={isConnected}
+          showDetails={false}
+        />
+      </div>
+
+      {/* Connection explanation for users */}
+      {connectionStatus === 'connected' && hasRemoteStream && (
+        <div className="glass-card px-3 py-1.5 rounded-lg mb-2 max-w-lg">
+          <p className="text-[11px] text-green-600 dark:text-green-400 text-center">
+            ✓ Face-to-face active • Both of you can see and hear each other clearly
+          </p>
         </div>
       )}
 
-      {/* Main Split Screen Video Container - FACE TO FACE - BOTH REAL FACES */}
+      {/* Main Split Screen Video Container - TRUE FACE TO FACE - BOTH REAL FACES VISIBLE */}
       <div className="relative flex-1 w-full max-w-lg rounded-2xl overflow-hidden bg-muted shadow-lg">
-        {/* Partner Video - Top Half (55%) - THEIR REAL FACE */}
+        {/* Partner Video - Top Half (55%) - YOU SEE THEIR REAL FACE HERE */}
         <div className="absolute top-0 left-0 right-0 h-[55%] bg-gradient-to-b from-card to-muted border-b-2 border-background">
           <video
             ref={partnerVideoRef}
@@ -603,26 +600,31 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
             className={`w-full h-full object-cover ${blurEnabled ? 'blur-xl' : ''}`}
           />
           
-          {/* Partner placeholder when no video */}
+          {/* Partner placeholder when waiting for connection */}
           {!hasRemoteStream && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-secondary/20 to-secondary/5">
-              <div className="w-20 h-20 rounded-full bg-secondary/20 flex items-center justify-center mb-3 animate-pulse">
-                <span className="text-3xl">👤</span>
+              <div className="w-20 h-20 rounded-full bg-secondary/20 flex items-center justify-center mb-3">
+                <Video className="w-8 h-8 text-secondary/60 animate-pulse" />
               </div>
               <p className="text-sm font-medium text-secondary">{partnerPseudoName}</p>
-              <p className="text-xs text-muted-foreground mt-1">Waiting for connection...</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {connectionStatus === 'connecting' ? 'Connecting camera...' : 'Waiting for partner\'s video...'}
+              </p>
             </div>
           )}
           
-          {/* Partner name badge */}
+          {/* Partner connected badge - confirms you CAN see them */}
           {hasRemoteStream && (
             <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <Video className="w-3.5 h-3.5 text-green-500" />
               <p className="text-xs font-medium text-secondary">{partnerPseudoName}</p>
+              <div className="flex items-center gap-0.5 ml-1">
+                <Volume2 className="w-3 h-3 text-green-500" />
+              </div>
             </div>
           )}
 
-          {/* Audio indicator when partner is speaking */}
+          {/* Audio wave indicator - shows partner is talking */}
           {hasRemoteStream && (
             <div className="absolute bottom-3 right-3 flex items-center gap-0.5">
               {[...Array(4)].map((_, i) => (

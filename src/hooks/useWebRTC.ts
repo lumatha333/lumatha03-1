@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { getIceServers } from '@/lib/turnServers';
 
 interface WebRTCConfig {
   onRemoteStream?: (stream: MediaStream) => void;
@@ -6,43 +7,8 @@ interface WebRTCConfig {
   onDataChannelMessage?: (message: string) => void;
 }
 
-// STUN/TURN server configuration for NAT traversal
-// Includes free public TURN servers for users behind restrictive firewalls
-const iceServers: RTCIceServer[] = [
-  // Google STUN servers
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun4.l.google.com:19302' },
-  // Open Relay TURN servers (free, for NAT traversal)
-  {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject'
-  },
-  // Additional free TURN servers
-  {
-    urls: 'turn:relay.metered.ca:80',
-    username: 'e8d0dbcb29e64c7ba6e8eb4e',
-    credential: 'xPfrFjGI9VaDfrz8'
-  },
-  {
-    urls: 'turn:relay.metered.ca:443',
-    username: 'e8d0dbcb29e64c7ba6e8eb4e',
-    credential: 'xPfrFjGI9VaDfrz8'
-  }
-];
+// Use centralized TURN server configuration
+const iceServers = getIceServers();
 
 export const useWebRTC = (config: WebRTCConfig = {}) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
