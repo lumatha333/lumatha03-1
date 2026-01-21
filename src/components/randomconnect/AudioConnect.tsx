@@ -99,48 +99,70 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     return user.id < partnerId;
   }, [user?.id, partnerId]);
 
-  // Try to create offer when conditions are met
+  // Try to create offer when conditions are met - called from checkAndCreateOffer
   const tryCreateOffer = useCallback(async () => {
     const pc = peerConnectionRef.current;
 
-    // Do not create an offer until we KNOW the other peer is present.
-    // Otherwise the offer can be "lost" (broadcast to nobody) and both users will be stuck.
+    // All conditions must be met
     if (!peerPresentRef.current) {
-      console.log('Peer not present yet — waiting before creating offer');
+      console.log('[tryCreateOffer] Peer not present yet');
       return;
     }
 
-    if (!pc || !localStreamReadyRef.current || hasCreatedOfferRef.current) {
-      console.log('Cannot create offer yet:', {
-        hasPc: !!pc,
-        localReady: localStreamReadyRef.current,
-        alreadyCreated: hasCreatedOfferRef.current
-      });
+    if (!pc) {
+      console.log('[tryCreateOffer] No peer connection');
+      return;
+    }
+    
+    if (!localStreamReadyRef.current) {
+      console.log('[tryCreateOffer] Local stream not ready');
+      return;
+    }
+    
+    if (hasCreatedOfferRef.current) {
+      console.log('[tryCreateOffer] Offer already created');
       return;
     }
 
     if (!shouldBeInitiator()) {
-      console.log('Not initiator, waiting for offer from partner');
+      console.log('[tryCreateOffer] Not initiator, waiting for offer from partner');
       return;
     }
 
     hasCreatedOfferRef.current = true;
 
     try {
-      console.log('Creating WebRTC offer as initiator...');
+      console.log('[tryCreateOffer] Creating WebRTC offer as initiator...');
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: false
       });
       await pc.setLocalDescription(offer);
-      console.log('Sending offer to partner');
+      console.log('[tryCreateOffer] Sending offer to partner');
       sendOfferRef.current?.(offer);
       setOfferSent(true);
     } catch (error) {
-      console.error('Error creating offer:', error);
+      console.error('[tryCreateOffer] Error creating offer:', error);
       hasCreatedOfferRef.current = false;
     }
   }, [shouldBeInitiator]);
+  
+  // Centralized function to check conditions and create offer
+  const checkAndCreateOffer = useCallback(() => {
+    console.log('[checkAndCreateOffer] Checking conditions:', {
+      peerPresent: peerPresentRef.current,
+      localStreamReady: localStreamReadyRef.current,
+      hasCreatedOffer: hasCreatedOfferRef.current,
+      hasPc: !!peerConnectionRef.current
+    });
+    
+    if (peerPresentRef.current && localStreamReadyRef.current && !hasCreatedOfferRef.current) {
+      // Small delay to ensure everything is settled
+      setTimeout(() => {
+        tryCreateOffer();
+      }, 100);
+    }
+  }, [tryCreateOffer]);
 
   // ICE restart function for reconnection
   const attemptIceRestart = useCallback(async () => {
@@ -286,24 +308,22 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   }, [attemptIceRestart]);
 
   // Signaling handlers
-  const handlePeerJoined = useCallback(async (data: { userId: string; pseudoName: string }) => {
-    console.log('Peer joined audio call:', data.pseudoName);
+  const handlePeerJoined = useCallback((data: { userId: string; pseudoName: string }) => {
+    console.log('[handlePeerJoined] Peer joined audio call:', data.pseudoName);
     peerPresentRef.current = true;
 
     const pc = peerConnectionRef.current;
     // If we already created an offer earlier, re-send it now that the peer is definitely present.
     if (pc?.localDescription?.type === 'offer' && !answerReceived) {
-      console.log('Re-sending existing offer to newly joined peer');
+      console.log('[handlePeerJoined] Re-sending existing offer to newly joined peer');
       sendOfferRef.current?.(pc.localDescription);
       setOfferSent(true);
       return;
     }
 
-    // Short delay to ensure both sides are ready
-    setTimeout(() => {
-      tryCreateOffer();
-    }, 500);
-  }, [tryCreateOffer, answerReceived]);
+    // Check if we should create an offer now
+    checkAndCreateOffer();
+  }, [checkAndCreateOffer, answerReceived]);
 
   const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
     console.log('Received offer from:', data.fromPseudoName);
@@ -395,21 +415,17 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
 
   // CRITICAL: Called when signaling joins, with list of existing participants
   const handleSignalingConnected = useCallback((existingParticipants: Array<{ userId: string; pseudoName: string }>) => {
-    console.log('Signaling connected for audio call, existing participants:', existingParticipants);
+    console.log('[handleSignalingConnected] Signaling connected for audio call, existing participants:', existingParticipants);
     
     // If there are existing participants, the partner is already in the room
     if (existingParticipants.length > 0) {
-      console.log('Partner already in session, marking peer as present');
+      console.log('[handleSignalingConnected] Partner already in session, marking peer as present');
       peerPresentRef.current = true;
       
-      // Try to create offer after a short delay to ensure local stream is ready
-      setTimeout(() => {
-        if (localStreamReadyRef.current && !hasCreatedOfferRef.current) {
-          tryCreateOffer();
-        }
-      }, 500);
+      // Check if we should create offer now
+      checkAndCreateOffer();
     }
-  }, [tryCreateOffer]);
+  }, [checkAndCreateOffer]);
 
   // Signaling for WebRTC connection
   const { 
@@ -530,17 +546,17 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     };
   }, [isMicOn, hasRemoteAudio]);
 
-  // Initialize WebRTC audio call
+  // Initialize WebRTC audio call - runs once on mount
   useEffect(() => {
     let mounted = true;
     hasCreatedOfferRef.current = false;
     iceCandidatesQueue.current = [];
     localStreamReadyRef.current = false;
-    peerPresentRef.current = false;
+    // Note: Don't reset peerPresentRef here - it may have been set by signaling already
 
     const initializeAudioCall = async () => {
       try {
-        console.log('Requesting microphone access...');
+        console.log('[initializeAudioCall] Requesting microphone access...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
             echoCancellation: true,
@@ -557,7 +573,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         }
         
         localStreamRef.current = stream;
-        console.log('Got local audio stream:', stream.getAudioTracks().map(t => `${t.kind}:${t.readyState}`).join(', '));
+        console.log('[initializeAudioCall] Got local audio stream:', stream.getAudioTracks().map(t => `${t.kind}:${t.readyState}`).join(', '));
         
         // Set up audio analysis for voice level visualization
         audioContextRef.current = new AudioContext();
@@ -571,22 +587,26 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
 
         // Add audio track to peer connection - CRITICAL FOR TWO-WAY AUDIO
         stream.getAudioTracks().forEach(track => {
-          console.log('Adding audio track to peer connection:', track.kind, track.readyState);
+          console.log('[initializeAudioCall] Adding audio track to peer connection:', track.kind, track.readyState);
           pc.addTrack(track, stream);
         });
         
+        // Mark local stream as ready
         localStreamReadyRef.current = true;
-        console.log('Local audio stream ready, checking if should create offer...');
+        console.log('[initializeAudioCall] Local audio stream ready, will check if should create offer');
         
-        // If signaling is already connected and partner is present, try to create offer
-        if (signalingConnected && peerPresentRef.current) {
+        // Check if we should create an offer now (peer might already be present)
+        if (peerPresentRef.current && !hasCreatedOfferRef.current) {
+          console.log('[initializeAudioCall] Peer already present, triggering offer check');
           setTimeout(() => {
-            tryCreateOffer();
-          }, 500);
+            if (peerPresentRef.current && localStreamReadyRef.current && !hasCreatedOfferRef.current) {
+              tryCreateOffer();
+            }
+          }, 200);
         }
 
       } catch (err) {
-        console.error('Failed to initialize audio call:', err);
+        console.error('[initializeAudioCall] Failed to initialize audio call:', err);
         toast.error('Microphone access is required for audio chat');
       }
     };
@@ -628,7 +648,8 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         speechRecognitionRef.current.stop();
       }
     };
-  }, [createPeerConnection, signalingConnected, tryCreateOffer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createPeerConnection]); // Only depend on createPeerConnection, not signaling state
 
   // Duration timer
   useEffect(() => {
