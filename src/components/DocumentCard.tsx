@@ -232,21 +232,50 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44 glass-card">
-                  <DropdownMenuItem onClick={async () => {
-                    try {
-                      // Fetch blob first to force browser to handle it properly
-                      const response = await fetch(doc.file_url);
-                      if (!response.ok) throw new Error('Failed to fetch');
-                      const blob = await response.blob();
-                      const blobUrl = URL.createObjectURL(blob);
-                      window.open(blobUrl, '_blank', 'noopener,noreferrer');
-                      // Clean up after a delay
-                      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-                      toast.success('Opened in new tab!');
-                    } catch (error) {
-                      // Fallback to direct URL
-                      window.open(doc.file_url, '_blank', 'noopener,noreferrer');
+                  <DropdownMenuItem onClick={() => {
+                    const fileType = doc.file_type?.toLowerCase() || '';
+                    const fileName = doc.file_name.toLowerCase();
+                    const encodedUrl = encodeURIComponent(doc.file_url);
+                    
+                    // Use Google Docs Viewer for PDFs
+                    if (fileType.includes('pdf') || fileName.endsWith('.pdf')) {
+                      window.open(`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`, '_blank', 'noopener,noreferrer');
+                      toast.success('Opening PDF in viewer...');
+                      return;
                     }
+                    
+                    // Use Office Online for Word, Excel, PowerPoint
+                    if (fileType.includes('word') || fileType.includes('document') || 
+                        fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
+                      window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodedUrl}`, '_blank', 'noopener,noreferrer');
+                      toast.success('Opening Word document in viewer...');
+                      return;
+                    }
+                    
+                    if (fileType.includes('excel') || fileType.includes('spreadsheet') || 
+                        fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
+                      window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodedUrl}`, '_blank', 'noopener,noreferrer');
+                      toast.success('Opening Excel file in viewer...');
+                      return;
+                    }
+                    
+                    if (fileType.includes('powerpoint') || fileType.includes('presentation') || 
+                        fileName.endsWith('.ppt') || fileName.endsWith('.pptx')) {
+                      window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodedUrl}`, '_blank', 'noopener,noreferrer');
+                      toast.success('Opening PowerPoint in viewer...');
+                      return;
+                    }
+                    
+                    // For images and other files, open directly
+                    if (fileType.includes('image') || fileName.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) {
+                      window.open(doc.file_url, '_blank', 'noopener,noreferrer');
+                      toast.success('Opening image...');
+                      return;
+                    }
+                    
+                    // Fallback: use Google Docs Viewer for other document types
+                    window.open(`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`, '_blank', 'noopener,noreferrer');
+                    toast.success('Opening in viewer...');
                   }}>
                     <ExternalLink className="w-3.5 h-3.5 mr-2" />Open in Browser
                   </DropdownMenuItem>
