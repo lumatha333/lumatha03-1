@@ -73,6 +73,11 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
   const iceReconnectAttemptedRef = useRef<boolean>(false);
   const iceFailedTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Avoid TS2448 by using stable refs for signaling senders (they are returned later by useSignaling)
+  const sendOfferRef = useRef<((sdp: RTCSessionDescriptionInit) => void) | null>(null);
+  const sendAnswerRef = useRef<((sdp: RTCSessionDescriptionInit) => void) | null>(null);
+  const sendIceCandidateRef = useRef<((candidate: RTCIceCandidateInit) => void) | null>(null);
+
   const { 
     currentSound, 
     volume, 
@@ -129,13 +134,13 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       });
       await pc.setLocalDescription(offer);
       console.log('Sending offer to partner');
-      sendOffer(offer);
+      sendOfferRef.current?.(offer);
       setOfferSent(true);
     } catch (error) {
       console.error('Error creating offer:', error);
       hasCreatedOfferRef.current = false;
     }
-  }, [shouldBeInitiator, sendOffer]);
+  }, [shouldBeInitiator]);
 
   // ICE restart function for reconnection
   const attemptIceRestart = useCallback(async () => {
@@ -150,7 +155,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       // Create new offer with iceRestart flag
       const offer = await pc.createOffer({ iceRestart: true });
       await pc.setLocalDescription(offer);
-      sendOffer(offer);
+      sendOfferRef.current?.(offer);
       setOfferSent(true);
       console.log('ICE restart offer sent');
     } catch (error) {
@@ -158,7 +163,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       toast.error('Reconnection failed. Returning to lobby...');
       onSkip();
     }
-  }, [onSkip, sendOffer]);
+  }, [onSkip]);
 
   // Create peer connection
   const createPeerConnection = useCallback(() => {
@@ -177,7 +182,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         console.log('Generated ICE candidate, sending to partner');
-        sendIceCandidate(event.candidate.toJSON());
+        sendIceCandidateRef.current?.(event.candidate.toJSON());
       }
     };
 
@@ -278,7 +283,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     };
 
     return pc;
-  }, [attemptIceRestart, sendIceCandidate]);
+  }, [attemptIceRestart]);
 
   // Signaling handlers
   const handlePeerJoined = useCallback(async (data: { userId: string; pseudoName: string }) => {
@@ -289,7 +294,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     // If we already created an offer earlier, re-send it now that the peer is definitely present.
     if (pc?.localDescription?.type === 'offer' && !answerReceived) {
       console.log('Re-sending existing offer to newly joined peer');
-      sendOffer(pc.localDescription);
+      sendOfferRef.current?.(pc.localDescription);
       setOfferSent(true);
       return;
     }
@@ -298,7 +303,7 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     setTimeout(() => {
       tryCreateOffer();
     }, 500);
-  }, [tryCreateOffer, answerReceived, sendOffer]);
+  }, [tryCreateOffer, answerReceived]);
 
   const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
     console.log('Received offer from:', data.fromPseudoName);
@@ -325,11 +330,11 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       console.log('Sending answer to partner');
-      sendAnswer(answer);
+      sendAnswerRef.current?.(answer);
     } catch (error) {
       console.error('Error handling offer:', error);
     }
-  }, [sendAnswer]);
+  }, []);
 
   const handleAnswer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string }) => {
     console.log('Received answer from partner');
@@ -416,6 +421,13 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     onIceCandidate: handleIceCandidate,
     onPeerLeft: handlePeerLeft
   });
+
+  // Keep signaling sender refs in sync
+  useEffect(() => {
+    sendOfferRef.current = sendOffer;
+    sendAnswerRef.current = sendAnswer;
+    sendIceCandidateRef.current = sendIceCandidate;
+  }, [sendOffer, sendAnswer, sendIceCandidate]);
 
   // When signaling connects and participantCount > 1, partner is already there
   useEffect(() => {

@@ -70,6 +70,11 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   const iceReconnectAttemptedRef = useRef<boolean>(false);
   const iceFailedTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Avoid TS2448 by using stable refs for signaling senders (they are returned later by useSignaling)
+  const sendOfferRef = useRef<((sdp: RTCSessionDescriptionInit) => void) | null>(null);
+  const sendAnswerRef = useRef<((sdp: RTCSessionDescriptionInit) => void) | null>(null);
+  const sendIceCandidateRef = useRef<((candidate: RTCIceCandidateInit) => void) | null>(null);
+
   // Security detection
   useSecurityDetection({
     enabled: true,
@@ -119,13 +124,13 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       });
       await pc.setLocalDescription(offer);
       console.log('Sending offer to partner');
-      sendOffer(offer);
+      sendOfferRef.current?.(offer);
       setOfferSent(true);
     } catch (error) {
       console.error('Error creating offer:', error);
       hasCreatedOfferRef.current = false;
     }
-  }, [shouldBeInitiator, sendOffer]);
+  }, [shouldBeInitiator]);
 
   // ICE restart function for reconnection
   const attemptIceRestart = useCallback(async () => {
@@ -140,7 +145,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       // Create new offer with iceRestart flag
       const offer = await pc.createOffer({ iceRestart: true });
       await pc.setLocalDescription(offer);
-      sendOffer(offer);
+      sendOfferRef.current?.(offer);
       setOfferSent(true);
       console.log('ICE restart offer sent');
     } catch (error) {
@@ -148,7 +153,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       toast.error('Reconnection failed. Returning to lobby...');
       onSkip();
     }
-  }, [onSkip, sendOffer]);
+  }, [onSkip]);
 
   // Create peer connection
   const createPeerConnection = useCallback(() => {
@@ -167,7 +172,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         console.log('Generated ICE candidate, sending to partner');
-        sendIceCandidate(event.candidate.toJSON());
+        sendIceCandidateRef.current?.(event.candidate.toJSON());
       }
     };
 
@@ -270,7 +275,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     };
 
     return pc;
-  }, [attemptIceRestart, sendIceCandidate]);
+  }, [attemptIceRestart]);
 
   // Signaling handlers
   const handlePeerJoined = useCallback(async (data: { userId: string; pseudoName: string }) => {
@@ -281,7 +286,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     // If we already created an offer earlier, re-send it now that the peer is definitely present.
     if (pc?.localDescription?.type === 'offer' && !answerReceived) {
       console.log('Re-sending existing offer to newly joined peer');
-      sendOffer(pc.localDescription);
+      sendOfferRef.current?.(pc.localDescription);
       setOfferSent(true);
       return;
     }
@@ -290,7 +295,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     setTimeout(() => {
       tryCreateOffer();
     }, 500);
-  }, [tryCreateOffer, answerReceived, sendOffer]);
+  }, [tryCreateOffer, answerReceived]);
 
   const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
     console.log('Received offer from:', data.fromPseudoName);
@@ -317,11 +322,11 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       console.log('Sending answer to partner');
-      sendAnswer(answer);
+      sendAnswerRef.current?.(answer);
     } catch (error) {
       console.error('Error handling offer:', error);
     }
-  }, [sendAnswer]);
+  }, []);
 
   const handleAnswer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string }) => {
     console.log('Received answer from partner');
@@ -410,6 +415,13 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     onIceCandidate: handleIceCandidate,
     onPeerLeft: handlePeerLeft
   });
+
+  // Keep signaling sender refs in sync
+  useEffect(() => {
+    sendOfferRef.current = sendOffer;
+    sendAnswerRef.current = sendAnswer;
+    sendIceCandidateRef.current = sendIceCandidate;
+  }, [sendOffer, sendAnswer, sendIceCandidate]);
 
   // When signaling connects and participantCount > 1, partner is already there
   useEffect(() => {
