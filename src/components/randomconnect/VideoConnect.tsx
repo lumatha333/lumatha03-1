@@ -88,28 +88,33 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     return user.id < partnerId;
   }, [user?.id, partnerId]);
 
-  // Try to create offer when conditions are met
+  // Try to create offer when conditions are met - called from checkAndCreateOffer
   const tryCreateOffer = useCallback(async () => {
     const pc = peerConnectionRef.current;
 
-    // Do not create an offer until we KNOW the other peer is present.
-    // Otherwise the offer can be "lost" (broadcast to nobody) and both users will be stuck.
+    // All conditions must be met
     if (!peerPresentRef.current) {
-      console.log('Peer not present yet — waiting before creating offer');
+      console.log('[tryCreateOffer] Peer not present yet');
       return;
     }
 
-    if (!pc || !localStreamReadyRef.current || hasCreatedOfferRef.current) {
-      console.log('Cannot create offer yet:', {
-        hasPc: !!pc,
-        localReady: localStreamReadyRef.current,
-        alreadyCreated: hasCreatedOfferRef.current
-      });
+    if (!pc) {
+      console.log('[tryCreateOffer] No peer connection');
+      return;
+    }
+    
+    if (!localStreamReadyRef.current) {
+      console.log('[tryCreateOffer] Local stream not ready');
+      return;
+    }
+    
+    if (hasCreatedOfferRef.current) {
+      console.log('[tryCreateOffer] Offer already created');
       return;
     }
 
     if (!shouldBeInitiator()) {
-      console.log('Not initiator, waiting for offer from partner');
+      console.log('[tryCreateOffer] Not initiator, waiting for offer from partner');
       return;
     }
 
@@ -117,20 +122,37 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     isInitiatorRef.current = true;
 
     try {
-      console.log('Creating WebRTC offer as initiator...');
+      console.log('[tryCreateOffer] Creating WebRTC offer as initiator...');
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true
       });
       await pc.setLocalDescription(offer);
-      console.log('Sending offer to partner');
+      console.log('[tryCreateOffer] Sending offer to partner');
       sendOfferRef.current?.(offer);
       setOfferSent(true);
     } catch (error) {
-      console.error('Error creating offer:', error);
+      console.error('[tryCreateOffer] Error creating offer:', error);
       hasCreatedOfferRef.current = false;
     }
   }, [shouldBeInitiator]);
+  
+  // Centralized function to check conditions and create offer
+  const checkAndCreateOffer = useCallback(() => {
+    console.log('[checkAndCreateOffer] Checking conditions:', {
+      peerPresent: peerPresentRef.current,
+      localStreamReady: localStreamReadyRef.current,
+      hasCreatedOffer: hasCreatedOfferRef.current,
+      hasPc: !!peerConnectionRef.current
+    });
+    
+    if (peerPresentRef.current && localStreamReadyRef.current && !hasCreatedOfferRef.current) {
+      // Small delay to ensure everything is settled
+      setTimeout(() => {
+        tryCreateOffer();
+      }, 100);
+    }
+  }, [tryCreateOffer]);
 
   // ICE restart function for reconnection
   const attemptIceRestart = useCallback(async () => {
@@ -278,24 +300,22 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
   }, [attemptIceRestart]);
 
   // Signaling handlers
-  const handlePeerJoined = useCallback(async (data: { userId: string; pseudoName: string }) => {
-    console.log('Peer joined video call:', data.pseudoName, 'userId:', data.userId);
+  const handlePeerJoined = useCallback((data: { userId: string; pseudoName: string }) => {
+    console.log('[handlePeerJoined] Peer joined video call:', data.pseudoName, 'userId:', data.userId);
     peerPresentRef.current = true;
 
     const pc = peerConnectionRef.current;
     // If we already created an offer earlier, re-send it now that the peer is definitely present.
     if (pc?.localDescription?.type === 'offer' && !answerReceived) {
-      console.log('Re-sending existing offer to newly joined peer');
+      console.log('[handlePeerJoined] Re-sending existing offer to newly joined peer');
       sendOfferRef.current?.(pc.localDescription);
       setOfferSent(true);
       return;
     }
 
-    // Short delay to ensure both sides are ready
-    setTimeout(() => {
-      tryCreateOffer();
-    }, 500);
-  }, [tryCreateOffer, answerReceived]);
+    // Check if we should create an offer now
+    checkAndCreateOffer();
+  }, [checkAndCreateOffer, answerReceived]);
 
   const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
     console.log('Received offer from:', data.fromPseudoName);
@@ -388,22 +408,18 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
 
   // CRITICAL: Called when signaling joins, with list of existing participants
   const handleSignalingConnected = useCallback((existingParticipants: Array<{ userId: string; pseudoName: string }>) => {
-    console.log('Signaling connected, existing participants:', existingParticipants);
+    console.log('[handleSignalingConnected] Signaling connected, existing participants:', existingParticipants);
     signalingReadyRef.current = true;
     
     // If there are existing participants, the partner is already in the room
     if (existingParticipants.length > 0) {
-      console.log('Partner already in session, marking peer as present');
+      console.log('[handleSignalingConnected] Partner already in session, marking peer as present');
       peerPresentRef.current = true;
       
-      // Try to create offer after a short delay to ensure local stream is ready
-      setTimeout(() => {
-        if (localStreamReadyRef.current && !hasCreatedOfferRef.current) {
-          tryCreateOffer();
-        }
-      }, 500);
+      // Check if we should create offer now
+      checkAndCreateOffer();
     }
-  }, [tryCreateOffer]);
+  }, [checkAndCreateOffer]);
 
   // Signaling for WebRTC connection
   const { 
@@ -494,18 +510,18 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     };
   }, [captionsEnabled]);
 
-  // Initialize WebRTC and camera
+  // Initialize WebRTC and camera - runs once on mount
   useEffect(() => {
     let mounted = true;
     hasCreatedOfferRef.current = false;
     iceCandidatesQueue.current = [];
     localStreamReadyRef.current = false;
-    peerPresentRef.current = false;
+    // Note: Don't reset peerPresentRef here - it may have been set by signaling already
     
     const initializeVideoCall = async () => {
       try {
         // Request camera and microphone with optimal settings for real-time communication
-        console.log('Requesting camera and microphone access...');
+        console.log('[initializeVideoCall] Requesting camera and microphone access...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: {
             width: { ideal: 1280, min: 640 },
@@ -528,7 +544,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         }
         
         localStreamRef.current = stream;
-        console.log('Got local stream with', stream.getTracks().length, 'tracks:', 
+        console.log('[initializeVideoCall] Got local stream with', stream.getTracks().length, 'tracks:', 
           stream.getTracks().map(t => `${t.kind}:${t.readyState}`).join(', '));
         
         // Set local video - THIS IS YOUR OWN FACE
@@ -543,22 +559,28 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
 
         // Add local stream tracks to peer connection - CRITICAL FOR TWO-WAY COMMUNICATION
         stream.getTracks().forEach(track => {
-          console.log('Adding track to peer connection:', track.kind, track.readyState);
+          console.log('[initializeVideoCall] Adding track to peer connection:', track.kind, track.readyState);
           pc.addTrack(track, stream);
         });
         
+        // Mark local stream as ready
         localStreamReadyRef.current = true;
-        console.log('Local stream ready, checking if should create offer...');
+        console.log('[initializeVideoCall] Local stream ready, will check if should create offer');
         
-        // If signaling is already connected and partner is present, try to create offer
-        if (signalingConnected && peerPresentRef.current) {
+        // Check if we should create an offer now (peer might already be present)
+        // We need to call the ref-based check because this callback may have stale closure
+        if (peerPresentRef.current && !hasCreatedOfferRef.current) {
+          console.log('[initializeVideoCall] Peer already present, triggering offer check');
+          // Use a small timeout to ensure refs are synced
           setTimeout(() => {
-            tryCreateOffer();
-          }, 500);
+            if (peerPresentRef.current && localStreamReadyRef.current && !hasCreatedOfferRef.current) {
+              tryCreateOffer();
+            }
+          }, 200);
         }
 
       } catch (err) {
-        console.error('Failed to initialize video call:', err);
+        console.error('[initializeVideoCall] Failed to initialize video call:', err);
         toast.error('Camera and microphone access is required for video chat');
       }
     };
@@ -591,7 +613,8 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
         speechRecognitionRef.current.stop();
       }
     };
-  }, [createPeerConnection, signalingConnected, tryCreateOffer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createPeerConnection]); // Only depend on createPeerConnection, not signaling state
 
   // Duration timer
   useEffect(() => {
