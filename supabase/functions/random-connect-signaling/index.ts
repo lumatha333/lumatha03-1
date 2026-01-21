@@ -13,8 +13,13 @@ interface SignalingMessage {
   payload?: any;
 }
 
-// Store active connections per session
-const sessionConnections = new Map<string, Map<string, WebSocket>>();
+interface Participant {
+  socket: WebSocket;
+  pseudoName: string;
+}
+
+// Store active connections per session with participant info
+const sessionConnections = new Map<string, Map<string, Participant>>();
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -52,20 +57,43 @@ Deno.serve(async (req) => {
         }
         const sessionRoom = sessionConnections.get(message.sessionId)!;
         
-        // Add this connection to session
-        sessionRoom.set(message.userId, socket);
+        // Add this connection to session with participant info
+        sessionRoom.set(message.userId, {
+          socket,
+          pseudoName: message.pseudoName
+        });
 
         // Broadcast to other participants in the session
         const broadcastToSession = (msg: any, excludeUserId?: string) => {
-          sessionRoom.forEach((ws, odId) => {
-            if (ws !== socket && ws.readyState === WebSocket.OPEN && odId !== excludeUserId) {
-              ws.send(JSON.stringify(msg));
+          sessionRoom.forEach((participant, odId) => {
+            if (participant.socket !== socket && participant.socket.readyState === WebSocket.OPEN && odId !== excludeUserId) {
+              participant.socket.send(JSON.stringify(msg));
             }
           });
         };
 
         switch (message.type) {
           case 'join':
+            // CRITICAL FIX: First, send existing participants to the newly joined user
+            // This ensures they know who is already in the room
+            const existingParticipants: Array<{ userId: string; pseudoName: string }> = [];
+            sessionRoom.forEach((participant, odId) => {
+              if (odId !== message.userId) {
+                existingParticipants.push({
+                  userId: odId,
+                  pseudoName: participant.pseudoName
+                });
+              }
+            });
+
+            // Send confirmation with existing participants list
+            socket.send(JSON.stringify({
+              type: 'joined',
+              sessionId: message.sessionId,
+              participantCount: sessionRoom.size,
+              existingParticipants
+            }));
+
             // Notify others that someone joined
             broadcastToSession({
               type: 'peer-joined',
@@ -73,17 +101,11 @@ Deno.serve(async (req) => {
               pseudoName: message.pseudoName,
               timestamp: new Date().toISOString()
             });
-            
-            // Send back confirmation
-            socket.send(JSON.stringify({
-              type: 'joined',
-              sessionId: message.sessionId,
-              participantCount: sessionRoom.size
-            }));
             break;
 
           case 'offer':
             // Forward WebRTC offer to peer
+            console.log('Forwarding offer from', message.userId);
             broadcastToSession({
               type: 'offer',
               sdp: message.payload.sdp,
@@ -94,6 +116,7 @@ Deno.serve(async (req) => {
 
           case 'answer':
             // Forward WebRTC answer to peer
+            console.log('Forwarding answer from', message.userId);
             broadcastToSession({
               type: 'answer',
               sdp: message.payload.sdp,
@@ -164,9 +187,9 @@ Deno.serve(async (req) => {
           sessionRoom.delete(currentUserId);
           
           // Notify others
-          sessionRoom.forEach((ws) => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
+          sessionRoom.forEach((participant) => {
+            if (participant.socket.readyState === WebSocket.OPEN) {
+              participant.socket.send(JSON.stringify({
                 type: 'peer-left',
                 userId: currentUserId,
                 pseudoName: currentPseudoName

@@ -386,16 +386,23 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     onSkip();
   }, [onSkip]);
 
-  const handleSignalingConnected = useCallback(() => {
-    console.log('Signaling connected, participant count received');
+  // CRITICAL: Called when signaling joins, with list of existing participants
+  const handleSignalingConnected = useCallback((existingParticipants: Array<{ userId: string; pseudoName: string }>) => {
+    console.log('Signaling connected, existing participants:', existingParticipants);
     signalingReadyRef.current = true;
     
-    // Partner is already in session, try to create offer after a short delay
-    setTimeout(() => {
-      if (localStreamReadyRef.current && !hasCreatedOfferRef.current) {
-        tryCreateOffer();
-      }
-    }, 1000);
+    // If there are existing participants, the partner is already in the room
+    if (existingParticipants.length > 0) {
+      console.log('Partner already in session, marking peer as present');
+      peerPresentRef.current = true;
+      
+      // Try to create offer after a short delay to ensure local stream is ready
+      setTimeout(() => {
+        if (localStreamReadyRef.current && !hasCreatedOfferRef.current) {
+          tryCreateOffer();
+        }
+      }, 500);
+    }
   }, [tryCreateOffer]);
 
   // Signaling for WebRTC connection
@@ -409,6 +416,7 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     sessionId: sessionId || null,
     userId: user?.id || '',
     pseudoName: myPseudoName,
+    onSignalingConnected: handleSignalingConnected,
     onPeerJoined: handlePeerJoined,
     onOffer: handleOffer,
     onAnswer: handleAnswer,
@@ -422,15 +430,6 @@ export const VideoConnect: React.FC<VideoConnectProps> = ({
     sendAnswerRef.current = sendAnswer;
     sendIceCandidateRef.current = sendIceCandidate;
   }, [sendOffer, sendAnswer, sendIceCandidate]);
-
-  // When signaling connects and participantCount > 1, partner is already there
-  useEffect(() => {
-    if (signalingConnected && participantCount > 1) {
-      console.log('Partner already in session, participant count:', participantCount);
-      peerPresentRef.current = true;
-      handleSignalingConnected();
-    }
-  }, [signalingConnected, participantCount, handleSignalingConnected]);
 
   // Enable skip after mandatory stay (20 seconds)
   useEffect(() => {

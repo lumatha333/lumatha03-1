@@ -4,6 +4,7 @@ interface SignalingConfig {
   sessionId: string | null;
   userId: string;
   pseudoName: string;
+  onSignalingConnected?: (existingParticipants: Array<{ userId: string; pseudoName: string }>) => void;
   onPeerJoined?: (data: { userId: string; pseudoName: string }) => void;
   onPeerLeft?: (data: { userId: string; pseudoName: string }) => void;
   onOffer?: (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => void;
@@ -20,6 +21,7 @@ export const useSignaling = (config: SignalingConfig) => {
   const [participantCount, setParticipantCount] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasJoinedRef = useRef(false);
 
   const connect = useCallback(() => {
     if (!config.sessionId || !config.userId || wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -55,6 +57,10 @@ export const useSignaling = (config: SignalingConfig) => {
           switch (message.type) {
             case 'joined':
               setParticipantCount(message.participantCount);
+              hasJoinedRef.current = true;
+              // CRITICAL: Notify that we've joined and pass existing participants
+              // This allows the initiator to create an offer immediately if peers exist
+              config.onSignalingConnected?.(message.existingParticipants || []);
               break;
             case 'peer-joined':
               setParticipantCount(prev => prev + 1);
@@ -101,6 +107,7 @@ export const useSignaling = (config: SignalingConfig) => {
         console.log('Signaling WebSocket closed');
         setIsConnected(false);
         wsRef.current = null;
+        hasJoinedRef.current = false;
 
         // Attempt reconnection after 2 seconds if still in session
         if (config.sessionId) {
