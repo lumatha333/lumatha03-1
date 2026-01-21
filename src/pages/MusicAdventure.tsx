@@ -30,141 +30,9 @@ const CHALLENGE_CATEGORIES = [
   { name: 'Travel', icon: '✈️' }
 ];
 
-// ============= GENERATE 500+ UNIQUE SYSTEM CHALLENGES =============
-const generateSystemChallenges = () => {
-  const challenges: any[] = [];
-  let id = 1;
-  
-  const tasksByCategory: Record<string, string[]> = {
-    health: [
-      'Drink 2L of water today', 'Sleep 8 hours tonight', 'Take your vitamins', 'Eat 5 servings of fruits', 'Walk 10,000 steps',
-      'Practice 10-min meditation', 'No sugar for 24 hours', 'Drink green tea twice', 'Eat a colorful salad', 'Stay hydrated every hour',
-      'Stretch for 15 minutes', 'Avoid processed foods', 'Eat mindfully today', 'Take a 20-min power nap', 'Do deep breathing 5 times',
-      'Drink lemon water morning', 'Eat a healthy breakfast', 'No caffeine after 2pm', 'Eat rainbow vegetables', 'Track water intake all day',
-      'Eat whole grain meals', 'Take breaks every hour', 'No snacking after 8pm', 'Eat probiotic foods', 'Write 3 gratitude items',
-      'Limit screen to 2hrs', 'Sleep before 10pm', 'Wake with sunrise', 'Only drink water today', 'Eat omega-3 rich food',
-      'Fast for 12 hours', 'Eat 30g protein breakfast', 'No artificial sweeteners', 'Chew food 30 times', 'Sit in sunlight 15min',
-      'Practice box breathing', 'Do eye exercises', 'Massage temples 5min', 'Oil pulling morning', 'Cold shower 30 seconds',
-      'Eat fermented foods', 'No alcohol today', 'Herbal tea before bed', 'Walk after meals', 'Stand every 30 minutes',
-      'Foam roll muscles', 'Practice good posture', 'Hydrate before meals', 'Eat slowly mindfully', 'Digital sunset at 9pm'
-    ],
-    fitness: [
-      'Complete 30 pushups', 'Run for 30 minutes', 'Do 50 bodyweight squats', 'Plank for 3 minutes total', 'Jump rope 200 times',
-      'Complete yoga session', 'Do HIIT workout 20min', 'Swim 20 laps', 'Cycle 10km distance', 'Strength train upper body',
-      'Core workout 15 minutes', 'Complete leg day routine', 'Upper body circuit', 'Flexibility stretching', 'Dance workout 30min',
-      'Climb 20 flights stairs', 'Morning jog 3km', 'Evening walk 5km', 'Bodyweight circuit 3x', 'Complete 50 burpees',
-      '100 mountain climbers', 'Walking lunges 3 sets', 'Arm workout routine', 'Back exercises 4 sets', 'Cardio blast 25min',
-      'Balance training 10min', 'Resistance band workout', '50 kettlebell swings', 'Boxing workout 20min', 'Pilates full session',
-      'Dead hang 2 minutes', 'Calf raises 100 total', 'Wall sits 5 minutes', 'Bear crawls 50 meters', 'Handstand practice',
-      'Sprint intervals 10x', 'Pull-ups 3 sets max', 'Dips 30 total', 'Jumping jacks 200', 'High knees 3 minutes',
-      'Bicycle crunches 100', 'Russian twists 60', 'Leg raises 50', 'Superman holds 5x30s', 'Glute bridges 50',
-      'Side planks 2min each', 'Skipping 10 minutes', 'Rowing 2000m', 'Battle ropes 5 minutes', 'TRX workout 30min'
-    ],
-    mind: [
-      'Journal for 15 minutes', 'Practice mindfulness walk', 'Solve a crossword puzzle', 'Learn a new skill today', 'Read for 45 minutes',
-      'Digital detox 2 hours', 'Write gratitude journal', 'Visualization 10 minutes', 'Complete brain teaser', 'Play memory game 15min',
-      'Self-reflection journaling', 'Set 3 weekly goals', 'Positive affirmations 10', 'Stress relief techniques', 'Creative thinking task',
-      'Solve logic puzzle', 'Mind mapping session', 'Focus training 25min', 'Attention exercise 15min', 'Mental clarity meditation',
-      'Emotional check-in journal', 'Self-discovery writing', 'Thought journaling 20min', 'Cognitive exercise set', 'Mental rest break',
-      'Breathing meditation 15min', 'Body scan meditation', 'Loving kindness practice', 'Walking meditation 20min', 'Silent reflection hour',
-      'Learn 20 new words', 'Practice a new language', 'Memorize a poem', 'Mental math practice', 'Observe without judgment',
-      'Write future letter', 'Analyze a dream', 'Practice active listening', 'Mindful eating exercise', 'Gratitude meditation',
-      'Creativity journaling', 'Problem solving exercise', 'Read philosophy article', 'Practice non-reaction', 'Mindful breathing 20min',
-      'Stream of consciousness', 'Visual imagination 15min', 'Practice empathy exercise', 'Declutter mind dump', 'Evening reflection ritual'
-    ],
-    learning: [
-      'Learn 15 vocabulary words', 'Watch TED talk & notes', 'Complete online course lesson', 'Read educational article', 'Practice new skill 1hr',
-      'Language lesson 30min', 'Study focus session 2hr', 'Complete coding tutorial', 'Research interesting topic', 'Write detailed notes',
-      'Learn basic coding concept', 'Study history chapter', 'Learn science facts', 'Financial literacy reading', 'Photography technique',
-      'Music theory lesson', 'Art technique practice', 'Cook new recipe', 'DIY project complete', 'Creative writing practice',
-      'Public speaking practice', 'Leadership reading', 'Communication skill work', 'Time management technique', 'Productivity method learn',
-      'Excel new formula', 'Design principle study', 'Marketing concept learn', 'Business case study', 'Technical skill practice',
-      'Learn chess strategy', 'Study geography facts', 'Practice instrument 30min', 'Calligraphy practice', 'Learn new software',
-      'Study psychology concept', 'Economics basics read', 'Philosophy text study', 'Learn meditation type', 'Cultural learning',
-      'Watch documentary & notes', 'Podcast learning 1 hour', 'Audiobook chapter', 'Memory technique practice', 'Speed reading exercise',
-      'Learn origami pattern', 'Study architecture basics', 'Astronomy facts learn', 'Learn first aid skill', 'Environmental science read'
-    ],
-    lifestyle: [
-      'Morning routine complete', 'Organize one room area', 'Plan entire week ahead', 'Connect with old friend', 'Random act of kindness',
-      'Try new restaurant', 'Cook completely new dish', 'Declutter one drawer', 'Update wardrobe piece', 'Create daily routine',
-      'Monthly budget review', 'Social media cleanup', 'Plant something new', 'Complete self-care ritual', 'Evening routine establish',
-      'Morning ritual perfect', 'Weekend plan complete', 'Hobby time 2 hours', 'Quality family time', 'Friend meetup organize',
-      'Nature walk 1 hour', 'Watch sunset mindfully', 'Plan a picnic day', 'Movie night organize', 'Game night host',
-      'Start book club', 'Coffee date arrange', 'Shop consciously', 'Meal prep Sunday', 'Home improvement task',
-      'Write thank you note', 'Call family member', 'Help a neighbor', 'Donate unused items', 'Clean digital files',
-      'Update passwords', 'Backup important files', 'Organize photos', 'Plan dream trip', 'Create vision board',
-      'Write bucket list', 'Set monthly goals', 'Track expenses today', 'No shopping challenge', 'Minimalism practice',
-      'Capsule wardrobe plan', 'Sustainable swap make', 'Zero waste day try', 'Local business support', 'Handwritten letter send'
-    ],
-    travel: [
-      'Visit local landmark', 'Explore new neighborhood', 'Try authentic local cuisine', 'Take scenic photographs', 'Talk to local residents',
-      'Visit local museum', 'Explore city park', 'Historical site exploration', 'Beach day adventure', 'Mountain hiking trip',
-      'City walking tour 3hrs', 'Cultural experience attend', 'Local market exploration', 'Visit religious site', 'Art gallery visit',
-      'Nature reserve walk', 'Waterfall expedition', 'Sunrise spot discovery', 'Sunset viewpoint visit', 'Hidden gem find',
-      'Food tour experience', 'Night market explore', 'Street food adventure', 'Local festival attend', 'Traditional event join',
-      'Boat ride experience', 'Cable car journey', 'Scenic train ride', 'Road trip day', 'Camping night out',
-      'Star gazing location', 'Bird watching spot', 'Botanical garden visit', 'Zoo exploration', 'Aquarium visit',
-      'Castle exploration', 'Ancient ruins visit', 'Bridge walk famous', 'Tower climb', 'Underground tour',
-      'Wine region visit', 'Coffee plantation tour', 'Farm visit experience', 'Fishing village explore', 'Island hopping',
-      'Desert experience', 'Rainforest walk', 'Glacier viewing', 'Hot springs visit', 'Northern lights chase'
-    ]
-  };
-
-  const durations = ['daily', 'weekly', 'monthly', 'yearly', 'lifetime'];
-  const categoryIcons: Record<string, string> = {
-    health: '💚', fitness: '🏃', mind: '🧠', learning: '📚', lifestyle: '🌟', travel: '✈️'
-  };
-
-  // Add all base challenges (300 total - 50 per category)
-  Object.entries(tasksByCategory).forEach(([category, tasks]) => {
-    tasks.forEach((task, i) => {
-      const dur = durations[i % 5];
-      challenges.push({
-        id: `sys-${id++}`,
-        title: task,
-        description: `Complete this ${category} challenge`,
-        category,
-        categoryIcon: categoryIcons[category],
-        duration: dur,
-        type: 'system',
-        likes: 0,
-        comments: 0,
-        createdAt: new Date().toISOString()
-      });
-    });
-  });
-
-  // Generate 200 more unique challenges
-  const extraChallenges = [
-    { cat: 'health', tasks: ['Drink herbal infusion', 'Practice qi gong', 'Do lymphatic drainage', 'Try acupressure points', 'Practice earthing barefoot', 'Use blue light glasses', 'Try intermittent fasting', 'Eat anti-inflammatory foods', 'Practice nasal breathing', 'Do facial exercises', 'Try contrast therapy', 'Practice tongue scraping', 'Use essential oils', 'Try sound healing', 'Practice dry brushing', 'Do neck stretches', 'Try reflexology points', 'Practice eye yoga', 'Use meditation app', 'Try sensory deprivation', 'Practice gratitude walk', 'Do spinal twists', 'Try mushroom coffee', 'Practice humming meditation', 'Do jaw exercises', 'Try grounding exercises', 'Practice breathwork', 'Do wrist stretches', 'Try aromatherapy session', 'Practice self-massage', 'Do ankle mobility', 'Try cold exposure', 'Practice sun salutations'] },
-    { cat: 'fitness', tasks: ['Try animal flow', 'Practice mobility drills', 'Do tabata workout', 'Try functional training', 'Practice parkour basics', 'Do flexibility routine', 'Try crossfit WOD', 'Practice gymnastics holds', 'Do agility ladder', 'Try plyometric jumps', 'Practice martial arts', 'Do isometric holds', 'Try outdoor bootcamp', 'Practice calisthenics', 'Do suspension training', 'Try aqua aerobics', 'Practice rock climbing', 'Do sprint training', 'Try obstacle course', 'Practice kickboxing', 'Do strongman exercise', 'Try aerial yoga', 'Practice acro yoga', 'Do powerlifting set', 'Try Olympic lifts', 'Practice stretching routine', 'Do bodybuilding split', 'Try endurance run', 'Practice interval training', 'Do compound movements', 'Try circuit training', 'Practice muscle ups', 'Do pistol squat work'] },
-    { cat: 'mind', tasks: ['Practice noting meditation', 'Try transcendental meditation', 'Do progressive relaxation', 'Practice yoga nidra', 'Try binaural beats session', 'Practice concentration meditation', 'Do contemplation exercise', 'Try zen meditation', 'Practice insight meditation', 'Do mantra repetition', 'Try chakra meditation', 'Practice object meditation', 'Do candle gazing', 'Try third eye focus', 'Practice heart meditation', 'Do color visualization', 'Try music meditation', 'Practice movement meditation', 'Do nature meditation', 'Try labyrinth walking', 'Practice gratitude meditation', 'Do compassion meditation', 'Try forgiveness practice', 'Practice joy meditation', 'Do peace meditation', 'Try abundance meditation', 'Practice healing visualization', 'Do inner child work', 'Try past life meditation', 'Practice future self meeting', 'Do shadow work journal', 'Try archetypal meditation', 'Practice element meditation'] },
-    { cat: 'learning', tasks: ['Learn sign language basics', 'Study quantum physics intro', 'Practice digital art', 'Learn video editing', 'Study blockchain basics', 'Practice 3D modeling', 'Learn AI fundamentals', 'Study data science intro', 'Practice web development', 'Learn mobile app basics', 'Study UX design', 'Practice graphic design', 'Learn animation basics', 'Study game development', 'Practice music production', 'Learn podcast creation', 'Study content marketing', 'Practice copywriting', 'Learn SEO basics', 'Study social media strategy', 'Practice email marketing', 'Learn analytics tools', 'Study project management', 'Practice agile methodology', 'Learn negotiation skills', 'Study sales techniques', 'Practice presentation skills', 'Learn networking strategy', 'Study personal branding', 'Practice storytelling', 'Learn conflict resolution', 'Study emotional intelligence', 'Practice decision making'] },
-    { cat: 'lifestyle', tasks: ['Create morning pages', 'Practice bullet journaling', 'Do financial planning', 'Practice minimalist living', 'Create capsule wardrobe', 'Practice slow living', 'Do digital minimalism', 'Practice intentional living', 'Create life audit', 'Practice essentialism', 'Do values clarification', 'Practice boundary setting', 'Create life purpose statement', 'Practice saying no', 'Do relationship audit', 'Practice active rest', 'Create weekly review', 'Practice time blocking', 'Do energy audit', 'Practice batching tasks', 'Create systems thinking', 'Practice habit stacking', 'Do environment design', 'Practice temptation bundling', 'Create accountability system', 'Practice implementation intentions', 'Do identity-based habits', 'Practice keystone habits', 'Create trigger plan', 'Practice pre-commitment', 'Do friction reduction', 'Practice reward scheduling', 'Create habit scorecard'] },
-    { cat: 'travel', tasks: ['Try local homestay', 'Practice travel sketching', 'Do volunteer tourism', 'Practice slow travel', 'Try workation setup', 'Practice cultural immersion', 'Do eco-tourism activity', 'Practice responsible travel', 'Try adventure travel', 'Practice solo exploration', 'Do budget backpacking', 'Practice luxury travel hack', 'Try glamping experience', 'Practice digital nomad life', 'Do travel photography', 'Practice travel journaling', 'Try culinary tourism', 'Practice wellness travel', 'Do heritage exploration', 'Practice pilgrimage route', 'Try wildlife safari', 'Practice marine exploration', 'Do mountain expedition', 'Practice river journey', 'Try desert adventure', 'Practice arctic exploration', 'Do tropical discovery', 'Practice countryside tour', 'Try urban exploration', 'Practice architectural tour', 'Do art tourism', 'Practice music tourism', 'Try sports tourism'] }
-  ];
-
-  extraChallenges.forEach(({ cat, tasks }) => {
-    tasks.forEach((task, i) => {
-      challenges.push({
-        id: `sys-${id++}`,
-        title: task,
-        description: `${cat.charAt(0).toUpperCase() + cat.slice(1)} adventure awaits`,
-        category: cat,
-        categoryIcon: categoryIcons[cat],
-        duration: durations[i % 5],
-        type: 'system',
-        likes: 0,
-        comments: 0,
-        createdAt: new Date().toISOString()
-      });
-    });
-  });
-
-  return challenges;
-};
-
-const SYSTEM_CHALLENGES = generateSystemChallenges();
+// Import from data files
+import { SYSTEM_CHALLENGES } from '@/data/adventureChallenges';
+import { ALL_PLACES } from '@/data/adventurePlaces';
 
 // ============= 200 COUNTRIES WITH 5 GENUINE PLACES EACH =============
 const ALL_COUNTRIES = [
@@ -1000,7 +868,7 @@ export default function MusicAdventure() {
                           className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${isVisited ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                           <Footprints className="w-4 h-4" />
-                          {isVisited ? "Visited" : "Mark Visit"}
+                          {isVisited ? "Visited" : "Visit"}
                         </button>
                         <button 
                           onClick={() => togglePlaceLove(place.id)} 
