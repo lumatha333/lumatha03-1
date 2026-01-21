@@ -23,6 +23,32 @@ export const useSignaling = (config: SignalingConfig) => {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasJoinedRef = useRef(false);
 
+  // CRITICAL FIX: Use refs for all callbacks to avoid stale closures
+  const onSignalingConnectedRef = useRef(config.onSignalingConnected);
+  const onPeerJoinedRef = useRef(config.onPeerJoined);
+  const onPeerLeftRef = useRef(config.onPeerLeft);
+  const onOfferRef = useRef(config.onOffer);
+  const onAnswerRef = useRef(config.onAnswer);
+  const onIceCandidateRef = useRef(config.onIceCandidate);
+  const onTypingRef = useRef(config.onTyping);
+  const onReadRef = useRef(config.onRead);
+  const onPresenceRef = useRef(config.onPresence);
+  const onErrorRef = useRef(config.onError);
+
+  // Keep refs in sync with latest config
+  useEffect(() => {
+    onSignalingConnectedRef.current = config.onSignalingConnected;
+    onPeerJoinedRef.current = config.onPeerJoined;
+    onPeerLeftRef.current = config.onPeerLeft;
+    onOfferRef.current = config.onOffer;
+    onAnswerRef.current = config.onAnswer;
+    onIceCandidateRef.current = config.onIceCandidate;
+    onTypingRef.current = config.onTyping;
+    onReadRef.current = config.onRead;
+    onPresenceRef.current = config.onPresence;
+    onErrorRef.current = config.onError;
+  });
+
   const connect = useCallback(() => {
     if (!config.sessionId || !config.userId || wsRef.current?.readyState === WebSocket.OPEN) return;
 
@@ -33,11 +59,12 @@ export const useSignaling = (config: SignalingConfig) => {
       const wsBase = baseUrl.replace(/^http(s?):\/\//, 'wss://');
       const apikey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ?? '';
       const wsUrl = `${wsBase}/functions/v1/random-connect-signaling?apikey=${encodeURIComponent(apikey)}`;
+      console.log('[useSignaling] Connecting to signaling server...');
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('Signaling WebSocket connected');
+        console.log('[useSignaling] WebSocket connected, sending join message');
         setIsConnected(true);
         
         // Join the session
@@ -52,23 +79,25 @@ export const useSignaling = (config: SignalingConfig) => {
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log('Signaling message received:', message.type);
+          console.log('[useSignaling] Message received:', message.type);
 
           switch (message.type) {
             case 'joined':
               setParticipantCount(message.participantCount);
               hasJoinedRef.current = true;
-              // CRITICAL: Notify that we've joined and pass existing participants
-              // This allows the initiator to create an offer immediately if peers exist
-              config.onSignalingConnected?.(message.existingParticipants || []);
+              console.log('[useSignaling] Joined session, participants:', message.participantCount, 'existing:', message.existingParticipants?.length || 0);
+              // CRITICAL: Use ref to ensure we call the latest handler
+              onSignalingConnectedRef.current?.(message.existingParticipants || []);
               break;
             case 'peer-joined':
               setParticipantCount(prev => prev + 1);
-              config.onPeerJoined?.(message);
+              console.log('[useSignaling] Peer joined:', message.pseudoName);
+              onPeerJoinedRef.current?.(message);
               break;
             case 'peer-left':
               setParticipantCount(prev => Math.max(0, prev - 1));
-              config.onPeerLeft?.(message);
+              console.log('[useSignaling] Peer left:', message.pseudoName);
+              onPeerLeftRef.current?.(message);
               // Close the WebSocket when peer leaves - session ended
               if (wsRef.current) {
                 wsRef.current.close();
@@ -76,35 +105,38 @@ export const useSignaling = (config: SignalingConfig) => {
               }
               break;
             case 'offer':
-              config.onOffer?.(message);
+              console.log('[useSignaling] Received offer from:', message.fromPseudoName);
+              onOfferRef.current?.(message);
               break;
             case 'answer':
-              config.onAnswer?.(message);
+              console.log('[useSignaling] Received answer from:', message.fromUserId);
+              onAnswerRef.current?.(message);
               break;
             case 'ice-candidate':
-              config.onIceCandidate?.(message);
+              console.log('[useSignaling] Received ICE candidate');
+              onIceCandidateRef.current?.(message);
               break;
             case 'typing':
-              config.onTyping?.(message);
+              onTypingRef.current?.(message);
               break;
             case 'read':
-              config.onRead?.(message);
+              onReadRef.current?.(message);
               break;
             case 'presence':
-              config.onPresence?.(message);
+              onPresenceRef.current?.(message);
               break;
             case 'error':
-              console.error('Signaling error:', message.message);
-              config.onError?.(new Error(message.message));
+              console.error('[useSignaling] Server error:', message.message);
+              onErrorRef.current?.(new Error(message.message));
               break;
           }
         } catch (error) {
-          console.error('Failed to parse signaling message:', error);
+          console.error('[useSignaling] Failed to parse message:', error);
         }
       };
 
       ws.onclose = () => {
-        console.log('Signaling WebSocket closed');
+        console.log('[useSignaling] WebSocket closed');
         setIsConnected(false);
         wsRef.current = null;
         hasJoinedRef.current = false;
@@ -118,12 +150,12 @@ export const useSignaling = (config: SignalingConfig) => {
       };
 
       ws.onerror = (error) => {
-        console.error('Signaling WebSocket error:', error);
-        config.onError?.(new Error('WebSocket connection error'));
+        console.error('[useSignaling] WebSocket error:', error);
+        onErrorRef.current?.(new Error('WebSocket connection error'));
       };
     } catch (error) {
-      console.error('Failed to create WebSocket:', error);
-      config.onError?.(error as Error);
+      console.error('[useSignaling] Failed to create WebSocket:', error);
+      onErrorRef.current?.(error as Error);
     }
   }, [config.sessionId, config.userId, config.pseudoName]);
 
@@ -156,16 +188,20 @@ export const useSignaling = (config: SignalingConfig) => {
         pseudoName: config.pseudoName,
         payload
       }));
+    } else {
+      console.warn('[useSignaling] Cannot send - WebSocket not open');
     }
   }, [config.sessionId, config.userId, config.pseudoName]);
 
   // Send WebRTC offer
   const sendOffer = useCallback((sdp: RTCSessionDescriptionInit) => {
+    console.log('[useSignaling] Sending offer');
     send('offer', { sdp });
   }, [send]);
 
   // Send WebRTC answer
   const sendAnswer = useCallback((sdp: RTCSessionDescriptionInit) => {
+    console.log('[useSignaling] Sending answer');
     send('answer', { sdp });
   }, [send]);
 

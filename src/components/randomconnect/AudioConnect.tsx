@@ -129,6 +129,13 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
       return;
     }
 
+    // CRITICAL: Check that signaling functions are available
+    if (!sendOfferRef.current) {
+      console.log('[tryCreateOffer] sendOfferRef not ready yet, retrying in 100ms');
+      setTimeout(() => tryCreateOffer(), 100);
+      return;
+    }
+
     hasCreatedOfferRef.current = true;
 
     try {
@@ -138,8 +145,8 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
         offerToReceiveVideo: false
       });
       await pc.setLocalDescription(offer);
-      console.log('[tryCreateOffer] Sending offer to partner');
-      sendOfferRef.current?.(offer);
+      console.log('[tryCreateOffer] Sending offer to partner via signaling');
+      sendOfferRef.current(offer);
       setOfferSent(true);
     } catch (error) {
       console.error('[tryCreateOffer] Error creating offer:', error);
@@ -446,12 +453,11 @@ export const AudioConnect: React.FC<AudioConnectProps> = ({
     onPeerLeft: handlePeerLeft
   });
 
-  // Keep signaling sender refs in sync
-  useEffect(() => {
-    sendOfferRef.current = sendOffer;
-    sendAnswerRef.current = sendAnswer;
-    sendIceCandidateRef.current = sendIceCandidate;
-  }, [sendOffer, sendAnswer, sendIceCandidate]);
+  // CRITICAL FIX: Sync refs IMMEDIATELY (not in useEffect) so they're available
+  // before any callbacks try to use them
+  sendOfferRef.current = sendOffer;
+  sendAnswerRef.current = sendAnswer;
+  sendIceCandidateRef.current = sendIceCandidate;
 
   // Animate road movement (visual only, no sound)
   useEffect(() => {
