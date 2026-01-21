@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Wifi, WifiOff, Check, X, AlertTriangle, Activity } from 'lucide-react';
+import { ChevronDown, ChevronUp, Check, X, AlertTriangle, Activity, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface WebRTCDebugPanelProps {
   signalingConnected: boolean;
@@ -132,26 +133,72 @@ export const WebRTCDebugPanel: React.FC<WebRTCDebugPanelProps> = ({
   const isIceOk = ['connected', 'completed'].includes(debugState.iceConnectionState);
   const isConnectionOk = debugState.connectionState === 'connected';
 
+  const copyDebugSnapshot = () => {
+    const snapshot = `WebRTC Debug Snapshot - ${new Date().toISOString()}
+═══════════════════════════════════════
+SIGNALING
+  WebSocket: ${signalingConnected ? '✓ Connected' : '✗ Disconnected'}
+  Participants: ${participantCount}
+
+NEGOTIATION
+  Offer: ${offerSent ? 'Sent' : (debugState.remoteDescriptionType === 'offer' ? 'Received' : 'Pending')}
+  Answer: ${answerReceived ? 'Received' : (debugState.localDescriptionType === 'answer' ? 'Sent' : 'Pending')}
+  Local SDP Type: ${debugState.localDescriptionType || 'none'}
+  Remote SDP Type: ${debugState.remoteDescriptionType || 'none'}
+
+ICE CONNECTION
+  State: ${debugState.iceConnectionState}
+  Gathering: ${debugState.iceGatheringState}
+
+CONNECTION
+  State: ${debugState.connectionState}
+  Signaling State: ${debugState.signalingState}
+
+TRACKS
+  Local: ${debugState.audioTracksLocal} audio, ${debugState.videoTracksLocal} video
+  Remote: ${debugState.audioTracksRemote} audio, ${debugState.videoTracksRemote} video
+  Has Local Stream: ${hasLocalStream ? 'Yes' : 'No'}
+  Has Remote Stream: ${hasRemoteStream ? 'Yes' : 'No'}
+  Has Remote Audio: ${hasRemoteAudio ? 'Yes' : 'No'}
+  Has Remote Video: ${hasRemoteVideo ? 'Yes' : 'No'}
+═══════════════════════════════════════`;
+
+    navigator.clipboard.writeText(snapshot).then(() => {
+      toast.success('Debug snapshot copied to clipboard');
+    }).catch(() => {
+      toast.error('Failed to copy to clipboard');
+    });
+  };
+
   return (
     <div className="fixed bottom-4 left-4 z-50">
       <div className="bg-black/80 backdrop-blur-sm rounded-lg border border-white/20 text-xs font-mono text-white shadow-xl">
         {/* Header - Always visible */}
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full px-3 py-2 flex items-center justify-between gap-3 hover:bg-white/10 transition-colors rounded-lg"
-        >
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" />
-            <span className="font-semibold">WebRTC Debug</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Quick status indicators */}
-            <div className={cn("w-2 h-2 rounded-full", signalingConnected ? "bg-green-400" : "bg-red-400")} title="Signaling" />
-            <div className={cn("w-2 h-2 rounded-full", isIceOk ? "bg-green-400" : "bg-yellow-400")} title="ICE" />
-            <div className={cn("w-2 h-2 rounded-full", hasRemoteStream ? "bg-green-400" : "bg-red-400")} title="Remote Stream" />
-            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-          </div>
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex-1 px-3 py-2 flex items-center justify-between gap-3 hover:bg-white/10 transition-colors rounded-l-lg"
+          >
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-primary" />
+              <span className="font-semibold">WebRTC Debug</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Quick status indicators */}
+              <div className={cn("w-2 h-2 rounded-full", signalingConnected ? "bg-emerald-500" : "bg-destructive")} title="Signaling" />
+              <div className={cn("w-2 h-2 rounded-full", isIceOk ? "bg-emerald-500" : "bg-amber-500")} title="ICE" />
+              <div className={cn("w-2 h-2 rounded-full", hasRemoteStream ? "bg-emerald-500" : "bg-destructive")} title="Remote Stream" />
+              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+            </div>
+          </button>
+          <button
+            onClick={copyDebugSnapshot}
+            className="px-2 py-2 hover:bg-white/10 transition-colors rounded-r-lg border-l border-white/10"
+            title="Copy debug snapshot to clipboard"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+        </div>
 
         {/* Expanded details */}
         {isExpanded && (
