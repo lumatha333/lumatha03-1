@@ -650,7 +650,7 @@ export default function MusicAdventure() {
                           ))}
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {myRating ? `Your: ${myRating}⭐` : `Avg: ${place.stars}⭐`}
+                          {myRating ? `Your: ${myRating.toFixed(2)}⭐` : `Avg: ${place.stars.toFixed(2)}⭐`}
                         </span>
                       </div>
                       
