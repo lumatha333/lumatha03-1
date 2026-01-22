@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { Eye, EyeOff, LogIn, UserPlus, Globe, Calendar, Crown, Search, Laptop, Smartphone, Tablet, Check, X, Info } from 'lucide-react';
+import { validateLoginForm, validateSignupForm, getValidationErrors } from '@/lib/authValidation';
 
 // Complete world countries list
 const ALL_COUNTRIES = [
@@ -229,6 +230,7 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const filteredCountries = useMemo(() => {
     if (!countrySearch.trim()) return ALL_COUNTRIES;
@@ -249,34 +251,60 @@ export default function Auth() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormErrors({});
     
-    if (!isLogin && !isPasswordValid) {
-      toast.error('Please create a stronger password');
-      return;
+    // Validate using Zod schemas
+    if (isLogin) {
+      const result = validateLoginForm({ email, password });
+      if (!result.success) {
+        const errors = getValidationErrors(result);
+        setFormErrors(errors);
+        const firstError = Object.values(errors)[0];
+        toast.error(firstError);
+        return;
+      }
+    } else {
+      const result = validateSignupForm({ 
+        username, 
+        email, 
+        password, 
+        country, 
+        ageGroup, 
+        deviceType 
+      });
+      if (!result.success) {
+        const errors = getValidationErrors(result);
+        setFormErrors(errors);
+        const firstError = Object.values(errors)[0];
+        toast.error(firstError);
+        return;
+      }
     }
     
     setLoading(true);
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
         if (error) throw error;
         toast.success('Welcome back to Zenpeace!');
         navigate('/');
       } else {
-        if (!username.trim()) {
-          toast.error('Please enter a username');
+        const sanitizedUsername = username.trim().replace(/[<>'"`;]/g, '').slice(0, 50);
+        
+        if (!sanitizedUsername) {
+          toast.error('Please enter a valid username');
           setLoading(false);
           return;
         }
 
         const redirectUrl = `${window.location.origin}/`;
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: email.trim().toLowerCase(),
           password,
           options: {
             emailRedirectTo: redirectUrl,
-            data: { name: username, country, age_group: ageGroup, device_type: deviceType }
+            data: { name: sanitizedUsername, country, age_group: ageGroup, device_type: deviceType }
           }
         });
         
@@ -286,7 +314,7 @@ export default function Auth() {
         if (data.user) {
           await supabase.from('profiles').upsert({
             id: data.user.id,
-            name: username.trim(),
+            name: sanitizedUsername,
             country,
             age_group: ageGroup
           });

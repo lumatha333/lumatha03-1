@@ -1248,6 +1248,15 @@ export type Database = {
         Args: { check_user_id: string }
         Returns: boolean
       }
+      create_notification: {
+        Args: {
+          p_content: string
+          p_link?: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       get_random_connect_report_count: {
         Args: { check_user_id: string }
         Returns: number

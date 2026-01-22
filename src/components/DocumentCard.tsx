@@ -232,50 +232,63 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44 glass-card">
-                  <DropdownMenuItem onClick={() => {
+                  <DropdownMenuItem onClick={async () => {
                     const fileType = doc.file_type?.toLowerCase() || '';
                     const fileName = doc.file_name.toLowerCase();
-                    const encodedUrl = encodeURIComponent(doc.file_url);
                     
-                    // Use Google Docs Viewer for PDFs
-                    if (fileType.includes('pdf') || fileName.endsWith('.pdf')) {
-                      window.open(`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`, '_blank', 'noopener,noreferrer');
-                      toast.success('Opening PDF in viewer...');
-                      return;
-                    }
-                    
-                    // Use Office Online for Word, Excel, PowerPoint
-                    if (fileType.includes('word') || fileType.includes('document') || 
-                        fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
-                      window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodedUrl}`, '_blank', 'noopener,noreferrer');
-                      toast.success('Opening Word document in viewer...');
-                      return;
-                    }
-                    
-                    if (fileType.includes('excel') || fileType.includes('spreadsheet') || 
-                        fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) {
-                      window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodedUrl}`, '_blank', 'noopener,noreferrer');
-                      toast.success('Opening Excel file in viewer...');
-                      return;
-                    }
-                    
-                    if (fileType.includes('powerpoint') || fileType.includes('presentation') || 
-                        fileName.endsWith('.ppt') || fileName.endsWith('.pptx')) {
-                      window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodedUrl}`, '_blank', 'noopener,noreferrer');
-                      toast.success('Opening PowerPoint in viewer...');
-                      return;
-                    }
-                    
-                    // For images and other files, open directly
-                    if (fileType.includes('image') || fileName.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) {
+                    // For images, open directly
+                    if (fileType.includes('image') || fileName.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i)) {
                       window.open(doc.file_url, '_blank', 'noopener,noreferrer');
                       toast.success('Opening image...');
                       return;
                     }
                     
-                    // Fallback: use Google Docs Viewer for other document types
-                    window.open(`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`, '_blank', 'noopener,noreferrer');
-                    toast.success('Opening in viewer...');
+                    // For PDFs - try native browser PDF viewer first
+                    if (fileType.includes('pdf') || fileName.endsWith('.pdf')) {
+                      // Open PDF directly - most modern browsers have built-in PDF viewers
+                      const newWindow = window.open(doc.file_url, '_blank', 'noopener,noreferrer');
+                      if (newWindow) {
+                        toast.success('Opening PDF...');
+                      } else {
+                        // Fallback to Google Docs Viewer
+                        const encodedUrl = encodeURIComponent(doc.file_url);
+                        window.open(`https://docs.google.com/gview?url=${encodedUrl}&embedded=true`, '_blank', 'noopener,noreferrer');
+                        toast.success('Opening PDF in viewer...');
+                      }
+                      return;
+                    }
+                    
+                    // For text files, open directly
+                    if (fileType.includes('text') || fileName.match(/\.(txt|md|csv|json|xml|html|css|js|ts)$/i)) {
+                      window.open(doc.file_url, '_blank', 'noopener,noreferrer');
+                      toast.success('Opening file...');
+                      return;
+                    }
+                    
+                    // For Office documents (Word, Excel, PowerPoint)
+                    const isWord = fileType.includes('word') || fileType.includes('document') || fileName.match(/\.(doc|docx|odt)$/i);
+                    const isExcel = fileType.includes('excel') || fileType.includes('spreadsheet') || fileName.match(/\.(xls|xlsx|ods)$/i);
+                    const isPowerPoint = fileType.includes('powerpoint') || fileType.includes('presentation') || fileName.match(/\.(ppt|pptx|odp)$/i);
+                    
+                    if (isWord || isExcel || isPowerPoint) {
+                      const encodedUrl = encodeURIComponent(doc.file_url);
+                      // Use Office Online Viewer for Microsoft formats
+                      window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodedUrl}`, '_blank', 'noopener,noreferrer');
+                      toast.success(`Opening ${isWord ? 'document' : isExcel ? 'spreadsheet' : 'presentation'}...`);
+                      return;
+                    }
+                    
+                    // For audio/video, open directly
+                    if (fileType.includes('audio') || fileType.includes('video') || fileName.match(/\.(mp3|mp4|wav|ogg|webm|m4a|mov|avi)$/i)) {
+                      window.open(doc.file_url, '_blank', 'noopener,noreferrer');
+                      toast.success('Opening media file...');
+                      return;
+                    }
+                    
+                    // Fallback: try Google Docs Viewer for unknown document types
+                    const encodedUrl = encodeURIComponent(doc.file_url);
+                    window.open(`https://docs.google.com/gview?url=${encodedUrl}&embedded=true`, '_blank', 'noopener,noreferrer');
+                    toast.success('Opening in document viewer...');
                   }}>
                     <ExternalLink className="w-3.5 h-3.5 mr-2" />Open in Browser
                   </DropdownMenuItem>
