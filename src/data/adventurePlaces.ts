@@ -17,13 +17,19 @@ export interface Place {
 const mapUrl = (name: string, country: string) => 
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ', ' + country)}`;
 
-// Real image URLs from Unsplash (free to use)
+// Generate consistent placeholder images using Lorem Picsum (reliable free service)
 const getPlaceImage = (placeName: string, country: string): string => {
-  // Generate a consistent but varied image based on place name
-  const keywords = encodeURIComponent(`${placeName} ${country} travel landmark`);
-  const seed = placeName.length + country.length;
-  // Use Unsplash source for real photos
-  return `https://source.unsplash.com/800x600/?${keywords}&sig=${seed}`;
+  // Create a consistent seed from place name and country for reproducible images
+  let hash = 0;
+  const str = `${placeName}${country}`;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  const imageId = Math.abs(hash % 1000) + 1; // Use IDs 1-1000 for variety
+  // Use Lorem Picsum for reliable, beautiful travel-style images
+  return `https://picsum.photos/seed/${encodeURIComponent(placeName.replace(/\s+/g, '-'))}/800/600`;
 };
 
 // All countries with 10 places each (5 UNESCO + 5 Hidden Gems)
