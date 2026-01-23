@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,12 +13,18 @@ import {
   MapPin, Star, Heart, Target, Compass, Globe, 
   Plus, Check, Share2, MessageCircle, Footprints, 
   Award, Plane, Sparkles, Filter, Clock, Search,
-  RefreshCw, Users, ExternalLink, Image, Video
+  RefreshCw, Users, ExternalLink, Image, Video, Map, Flag, List
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AdventureCommentsDialog } from '@/components/AdventureCommentsDialog';
 import { ShareDialog } from '@/components/ShareDialog';
 import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
+import { TruncatedText } from '@/components/adventure/TruncatedText';
+import LazyBlurImage from '@/components/LazyBlurImage';
+import { cn } from '@/lib/utils';
+
+// Lazy load map component
+const DiscoverMapView = lazy(() => import('@/components/adventure/DiscoverMapView').then(m => ({ default: m.DiscoverMapView })));
 
 // ============= CHALLENGE CATEGORIES =============
 const CHALLENGE_CATEGORIES = [
@@ -30,6 +36,13 @@ const CHALLENGE_CATEGORIES = [
   { name: 'Travel', icon: '✈️' }
 ];
 
+// Ranking categories with icons (like home feed)
+const RANKING_CATEGORIES = [
+  { id: 'challenges', icon: Target, label: 'Challenges', color: 'text-orange-500' },
+  { id: 'discover', icon: Compass, label: 'Discover', color: 'text-blue-500' },
+  { id: 'travel', icon: Plane, label: 'Travel', color: 'text-purple-500' },
+];
+
 // Import from data files
 import { SYSTEM_CHALLENGES } from '@/data/adventureChallenges';
 import { ALL_PLACES } from '@/data/adventurePlaces';
@@ -39,7 +52,7 @@ export default function MusicAdventure() {
   const { user, profile } = useAuth();
   const [activeTab, setActiveTab] = useState('challenges');
   
-  // Accordion filter states - removed difficulty
+  // Accordion filter states
   const [sourceFilter, setSourceFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
   
@@ -52,16 +65,25 @@ export default function MusicAdventure() {
   const [completedChallenges, setCompletedChallenges] = useState<Set<string>>(new Set());
   const [likedChallenges, setLikedChallenges] = useState<Set<string>>(new Set());
   
-  // Place states - all reset to zero
+  // Place states
   const [visitedPlaces, setVisitedPlaces] = useState<Set<string>>(new Set());
   const [lovedPlaces, setLovedPlaces] = useState<Set<string>>(new Set());
   const [userRatings, setUserRatings] = useState<Record<string, number>>({});
+  const [discoverViewMode, setDiscoverViewMode] = useState<'list' | 'map'>('list');
   
-  // Travel stories - user created
+  // Travel stories states
   const [travelStories, setTravelStories] = useState<any[]>([]);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [showCreateStory, setShowCreateStory] = useState(false);
-  const [newStory, setNewStory] = useState({ title: '', content: '', image: '' });
+  const [newStory, setNewStory] = useState({ 
+    title: '', 
+    content: '', 
+    image: '', 
+    video: '',
+    location: '',
+    mediaType: 'image' as 'image' | 'video'
+  });
+  const [travelFilter, setTravelFilter] = useState<'global' | 'regional'>('global');
   
   // Dialog states
   const [showCreateChallenge, setShowCreateChallenge] = useState(false);
@@ -92,10 +114,10 @@ export default function MusicAdventure() {
   }>({ urls: [], types: [], title: '', id: '', isLiked: false });
 
   // Open media viewer function
-  const openMediaViewer = (imageUrl: string, title: string, id: string, isLiked: boolean) => {
+  const openMediaViewer = (mediaUrl: string, mediaType: string, title: string, id: string, isLiked: boolean) => {
     setMediaViewerData({
-      urls: [imageUrl],
-      types: ['image'],
+      urls: [mediaUrl],
+      types: [mediaType],
       title,
       id,
       isLiked
@@ -103,7 +125,7 @@ export default function MusicAdventure() {
     setMediaViewerOpen(true);
   };
 
-  // Load data from localStorage - preserve likes and loves
+  // Load data from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('adventure_zone_v2');
     if (saved) {
@@ -139,7 +161,7 @@ export default function MusicAdventure() {
 
   useEffect(() => { saveData(); }, [saveData]);
 
-  // ============= CHALLENGE RESET LOGIC =============
+  // Challenge reset logic
   const checkChallengeResets = () => {
     const saved = localStorage.getItem('adventure_zone_v2');
     if (!saved) return;
@@ -178,7 +200,7 @@ export default function MusicAdventure() {
     }
   };
 
-  // ============= FILTER CHALLENGES =============
+  // Filter challenges
   const filteredChallenges = useMemo(() => {
     let challenges = sourceFilter === 'custom' ? customChallenges : 
                      sourceFilter === 'system' ? SYSTEM_CHALLENGES : 
@@ -191,7 +213,7 @@ export default function MusicAdventure() {
     return challenges.slice(0, 50);
   }, [sourceFilter, timeFilter, customChallenges]);
 
-  // ============= FILTER PLACES =============
+  // Filter places
   const filteredPlaces = useMemo(() => {
     if (!discoverSearch.trim()) return ALL_PLACES.slice(0, 100);
     const search = discoverSearch.toLowerCase();
@@ -201,17 +223,32 @@ export default function MusicAdventure() {
     ).slice(0, 100);
   }, [discoverSearch]);
 
-  // ============= FILTER TRAVEL STORIES =============
+  // Filter travel stories with Global/Regional
   const filteredTravelStories = useMemo(() => {
-    if (!travelSearch.trim()) return travelStories;
-    const search = travelSearch.toLowerCase();
-    return travelStories.filter(p => 
-      p.title.toLowerCase().includes(search) || 
-      p.content.toLowerCase().includes(search)
-    );
-  }, [travelSearch, travelStories]);
+    let stories = travelStories;
+    
+    // Apply regional filter
+    if (travelFilter === 'regional' && profile?.country) {
+      stories = stories.filter(s => 
+        s.location?.toLowerCase().includes(profile.country.toLowerCase()) ||
+        s.creatorCountry === profile.country
+      );
+    }
+    
+    // Apply search
+    if (travelSearch.trim()) {
+      const search = travelSearch.toLowerCase();
+      stories = stories.filter(p => 
+        p.title.toLowerCase().includes(search) || 
+        p.content.toLowerCase().includes(search) ||
+        p.location?.toLowerCase().includes(search)
+      );
+    }
+    
+    return stories;
+  }, [travelSearch, travelStories, travelFilter, profile?.country]);
 
-  // ============= CHALLENGE ACTIONS =============
+  // Challenge actions
   const createCustomChallenge = () => {
     if (!newChallenge.title.trim()) {
       toast.error('Please enter a title');
@@ -225,7 +262,7 @@ export default function MusicAdventure() {
       likes: 0,
       comments: 0,
       createdAt: new Date().toISOString(),
-      creatorId: user?.id // Track creator for private comments
+      creatorId: user?.id
     };
     setCustomChallenges(prev => [...prev, challenge]);
     setShowCreateChallenge(false);
@@ -256,7 +293,7 @@ export default function MusicAdventure() {
     });
   };
 
-  // ============= DISCOVER ACTIONS =============
+  // Discover actions
   const togglePlaceVisit = (id: string) => {
     setVisitedPlaces(prev => {
       const newSet = new Set(prev);
@@ -285,14 +322,20 @@ export default function MusicAdventure() {
     toast.success(`Rated ${rating}⭐`);
   };
 
-  // ============= TRAVEL STORY ACTIONS =============
-  const [uploadingImage, setUploadingImage] = useState(false);
+  // Travel story actions
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
     
-    setUploadingImage(true);
+    // Check file size for videos (max 50MB)
+    if (type === 'video' && file.size > 50 * 1024 * 1024) {
+      toast.error('Video must be under 50MB');
+      return;
+    }
+    
+    setUploadingMedia(true);
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
@@ -304,13 +347,19 @@ export default function MusicAdventure() {
       if (uploadError) throw uploadError;
       
       const { data } = supabase.storage.from('posts-media').getPublicUrl(fileName);
-      setNewStory(prev => ({ ...prev, image: data.publicUrl }));
-      toast.success('Image uploaded! 📸');
+      
+      if (type === 'image') {
+        setNewStory(prev => ({ ...prev, image: data.publicUrl, mediaType: 'image' }));
+        toast.success('Image uploaded! 📸');
+      } else {
+        setNewStory(prev => ({ ...prev, video: data.publicUrl, mediaType: 'video' }));
+        toast.success('Video uploaded! 🎬');
+      }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error('Failed to upload image');
+      toast.error('Failed to upload media');
     } finally {
-      setUploadingImage(false);
+      setUploadingMedia(false);
     }
   };
   
@@ -319,24 +368,24 @@ export default function MusicAdventure() {
       toast.error('Please fill in title and content');
       return;
     }
-    if (!newStory.image) {
-      toast.error('Please upload an image for your story');
+    if (!newStory.image && !newStory.video) {
+      toast.error('Please upload an image or video for your story');
       return;
     }
     const story = {
       id: `story-${Date.now()}`,
       ...newStory,
-      image: newStory.image,
       author: profile?.name || 'You',
       authorAvatar: profile?.name?.[0] || 'U',
       likes: 0,
       comments: 0,
       createdAt: new Date().toISOString(),
-      creatorId: user?.id
+      creatorId: user?.id,
+      creatorCountry: profile?.country || ''
     };
     setTravelStories(prev => [story, ...prev]);
     setShowCreateStory(false);
-    setNewStory({ title: '', content: '', image: '' });
+    setNewStory({ title: '', content: '', image: '', video: '', location: '', mediaType: 'image' });
     toast.success('Travel story shared! ✈️');
   };
 
@@ -360,14 +409,13 @@ export default function MusicAdventure() {
     setShareOpen(true);
   };
 
-// ============= RANKING DATA - GENUINE SYSTEM (NO FAKE BOTS) =============
+  // Ranking calculations
   const calculateUserRank = () => {
     if (rankingCategory === 'challenges') {
-      return completedChallenges.size === 0 ? 'Unranked' : 1; // Only real user at their rank
+      return completedChallenges.size === 0 ? 'Unranked' : 1;
     } else if (rankingCategory === 'discover') {
       return visitedPlaces.size === 0 ? 'Unranked' : 1;
     } else {
-      // Travel ranking based on heart/likes received on travel stories
       const totalLikes = travelStories.reduce((sum, story) => sum + (likedPosts.has(story.id) ? 1 : 0), 0);
       return totalLikes === 0 ? 'Unranked' : 1;
     }
@@ -377,24 +425,24 @@ export default function MusicAdventure() {
     ? completedChallenges.size * 50 
     : rankingCategory === 'discover'
     ? visitedPlaces.size * 30
-    : likedPosts.size * 20; // Travel points from hearts
+    : likedPosts.size * 20;
 
-  // Empty rankings - genuine system, no fake bots
-  // Rankings will be populated with real users when database integration is added
   const globalRankings: { rank: number; name: string; points: number; emoji: string }[] = [];
   const regionalRankings: { rank: number; name: string; points: number; emoji: string }[] = [];
-
   const userRank = calculateUserRank();
+  
+  const currentRankingCategory = RANKING_CATEGORIES.find(c => c.id === rankingCategory) || RANKING_CATEGORIES[0];
+  const RankingIcon = currentRankingCategory.icon;
 
   return (
     <div className="min-h-screen pb-24 overflow-y-auto scroll-smooth overscroll-behavior-y-contain">
-      {/* ============= SUBSECTION HEADER - Like Home ============= */}
+      {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50 sticky top-0 bg-background/95 backdrop-blur-sm z-10">
         <Compass className="w-5 h-5 text-primary" />
         <span className="font-semibold text-base">Adventure</span>
       </div>
 
-      {/* ============= MAIN TABS ============= */}
+      {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full px-3 mt-2">
         <TabsList className="w-full grid grid-cols-4 h-auto p-1 bg-muted/50 sticky top-12 z-10">
           <TabsTrigger value="challenges" className="text-xs py-2.5 gap-1">
@@ -415,9 +463,8 @@ export default function MusicAdventure() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ============= CHALLENGES TAB ============= */}
+        {/* CHALLENGES TAB */}
         <TabsContent value="challenges" className="mt-4 space-y-4">
-          {/* Accordion Filters - Source & Time only */}
           <Accordion type="multiple" defaultValue={['source']} className="space-y-2">
             <AccordionItem value="source" className="border rounded-lg bg-card/50 px-3">
               <AccordionTrigger className="py-2.5 hover:no-underline">
@@ -442,7 +489,6 @@ export default function MusicAdventure() {
                       {s === 'custom' && `✨ Custom (${customChallenges.length})`}
                     </Button>
                   ))}
-                  {/* + Button for Custom Challenge */}
                   <Button 
                     size="sm" 
                     variant="outline" 
@@ -459,7 +505,7 @@ export default function MusicAdventure() {
             <AccordionItem value="time" className="border rounded-lg bg-card/50 px-3">
               <AccordionTrigger className="py-2.5 hover:no-underline">
                 <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-blue-500" />
+                  <Clock className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium">Time</span>
                   <Badge variant="secondary" className="ml-2 text-[10px] capitalize">{timeFilter}</Badge>
                 </div>
@@ -487,7 +533,7 @@ export default function MusicAdventure() {
             </AccordionItem>
           </Accordion>
 
-          {/* Challenge Cards - Single Column */}
+          {/* Challenge Cards */}
           <div className="space-y-3">
             {filteredChallenges.length === 0 ? (
               <Card className="glass-card">
@@ -505,7 +551,7 @@ export default function MusicAdventure() {
                 const isOwner = isCustom && challenge.creatorId === user?.id;
                 
                 return (
-                  <Card key={challenge.id} className={`glass-card overflow-hidden transition-all ${isCompleted ? 'border-green-500/30 bg-green-500/5' : ''}`}>
+                  <Card key={challenge.id} className={`glass-card overflow-hidden transition-all ${isCompleted ? 'border-primary/30 bg-primary/5' : ''}`}>
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
                         <div className="text-2xl">{challenge.categoryIcon}</div>
@@ -522,29 +568,26 @@ export default function MusicAdventure() {
                         </div>
                         <button 
                           onClick={() => toggleChallengeComplete(challenge.id)}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isCompleted ? 'bg-green-500 text-white' : 'bg-muted hover:bg-primary/20'}`}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isCompleted ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-primary/20'}`}
                         >
                           <Check className="w-4 h-4" />
                         </button>
                       </div>
                       
-                      {/* Actions - Like, Comment, Share */}
                       <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
                         <button 
                           onClick={() => toggleChallengeLike(challenge.id)} 
-                          className={`flex items-center gap-1.5 text-xs transition-colors ${isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-foreground'}`}
+                          className={`flex items-center gap-1.5 text-xs transition-colors ${isLiked ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                           <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
                           <span>{likedChallenges.has(challenge.id) ? 1 : 0}</span>
                         </button>
-                        {/* Comments - System challenges public, Custom only for owner */}
                         {(!isCustom || isOwner) && (
                           <button 
                             onClick={() => openComments(challenge.id, challenge.title)} 
                             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                           >
                             <MessageCircle className="w-4 h-4" />
-                            <span>Comment</span>
                           </button>
                         )}
                         <button 
@@ -562,136 +605,174 @@ export default function MusicAdventure() {
           </div>
         </TabsContent>
 
-        {/* ============= DISCOVER TAB - 200 Countries x 5 Places ============= */}
+        {/* DISCOVER TAB */}
         <TabsContent value="discover" className="mt-4 space-y-4">
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search 1000+ places..."
-              value={discoverSearch}
-              onChange={(e) => setDiscoverSearch(e.target.value)}
-              className="pl-10 h-10"
-            />
+          {/* View Toggle: List / Map */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search 2200+ places..."
+                value={discoverSearch}
+                onChange={(e) => setDiscoverSearch(e.target.value)}
+                className="pl-10 h-10"
+              />
+            </div>
+            <div className="flex gap-1 bg-muted rounded-lg p-1">
+              <Button
+                size="sm"
+                variant={discoverViewMode === 'list' ? 'default' : 'ghost'}
+                className="h-8 w-8 p-0"
+                onClick={() => setDiscoverViewMode('list')}
+              >
+                <List className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant={discoverViewMode === 'map' ? 'default' : 'ghost'}
+                className="h-8 w-8 p-0"
+                onClick={() => setDiscoverViewMode('map')}
+              >
+                <Map className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            {ALL_PLACES.length}+ places from 220+ countries
+            {ALL_PLACES.length}+ places from 220+ countries • {visitedPlaces.size} visited
           </p>
 
-          {/* Places - Single Column Layout */}
-          <div className="space-y-4">
-            {filteredPlaces.length === 0 ? (
-              <Card className="glass-card">
-                <CardContent className="py-12 text-center">
-                  <MapPin className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-                  <p className="font-medium">No places found</p>
-                  <p className="text-xs text-muted-foreground mt-1">Try a different search term</p>
-                </CardContent>
-              </Card>
-            ) : (
-              filteredPlaces.map(place => {
-                const isVisited = visitedPlaces.has(place.id);
-                const isLoved = lovedPlaces.has(place.id);
-                const myRating = userRatings[place.id];
-                
-                return (
-                  <Card key={place.id} className="glass-card overflow-hidden">
-                    {/* Full Width Image - Clickable for fullscreen */}
-                    <div 
-                      className="aspect-video w-full overflow-hidden relative cursor-pointer"
-                      onClick={() => openMediaViewer(place.image, place.name, place.id, lovedPlaces.has(place.id))}
-                    >
-                      <img 
-                        src={place.image} 
-                        alt={place.name}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
-                      {isVisited && (
-                        <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-0.5 rounded-full text-[10px] font-medium">
-                          ✓ Visited
-                        </div>
-                      )}
-                    </div>
-                    
-                    <CardContent className="p-4">
-                      {/* Place Info */}
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="font-semibold text-base">{place.name}</h3>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <span className="text-sm">{place.countryFlag}</span>
-                            {place.country}
-                          </p>
-                        </div>
-                        <a 
-                          href={place.mapUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          Map
-                        </a>
-                      </div>
+          {/* Map View */}
+          {discoverViewMode === 'map' && (
+            <Suspense fallback={
+              <div className="h-[400px] rounded-xl bg-muted/50 flex items-center justify-center">
+                <div className="text-center">
+                  <Map className="w-12 h-12 mx-auto text-muted-foreground/30 mb-2 animate-pulse" />
+                  <p className="text-sm text-muted-foreground">Loading map...</p>
+                </div>
+              </div>
+            }>
+              <DiscoverMapView
+                places={filteredPlaces}
+                visitedPlaces={visitedPlaces}
+                lovedPlaces={lovedPlaces}
+                onToggleVisit={togglePlaceVisit}
+                onToggleLove={togglePlaceLove}
+                onOpenPlace={(place) => openMediaViewer(place.image, 'image', place.name, place.id, lovedPlaces.has(place.id))}
+              />
+            </Suspense>
+          )}
 
-                      {/* Star Rating */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="flex items-center gap-0.5">
-                          {[1,2,3,4,5].map(star => (
-                            <button 
-                              key={star} 
-                              onClick={() => ratePlace(place.id, star)}
-                              className={`transition-colors ${(myRating || 0) >= star ? 'text-yellow-500' : 'text-muted-foreground/30'}`}
-                            >
-                              <Star className={`w-4 h-4 ${(myRating || 0) >= star ? 'fill-current' : ''}`} />
-                            </button>
-                          ))}
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {myRating ? `Your: ${myRating.toFixed(2)}⭐` : `Avg: ${place.stars.toFixed(2)}⭐`}
-                        </span>
+          {/* List View */}
+          {discoverViewMode === 'list' && (
+            <div className="space-y-4">
+              {filteredPlaces.length === 0 ? (
+                <Card className="glass-card">
+                  <CardContent className="py-12 text-center">
+                    <MapPin className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                    <p className="font-medium">No places found</p>
+                    <p className="text-xs text-muted-foreground mt-1">Try a different search term</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                filteredPlaces.map(place => {
+                  const isVisited = visitedPlaces.has(place.id);
+                  const isLoved = lovedPlaces.has(place.id);
+                  const myRating = userRatings[place.id];
+                  
+                  return (
+                    <Card key={place.id} className="glass-card overflow-hidden">
+                      <div 
+                        className="aspect-video w-full overflow-hidden relative cursor-pointer"
+                        onClick={() => openMediaViewer(place.image, 'image', place.name, place.id, lovedPlaces.has(place.id))}
+                      >
+                        <LazyBlurImage 
+                          src={place.image} 
+                          alt={place.name}
+                          className="w-full h-full"
+                        />
+                        {isVisited && (
+                          <div className="absolute top-2 right-2 bg-primary text-primary-foreground px-2 py-0.5 rounded-full text-[10px] font-medium">
+                            ✓ Visited
+                          </div>
+                        )}
                       </div>
                       
-                      {/* Actions */}
-                      <div className="flex items-center gap-4 pt-3 border-t border-border/50">
-                        <button 
-                          onClick={() => togglePlaceVisit(place.id)} 
-                          className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${isVisited ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'}`}
-                        >
-                          <Footprints className="w-4 h-4" />
-                          {isVisited ? "Visited" : "Visit"}
-                        </button>
-                        <button 
-                          onClick={() => togglePlaceLove(place.id)} 
-                          className={`flex items-center gap-1.5 text-xs transition-colors ${isLoved ? 'text-red-500' : 'text-muted-foreground hover:text-foreground'}`}
-                        >
-                          <Heart className={`w-4 h-4 ${isLoved ? 'fill-current' : ''}`} />
-                          <span>{isLoved ? 1 : 0}</span>
-                        </button>
-                        <button 
-                          onClick={() => openComments(place.id, place.name)} 
-                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => openShare(place.id, place.name, `Check out ${place.name} in ${place.country}`)} 
-                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h3 className="font-semibold text-base">{place.name}</h3>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <span className="text-sm">{place.countryFlag}</span>
+                              {place.country}
+                            </p>
+                          </div>
+                          <a 
+                            href={place.mapUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-primary hover:underline"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Map
+                          </a>
+                        </div>
+
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="flex items-center gap-0.5">
+                            {[1,2,3,4,5].map(star => (
+                              <button 
+                                key={star} 
+                                onClick={() => ratePlace(place.id, star)}
+                                className={`transition-colors ${(myRating || 0) >= star ? 'text-yellow-500' : 'text-muted-foreground/30'}`}
+                              >
+                                <Star className={`w-4 h-4 ${(myRating || 0) >= star ? 'fill-current' : ''}`} />
+                              </button>
+                            ))}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {myRating ? `Your: ${myRating.toFixed(2)}⭐` : `Avg: ${place.stars.toFixed(2)}⭐`}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-4 pt-3 border-t border-border/50">
+                          <button 
+                            onClick={() => togglePlaceVisit(place.id)} 
+                            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${isVisited ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                          >
+                            <Footprints className="w-4 h-4" />
+                            {isVisited ? "Visited" : "Visit"}
+                          </button>
+                          <button 
+                            onClick={() => togglePlaceLove(place.id)} 
+                            className={`flex items-center gap-1.5 text-xs transition-colors ${isLoved ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
+                          >
+                            <Heart className={`w-4 h-4 ${isLoved ? 'fill-current' : ''}`} />
+                            <span>{isLoved ? 1 : 0}</span>
+                          </button>
+                          <button 
+                            onClick={() => openComments(place.id, place.name)} 
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => openShare(place.id, place.name, `Check out ${place.name} in ${place.country}`)} 
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          )}
         </TabsContent>
 
-        {/* ============= TRAVEL TAB - User Stories ============= */}
+        {/* TRAVEL TAB */}
         <TabsContent value="travel" className="mt-4 space-y-4">
           {/* Create Story Button */}
           <Card 
@@ -702,10 +783,34 @@ export default function MusicAdventure() {
               <Plus className="w-5 h-5 text-primary" />
               <div className="text-center">
                 <p className="font-medium text-sm">Share Your Travel Story</p>
-                <p className="text-[10px] text-muted-foreground">Upload photos and memories from your journey</p>
+                <p className="text-[10px] text-muted-foreground">Upload photos or videos from your journey</p>
               </div>
             </CardContent>
           </Card>
+
+          {/* Global/Regional Filter (like Home) */}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1 bg-muted rounded-lg p-1 flex-1">
+              <Button
+                size="sm"
+                variant={travelFilter === 'global' ? 'default' : 'ghost'}
+                className="flex-1 h-8 gap-1.5"
+                onClick={() => setTravelFilter('global')}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                Global
+              </Button>
+              <Button
+                size="sm"
+                variant={travelFilter === 'regional' ? 'default' : 'ghost'}
+                className="flex-1 h-8 gap-1.5"
+                onClick={() => setTravelFilter('regional')}
+              >
+                <Flag className="w-3.5 h-3.5" />
+                Regional
+              </Button>
+            </div>
+          </div>
 
           {/* Search Bar */}
           <div className="relative">
@@ -718,22 +823,25 @@ export default function MusicAdventure() {
             />
           </div>
 
-          {/* Travel Stories - Single Column */}
+          {/* Travel Stories */}
           <div className="space-y-4">
             {filteredTravelStories.length === 0 ? (
               <Card className="glass-card">
                 <CardContent className="py-12 text-center">
                   <Plane className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
                   <p className="font-medium">No travel stories yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Share your first journey ✨</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {travelFilter === 'regional' ? 'No stories from your region' : 'Share your first journey ✨'}
+                  </p>
                 </CardContent>
               </Card>
             ) : (
               filteredTravelStories.map(post => {
                 const isLiked = likedPosts.has(post.id);
+                const hasVideo = post.video && post.mediaType === 'video';
+                
                 return (
                   <Card key={post.id} className="glass-card overflow-hidden">
-                    {/* Author Header */}
                     <CardContent className="p-4 pb-0">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold">
@@ -741,34 +849,65 @@ export default function MusicAdventure() {
                         </div>
                         <div className="flex-1">
                           <p className="font-medium text-sm">{post.author}</p>
-                          <p className="text-[10px] text-muted-foreground">Travel Story</p>
+                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            {post.location && (
+                              <>
+                                <MapPin className="w-3 h-3" />
+                                {post.location}
+                              </>
+                            )}
+                            {!post.location && 'Travel Story'}
+                          </p>
                         </div>
                       </div>
                     </CardContent>
                     
-                    {/* Post Image - Full Width, Clickable for fullscreen */}
+                    {/* Media - Image or Video */}
                     <div 
-                      className="aspect-[4/3] w-full overflow-hidden cursor-pointer"
-                      onClick={() => openMediaViewer(post.image, post.title, post.id, likedPosts.has(post.id))}
+                      className="aspect-[4/3] w-full overflow-hidden cursor-pointer relative"
+                      onClick={() => openMediaViewer(
+                        hasVideo ? post.video : post.image, 
+                        hasVideo ? 'video' : 'image',
+                        post.title, 
+                        post.id, 
+                        likedPosts.has(post.id)
+                      )}
                     >
-                      <img 
-                        src={post.image} 
-                        alt={post.title}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
+                      {hasVideo ? (
+                        <video 
+                          src={post.video}
+                          className="w-full h-full object-cover"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <LazyBlurImage 
+                          src={post.image} 
+                          alt={post.title}
+                          className="w-full h-full"
+                        />
+                      )}
+                      {hasVideo && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
+                            <Video className="w-5 h-5 text-foreground ml-0.5" />
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <CardContent className="p-4 pt-3">
-                      {/* Title & Content */}
                       <h3 className="font-semibold text-base">{post.title}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">{post.content}</p>
+                      <TruncatedText 
+                        text={post.content} 
+                        maxWords={50} 
+                        className="text-sm text-muted-foreground mt-1"
+                      />
                       
-                      {/* Actions */}
                       <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
                         <button 
                           onClick={() => togglePostLike(post.id)} 
-                          className={`flex items-center gap-1.5 text-xs transition-colors ${isLiked ? 'text-red-500' : 'text-muted-foreground hover:text-foreground'}`}
+                          className={`flex items-center gap-1.5 text-xs transition-colors ${isLiked ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                           <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
                           <span>{isLiked ? 1 : 0}</span>
@@ -778,14 +917,12 @@ export default function MusicAdventure() {
                           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                         >
                           <MessageCircle className="w-4 h-4" />
-                          Comment
                         </button>
                         <button 
                           onClick={() => openShare(post.id, post.title, post.content)} 
                           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                         >
                           <Share2 className="w-4 h-4" />
-                          Share
                         </button>
                       </div>
                     </CardContent>
@@ -796,67 +933,60 @@ export default function MusicAdventure() {
           </div>
         </TabsContent>
 
-        {/* ============= RANKING TAB ============= */}
+        {/* RANKING TAB */}
         <TabsContent value="ranking" className="mt-4 space-y-4">
-          {/* Main Categories with ^ separator style */}
-          <div className="text-center space-y-3">
-            <p className="text-xs text-muted-foreground font-medium">🌟 MAIN ADVENTURE CATEGORIES</p>
-            <div className="flex items-center justify-center gap-3">
-              <button 
-                onClick={() => setRankingCategory('challenges')}
-                className={`text-sm font-semibold transition-colors ${rankingCategory === 'challenges' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Challenges
-              </button>
-              <span className="text-muted-foreground">^</span>
-              <button 
-                onClick={() => setRankingCategory('discover')}
-                className={`text-sm font-semibold transition-colors ${rankingCategory === 'discover' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Discover
-              </button>
-              <span className="text-muted-foreground">^</span>
-              <button 
-                onClick={() => setRankingCategory('travel')}
-                className={`text-sm font-semibold transition-colors ${rankingCategory === 'travel' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Travel
-              </button>
-            </div>
+          {/* Category Selector (like Home feed) */}
+          <div className="flex items-center justify-center gap-1 bg-muted rounded-lg p-1">
+            {RANKING_CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const isActive = rankingCategory === cat.id;
+              return (
+                <Button
+                  key={cat.id}
+                  size="sm"
+                  variant={isActive ? 'default' : 'ghost'}
+                  className={cn("flex-1 h-9 gap-1.5", isActive && cat.color)}
+                  onClick={() => setRankingCategory(cat.id as any)}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="text-xs">{cat.label}</span>
+                </Button>
+              );
+            })}
           </div>
 
-          {/* Scope Categories with ^ separator style */}
-          <div className="text-center space-y-2">
-            <p className="text-xs text-muted-foreground font-medium">🌍 SCOPE</p>
-            <div className="flex items-center justify-center gap-4">
-              <button 
-                onClick={() => setRankingFilter('global')}
-                className={`text-sm font-semibold transition-colors flex items-center gap-1.5 ${rankingFilter === 'global' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <Globe className="w-4 h-4" />
-                Global
-              </button>
-              <span className="text-muted-foreground">^</span>
-              <button 
-                onClick={() => setRankingFilter('regional')}
-                className={`text-sm font-semibold transition-colors flex items-center gap-1.5 ${rankingFilter === 'regional' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <MapPin className="w-4 h-4" />
-                Regional
-              </button>
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              {rankingFilter === 'global' ? 'From everywhere' : 'Near you'}
-            </p>
+          {/* Scope: Global / Regional */}
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              size="sm"
+              variant={rankingFilter === 'global' ? 'default' : 'outline'}
+              className="gap-1.5"
+              onClick={() => setRankingFilter('global')}
+            >
+              <Globe className="w-4 h-4" />
+              Global
+            </Button>
+            <Button
+              size="sm"
+              variant={rankingFilter === 'regional' ? 'default' : 'outline'}
+              className="gap-1.5"
+              onClick={() => setRankingFilter('regional')}
+            >
+              <MapPin className="w-4 h-4" />
+              Regional
+            </Button>
           </div>
 
           {/* Your Rank Card */}
           <Card className="glass-card bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/30">
             <CardContent className="py-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                Your {rankingCategory === 'challenges' ? 'Challenges' : rankingCategory === 'discover' ? 'Discover' : 'Travel ❤️'} Rank
-              </p>
-              <p className={`text-3xl font-bold mt-1 ${userRank === 'Unranked' ? 'text-muted-foreground' : 'text-primary'}`}>
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <RankingIcon className={cn("w-5 h-5", currentRankingCategory.color)} />
+                <p className="text-sm text-muted-foreground">
+                  Your {currentRankingCategory.label} Rank
+                </p>
+              </div>
+              <p className={`text-3xl font-bold ${userRank === 'Unranked' ? 'text-muted-foreground' : 'text-primary'}`}>
                 {userRank === 'Unranked' ? 'Unranked' : `#${userRank}`}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -875,16 +1005,12 @@ export default function MusicAdventure() {
             </CardContent>
           </Card>
 
-          {/* Top 10 Rankings - Genuine system (empty until real users participate) */}
+          {/* Top 10 Rankings */}
           <Card className="glass-card">
             <CardContent className="p-4">
               <h3 className="font-medium text-sm mb-3 flex items-center gap-2">
                 {rankingFilter === 'global' ? <Globe className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-                Top 10 {rankingFilter === 'global' ? 'Global' : 'Regional'} • {
-                  rankingCategory === 'challenges' ? 'Challenges' : 
-                  rankingCategory === 'discover' ? 'Discover' : 
-                  'Travel ❤️'
-                }
+                Top 10 {rankingFilter === 'global' ? 'Global' : 'Regional'} • {currentRankingCategory.label}
               </h3>
               
               {(rankingFilter === 'global' ? globalRankings : regionalRankings).length === 0 ? (
@@ -918,7 +1044,7 @@ export default function MusicAdventure() {
                         </p>
                       </div>
                       <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        {rankingCategory === 'travel' && <Heart className="w-3 h-3 text-red-500 fill-current" />}
+                        {rankingCategory === 'travel' && <Heart className="w-3 h-3 text-destructive fill-current" />}
                         {u.points.toLocaleString()}
                       </span>
                     </div>
@@ -930,7 +1056,7 @@ export default function MusicAdventure() {
         </TabsContent>
       </Tabs>
 
-      {/* ============= CREATE CHALLENGE DIALOG ============= */}
+      {/* CREATE CHALLENGE DIALOG */}
       <Dialog open={showCreateChallenge} onOpenChange={setShowCreateChallenge}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -995,7 +1121,7 @@ export default function MusicAdventure() {
         </DialogContent>
       </Dialog>
 
-      {/* ============= CREATE TRAVEL STORY DIALOG ============= */}
+      {/* CREATE TRAVEL STORY DIALOG */}
       <Dialog open={showCreateStory} onOpenChange={setShowCreateStory}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1015,6 +1141,18 @@ export default function MusicAdventure() {
               />
             </div>
             <div>
+              <label className="text-sm font-medium">Location</label>
+              <div className="relative mt-1">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input 
+                  value={newStory.location} 
+                  onChange={e => setNewStory(p => ({ ...p, location: e.target.value }))}
+                  placeholder="e.g., Paris, France"
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div>
               <label className="text-sm font-medium">Story *</label>
               <Textarea 
                 value={newStory.content} 
@@ -1025,46 +1163,69 @@ export default function MusicAdventure() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Upload Photo *</label>
-              <div className="mt-1 space-y-2">
-                {newStory.image ? (
-                  <div className="relative rounded-lg overflow-hidden">
-                    <img src={newStory.image} alt="Preview" className="w-full h-40 object-cover" />
-                    <Button 
-                      size="sm" 
-                      variant="destructive" 
-                      className="absolute top-2 right-2 h-7 text-xs"
-                      onClick={() => setNewStory(p => ({ ...p, image: '' }))}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-primary/30 rounded-lg cursor-pointer hover:bg-primary/5 transition-colors">
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={handleImageUpload}
-                      disabled={uploadingImage}
-                    />
-                    {uploadingImage ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
-                        <p className="text-xs text-muted-foreground">Uploading...</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <Image className="w-8 h-8 text-primary/50" />
-                        <p className="text-xs text-muted-foreground">Click to upload photo</p>
-                        <p className="text-[10px] text-muted-foreground">JPG, PNG, WEBP up to 10MB</p>
-                      </div>
-                    )}
-                  </label>
-                )}
+              <label className="text-sm font-medium">Upload Media *</label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {/* Image Upload */}
+                <label className={cn(
+                  "flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
+                  newStory.image ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"
+                )}>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => handleMediaUpload(e, 'image')}
+                    disabled={uploadingMedia}
+                  />
+                  {newStory.image ? (
+                    <div className="text-center">
+                      <Image className="w-6 h-6 mx-auto text-primary" />
+                      <p className="text-[10px] text-primary mt-1">Image Added ✓</p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <Image className="w-6 h-6 mx-auto text-muted-foreground" />
+                      <p className="text-[10px] text-muted-foreground mt-1">Add Photo</p>
+                    </div>
+                  )}
+                </label>
+                
+                {/* Video Upload */}
+                <label className={cn(
+                  "flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
+                  newStory.video ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"
+                )}>
+                  <input 
+                    type="file" 
+                    accept="video/*" 
+                    className="hidden" 
+                    onChange={(e) => handleMediaUpload(e, 'video')}
+                    disabled={uploadingMedia}
+                  />
+                  {newStory.video ? (
+                    <div className="text-center">
+                      <Video className="w-6 h-6 mx-auto text-primary" />
+                      <p className="text-[10px] text-primary mt-1">Video Added ✓</p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <Video className="w-6 h-6 mx-auto text-muted-foreground" />
+                      <p className="text-[10px] text-muted-foreground mt-1">Add Video</p>
+                    </div>
+                  )}
+                </label>
               </div>
+              {uploadingMedia && (
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+                  <span className="text-xs text-muted-foreground">Uploading...</span>
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Photos: JPG, PNG, WEBP • Videos: MP4, MOV (max 50MB)
+              </p>
             </div>
-            <Button onClick={createTravelStory} className="w-full" disabled={uploadingImage || !newStory.image}>
+            <Button onClick={createTravelStory} className="w-full" disabled={uploadingMedia || (!newStory.image && !newStory.video)}>
               <Plane className="w-4 h-4 mr-2" />
               Share Story
             </Button>
@@ -1072,7 +1233,7 @@ export default function MusicAdventure() {
         </DialogContent>
       </Dialog>
 
-      {/* Comments Dialog - Now saves to database properly */}
+      {/* Comments Dialog */}
       <AdventureCommentsDialog 
         open={commentsOpen} 
         onOpenChange={setCommentsOpen} 
@@ -1081,7 +1242,7 @@ export default function MusicAdventure() {
         itemType={selectedPostId.startsWith('sys-') || selectedPostId.startsWith('custom-') ? 'challenge' : selectedPostId.startsWith('story-') ? 'travel' : 'place'}
       />
 
-      {/* Share Dialog - Share to Friends */}
+      {/* Share Dialog */}
       <ShareDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
