@@ -80,17 +80,12 @@ export default function Home() {
       // Apply feed category filter
       switch (feedCategory) {
         case 'global':
-          query = query.eq('visibility', 'public');
+          // Exclude ghost posts from global feed
+          query = query.eq('visibility', 'public').neq('category', 'ghost');
           break;
         case 'regional':
-          // Filter by user's country if set
-          if (userCountry) {
-            query = query.eq('visibility', 'public');
-            // We'd need to join with profiles and filter by country
-            // For now, show all public posts tagged with the user's country
-          } else {
-            query = query.eq('visibility', 'public');
-          }
+          // Filter by user's country if set, exclude ghost posts
+          query = query.eq('visibility', 'public').neq('category', 'ghost');
           break;
         case 'following':
           const { data: following } = await supabase
@@ -106,7 +101,8 @@ export default function Home() {
           const friendIds = friendReqs?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || [];
           const allIds = [...new Set([...followingIds, ...friendIds])];
           if (allIds.length > 0) {
-            query = query.eq('visibility', 'public').in('user_id', allIds);
+            // Exclude ghost posts from following feed
+            query = query.eq('visibility', 'public').neq('category', 'ghost').in('user_id', allIds);
           } else {
             setPosts([]);
             setLoading(false);
@@ -114,15 +110,19 @@ export default function Home() {
           }
           break;
         case 'ghost':
-          // Show posts from last 24 hours only
+          // Show ONLY ghost posts from last 24 hours
           const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-          query = query.eq('visibility', 'public').gte('created_at', yesterday);
+          query = query.eq('visibility', 'public').eq('category', 'ghost').gte('created_at', yesterday);
           break;
       }
 
       // Apply content filter from SubNavigation (VDOs tab)
+      // Also exclude ghost posts from video feeds
       if (contentFilter === 'videos') {
         query = query.or('file_type.ilike.%video%,media_types.cs.{video}');
+        if (feedCategory !== 'ghost') {
+          query = query.neq('category', 'ghost');
+        }
       }
 
       query = query.order('created_at', { ascending: false }).limit(50);
