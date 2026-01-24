@@ -3,7 +3,7 @@ import { Layout } from '@/components/Layout';
 import { SplashScreen } from '@/components/SplashScreen';
 import { AuthProvider } from '@/contexts/AuthContext';
 import Home from '@/pages/Home';
-import Education from '@/pages/Education';
+import Learn from '@/pages/Learn';
 import MusicAdventure from '@/pages/MusicAdventure';
 import RandomConnect from '@/pages/RandomConnect';
 import Marketplace from '@/pages/Marketplace';
@@ -30,7 +30,8 @@ export default function Index() {
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<Home />} />
-              <Route path="/education" element={<Education />} />
+              <Route path="/education" element={<Learn />} />
+              <Route path="/learn" element={<Learn />} />
               <Route path="/music-adventure" element={<MusicAdventure />} />
               <Route path="/random-connect" element={<RandomConnect />} />
               <Route path="/marketplace" element={<Marketplace />} />
