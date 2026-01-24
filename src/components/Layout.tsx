@@ -18,7 +18,7 @@ interface LayoutProps {
 // Colorful icons for sidebar
 const menuItems = [
   { title: 'Home', url: '/', emoji: '🏠', color: 'text-blue-500', desc: 'Social + Explore' },
-  { title: 'Education', url: '/education', emoji: '📚', color: 'text-purple-500', desc: 'Notes, Docs, Study Hub' },
+  { title: 'Learn', url: '/education', emoji: '📚', color: 'text-purple-500', desc: 'Docs, Images, Videos' },
   { title: 'Messages', url: '/chat', emoji: '💬', color: 'text-green-500', desc: 'Chat + VC + Groups' },
   { title: 'FunPun', url: '/funpun', emoji: '🎮', color: 'text-orange-500', desc: 'Games for Fresh Mind' },
   { title: 'Adventure', url: '/music-adventure', emoji: '🏔️', color: 'text-teal-500', desc: 'Challenges + Discover + Travel' },

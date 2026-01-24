@@ -10,9 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { LazyImage } from '@/components/LazyImage';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { FriendTick } from '@/components/zenpeace/FriendTick';
+import { SymbolicHeart } from '@/components/zenpeace/SymbolicHeart';
 import { 
   ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
-  MapPin, Calendar, Phone, Globe, Briefcase, Star, Trophy, Eye, MessageCircle, UserCheck, Clock
+  MapPin, Calendar, Phone, Globe, Briefcase, Star, Trophy, Eye, MessageCircle, UserCheck, Clock, Users
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
@@ -29,8 +31,7 @@ export default function Profile() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
-  const [followersCount, setFollowersCount] = useState(0);
-  const [followingCount, setFollowingCount] = useState(0);
+  const [friendsCount, setFriendsCount] = useState(0);
   const [saved, setSaved] = useState<string[]>([]);
   const [likes, setLikes] = useState<{ post_id: string }[]>([]);
   const [likesCount, setLikesCount] = useState<Record<string, number>>({});
@@ -158,19 +159,14 @@ export default function Profile() {
         }
       }
 
-      // Get followers/following count
-      const { count: followersCountData } = await supabase
-        .from('follows')
+      // Get friends count (accepted friend requests)
+      const { count: friendsCountData } = await supabase
+        .from('friend_requests')
         .select('*', { count: 'exact', head: true })
-        .eq('following_id', userId);
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+        .eq('status', 'accepted');
 
-      const { count: followingCountData } = await supabase
-        .from('follows')
-        .select('*', { count: 'exact', head: true })
-        .eq('follower_id', userId);
-
-      setFollowersCount(followersCountData || 0);
-      setFollowingCount(followingCountData || 0);
+      setFriendsCount(friendsCountData || 0);
     } catch (error) {
       console.error('Error fetching profile:', error);
       toast.error('Failed to load profile');
@@ -193,14 +189,12 @@ export default function Profile() {
           .eq('follower_id', currentUser.id)
           .eq('following_id', userId);
         setIsFollowing(false);
-        setFollowersCount(prev => prev - 1);
         toast.success('Unfollowed');
       } else {
         await supabase
           .from('follows')
           .insert({ follower_id: currentUser.id, following_id: userId });
         setIsFollowing(true);
-        setFollowersCount(prev => prev + 1);
         toast.success('Following!');
       }
     } catch (error) {
@@ -317,19 +311,17 @@ export default function Profile() {
             <div className="flex-1 text-center sm:text-left space-y-2">
               <h1 className="text-xl font-bold">{profile.name}</h1>
               
-              {/* Stats Row */}
+              {/* Zenpeace Stats - Friends & Posts only (no follower counts) */}
               <div className="flex gap-6 justify-center sm:justify-start text-center">
+                <div className="flex items-center gap-1">
+                  <Users className="w-4 h-4 text-muted-foreground" />
+                  <div className="font-bold text-lg">{friendsCount}</div>
+                  <div className="text-[10px] text-muted-foreground">Friends</div>
+                  <FriendTick friendsCount={friendsCount} />
+                </div>
                 <div>
                   <div className="font-bold text-lg">{posts.length}</div>
                   <div className="text-[10px] text-muted-foreground">Posts</div>
-                </div>
-                <div className="cursor-pointer hover:opacity-80">
-                  <div className="font-bold text-lg">{followersCount}</div>
-                  <div className="text-[10px] text-muted-foreground">Followers</div>
-                </div>
-                <div className="cursor-pointer hover:opacity-80">
-                  <div className="font-bold text-lg">{followingCount}</div>
-                  <div className="text-[10px] text-muted-foreground">Following</div>
                 </div>
               </div>
 

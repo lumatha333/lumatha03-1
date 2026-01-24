@@ -6,6 +6,7 @@ interface LazyBlurImageProps {
   alt: string;
   className?: string;
   placeholderClassName?: string;
+  onClick?: () => void;
 }
 
 // Generate a consistent blur placeholder gradient based on image seed
@@ -29,7 +30,8 @@ const LazyBlurImage: React.FC<LazyBlurImageProps> = ({
   src,
   alt,
   className = '',
-  placeholderClassName = ''
+  placeholderClassName = '',
+  onClick
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isInView, setIsInView] = useState(false);
@@ -71,7 +73,8 @@ const LazyBlurImage: React.FC<LazyBlurImageProps> = ({
   return (
     <div 
       ref={imgRef} 
-      className={cn('relative overflow-hidden', className)}
+      className={cn('relative overflow-hidden', className, onClick && 'cursor-pointer')}
+      onClick={onClick}
     >
       {/* Blur placeholder with shimmer effect */}
       <div
