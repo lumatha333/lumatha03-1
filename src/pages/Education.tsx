@@ -11,11 +11,12 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Trash2, Bookmark, RotateCcw, Sparkles } from 'lucide-react';
+import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Trash2, Bookmark, RotateCcw, Sparkles, GraduationCap, Image, Video, Flag } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import DocumentCard from '@/components/DocumentCard';
 import { DEFAULT_DAILY_TODOS, DEFAULT_WEEKLY_TODOS, DEFAULT_MONTHLY_TODOS, DEFAULT_YEARLY_TODOS, TODO_CATEGORIES, TodoCategory, getDefaultTodos } from '@/data/defaultTodos';
 import { cn } from '@/lib/utils';
+import { LearnMediaCard } from '@/components/zenpeace/LearnMediaCard';
 
 type Document = Database['public']['Tables']['documents']['Row'];
 type Todo = Database['public']['Tables']['todos']['Row'];
@@ -28,15 +29,21 @@ interface CategorizedTodo extends Todo {
   category?: TodoCategory;
 }
 
+// Education Section: To-Do, Notes, Learn
 export default function Education() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, profile } = useAuth();
   const navigate = useNavigate();
-  // Default to 'documents' tab - never auto-show To-Do
+  // Default to 'todos' tab (Tasks first)
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem('zenpeace_education_tab');
-    // Default to tasks (first tab)
-    return saved && ['documents', 'notes', 'todos'].includes(saved) ? saved : 'todos';
+    return saved && ['todos', 'notes', 'learn'].includes(saved) ? saved : 'todos';
   });
+  
+  // Learn sub-tabs and filters
+  const [learnTab, setLearnTab] = useState<'public' | 'private' | 'create'>('public');
+  const [learnSubTab, setLearnSubTab] = useState<'all' | 'docs' | 'images' | 'vdos'>('all');
+  const [learnScope, setLearnScope] = useState<'global' | 'regional'>('global');
+  const [privateSubTab, setPrivateSubTab] = useState<'own' | 'saved'>('own');
   
   // Save active tab preference
   useEffect(() => {
