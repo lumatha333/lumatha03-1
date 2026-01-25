@@ -45,7 +45,7 @@ const RANKING_CATEGORIES = [
 
 // Import from data files
 import { SYSTEM_CHALLENGES } from '@/data/adventureChallenges';
-import { ALL_PLACES } from '@/data/adventurePlaces';
+import { ADVENTURE_PLACES } from '@/data/adventurePlaces';
 
 // ============= COMPONENT =============
 export default function MusicAdventure() {
