@@ -215,9 +215,9 @@ export default function MusicAdventure() {
 
   // Filter places
   const filteredPlaces = useMemo(() => {
-    if (!discoverSearch.trim()) return ALL_PLACES.slice(0, 100);
+    if (!discoverSearch.trim()) return ADVENTURE_PLACES.slice(0, 100);
     const search = discoverSearch.toLowerCase();
-    return ALL_PLACES.filter(p => 
+    return ADVENTURE_PLACES.filter(p => 
       p.name.toLowerCase().includes(search) || 
       p.country.toLowerCase().includes(search)
     ).slice(0, 100);
@@ -639,7 +639,7 @@ export default function MusicAdventure() {
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            {ALL_PLACES.length}+ places from 220+ countries • {visitedPlaces.size} visited
+            {ADVENTURE_PLACES.length}+ places from 220+ countries • {visitedPlaces.size} visited
           </p>
 
           {/* Map View */}
