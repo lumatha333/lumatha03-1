@@ -9,9 +9,9 @@ interface SubNavigationProps {
   visible?: boolean;
 }
 
-// 6 icons: Home, VDOs, Search, Private, Notifications, Profile
+// 6 icons: Feed, VDOs, Search, Private, Notifications, Profile
 const tabs = [
-  { id: 'feed', icon: Home, path: '/', label: 'Home', color: 'text-blue-500' },
+  { id: 'feed', icon: Home, path: '/', label: 'Feed', color: 'text-blue-500' },
   { id: 'videos', icon: Video, path: '/?filter=videos', label: 'VDOs', color: 'text-red-500' },
   { id: 'search', icon: Search, path: '/search', label: 'Search', color: 'text-purple-500' },
   { id: 'private', icon: Lock, path: '/private', label: 'Private', color: 'text-green-500' },

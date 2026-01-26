@@ -309,17 +309,20 @@ export default function Profile() {
             </div>
             
             <div className="flex-1 text-center sm:text-left space-y-2">
-              <h1 className="text-xl font-bold">{profile.name}</h1>
+              {/* Name with FriendTick prominently displayed */}
+              <div className="flex items-center justify-center sm:justify-start gap-2">
+                <h1 className="text-xl font-bold">{profile.name}</h1>
+                <FriendTick friendsCount={friendsCount} showLabel />
+              </div>
               
               {/* Zenpeace Stats - Friends & Posts only (no follower counts) */}
               <div className="flex gap-6 justify-center sm:justify-start text-center">
-                <div className="flex items-center gap-1">
-                  <Users className="w-4 h-4 text-muted-foreground" />
+                <div className="flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-primary" />
                   <div className="font-bold text-lg">{friendsCount}</div>
                   <div className="text-[10px] text-muted-foreground">Friends</div>
-                  <FriendTick friendsCount={friendsCount} />
                 </div>
-                <div>
+                <div className="flex items-center gap-1.5">
                   <div className="font-bold text-lg">{posts.length}</div>
                   <div className="text-[10px] text-muted-foreground">Posts</div>
                 </div>

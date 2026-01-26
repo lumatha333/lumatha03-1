@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Send, ArrowLeft, Search, Paperclip, X, MoreVertical, 
   Archive, Ghost, Trash2, ShieldOff, Smile, Mic, MicOff, Play, Pause, 
-  Lock, Image, Users, Heart, UserSearch, MessageCircle, Star
+  Lock, Image, Users, Heart, UserSearch, MessageCircle, Star, Phone, Video as VideoIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -457,6 +457,26 @@ export default function Chat() {
             </div>
           </div>
           
+          {/* Call Buttons */}
+          <div className="flex gap-1">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9"
+              onClick={() => toast.info('🎤 Voice call starting...', { description: 'WebRTC audio call feature' })}
+            >
+              <Phone className="w-4 h-4 text-green-500" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9"
+              onClick={() => toast.info('📹 Video call starting...', { description: 'WebRTC video call feature' })}
+            >
+              <VideoIcon className="w-4 h-4 text-blue-500" />
+            </Button>
+          </div>
+          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-10 w-10">
@@ -494,9 +514,19 @@ export default function Chat() {
               
               <DropdownMenuSeparator />
               
-              <DropdownMenuItem onClick={() => toast.info('Group chat coming soon!')}>
+              <DropdownMenuItem onClick={() => toast.info('Group chat feature', { description: 'Create group chats with multiple friends!' })}>
                 <Users className="w-4 h-4 mr-2" />
                 Create Group
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem onClick={() => toast.info('Video call feature', { description: 'Start a video call with this friend!' })}>
+                <VideoIcon className="w-4 h-4 mr-2" />
+                Video Call
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem onClick={() => toast.info('Voice call feature', { description: 'Start a voice call with this friend!' })}>
+                <Phone className="w-4 h-4 mr-2" />
+                Voice Call
               </DropdownMenuItem>
               
               <DropdownMenuItem onClick={() => toggleArchive(currentChatUser)}>

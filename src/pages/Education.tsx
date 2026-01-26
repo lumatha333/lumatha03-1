@@ -312,80 +312,278 @@ export default function Education() {
         <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
           <TabsTrigger value="todos" className="gap-1 text-[11px] sm:text-xs py-1.5">
             <CheckSquare className="w-3 h-3" />
-            Tasks
+            To-Do
           </TabsTrigger>
           <TabsTrigger value="notes" className="gap-1 text-[11px] sm:text-xs py-1.5">
             <StickyNote className="w-3 h-3" />
             Notes
           </TabsTrigger>
-          <TabsTrigger value="documents" className="gap-1 text-[11px] sm:text-xs py-1.5">
-            <FileText className="w-3 h-3" />
-            <span>Docs</span>
+          <TabsTrigger value="learn" className="gap-1 text-[11px] sm:text-xs py-1.5">
+            <GraduationCap className="w-3 h-3" />
+            Learn
           </TabsTrigger>
         </TabsList>
 
-        {/* Documents Tab */}
-        <TabsContent value="documents" className="space-y-2 mt-3">
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary" />
-            <Input 
-              placeholder="Search documents..." 
-              value={docSearch} 
-              onChange={(e) => setDocSearch(e.target.value)} 
-              className="pl-8 h-8 text-xs border-primary/30 focus:border-primary bg-primary/5"
-            />
-          </div>
-
-          {/* Upload Button */}
-          <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline" className="w-full gap-1.5 h-8 border-dashed border-primary/50 hover:bg-primary/10">
-                <Plus className="w-3.5 h-3.5" />Add Document
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="glass-card max-w-sm mx-4">
-              <DialogHeader><DialogTitle className="text-sm">Upload Document</DialogTitle></DialogHeader>
-              <div className="space-y-2">
-                <div><Label className="text-[10px]">File</Label><Input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="glass-card text-xs h-8" /></div>
-                <div><Label className="text-[10px]">Title</Label><Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} className="glass-card h-8 text-xs" /></div>
-                <div><Label className="text-[10px]">Description</Label><Textarea value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} className="glass-card text-xs" rows={2} /></div>
-                <RadioGroup value={visibility} onValueChange={(val) => setVisibility(val as 'private' | 'public')} className="flex gap-3">
-                  <div className="flex items-center gap-1"><RadioGroupItem value="private" id="priv" /><Label htmlFor="priv" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Lock className="w-2.5 h-2.5" />Private</Label></div>
-                  <div className="flex items-center gap-1"><RadioGroupItem value="public" id="pub" /><Label htmlFor="pub" className="flex items-center gap-0.5 text-[10px] cursor-pointer"><Globe className="w-2.5 h-2.5" />Public</Label></div>
-                </RadioGroup>
-                <Button onClick={handleUpload} disabled={uploading} className="w-full h-8 text-xs">{uploading ? 'Uploading...' : 'Upload'}</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Document Tabs: Public | Own | Saved */}
-          <Tabs value={docTab} onValueChange={(val) => setDocTab(val as 'public' | 'own' | 'saved')}>
+        {/* Learn Tab - New Structure with Public/Private/Create */}
+        <TabsContent value="learn" className="space-y-2 mt-3">
+          {/* Learn Category Tabs */}
+          <Tabs value={learnTab} onValueChange={(v) => setLearnTab(v as any)} className="w-full">
             <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
-              <TabsTrigger value="public" className="text-[10px] py-1"><Globe className="w-2.5 h-2.5 mr-0.5" />Public</TabsTrigger>
-              <TabsTrigger value="own" className="text-[10px] py-1"><Lock className="w-2.5 h-2.5 mr-0.5" />Own</TabsTrigger>
-              <TabsTrigger value="saved" className="text-[10px] py-1"><Bookmark className="w-2.5 h-2.5 mr-0.5" />Saved</TabsTrigger>
+              <TabsTrigger value="public" className="text-[10px] py-1.5 gap-1">
+                <Globe className="w-3 h-3" />
+                Public
+              </TabsTrigger>
+              <TabsTrigger value="private" className="text-[10px] py-1.5 gap-1">
+                <Lock className="w-3 h-3" />
+                Private
+              </TabsTrigger>
+              <TabsTrigger value="create" className="text-[10px] py-1.5 gap-1">
+                <Plus className="w-3 h-3" />
+                Create
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value={docTab} className="mt-2">
-              {docLoading ? <p className="text-center py-6 text-muted-foreground text-xs">Loading...</p> : filteredDocs.length === 0 ? (
-                <Card className="glass-card"><CardContent className="py-6 text-center"><BookOpen className="h-10 w-10 mx-auto text-muted-foreground mb-2" /><p className="text-xs text-muted-foreground">{docTab === 'saved' ? 'No saved documents' : 'No documents yet'}</p></CardContent></Card>
-              ) : (
-                <div className="grid grid-cols-1 gap-2">
-                  {filteredDocs.map((doc) => (
-                    <DocumentCard 
-                      key={doc.id}
-                      doc={doc}
-                      onDelete={handleDeleteDoc}
-                      onDownload={handleDownload}
-                      onOpenInBrowser={handleOpenInBrowser}
-                      onRefresh={fetchDocuments}
-                      onSave={() => handleSaveDoc(doc.id)}
-                      isSaved={savedDocIds.has(doc.id)}
-                    />
+            {/* PUBLIC - Sub-tabs: All, Docs, Images, VDOs + Global/Regional filter */}
+            <TabsContent value="public" className="space-y-2 mt-2">
+              {/* Sub-tabs + Scope Filter */}
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1 flex-1 overflow-x-auto">
+                  {['all', 'docs', 'images', 'vdos'].map((tab) => (
+                    <Button
+                      key={tab}
+                      size="sm"
+                      variant={learnSubTab === tab ? 'default' : 'ghost'}
+                      onClick={() => setLearnSubTab(tab as any)}
+                      className="text-[10px] h-7 px-2"
+                    >
+                      {tab === 'all' && <Sparkles className="w-3 h-3 mr-0.5" />}
+                      {tab === 'docs' && <FileText className="w-3 h-3 mr-0.5" />}
+                      {tab === 'images' && <Image className="w-3 h-3 mr-0.5" />}
+                      {tab === 'vdos' && <Video className="w-3 h-3 mr-0.5" />}
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </Button>
                   ))}
                 </div>
+                {/* Global/Regional Toggle */}
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={learnScope === 'global' ? 'default' : 'outline'}
+                    onClick={() => setLearnScope('global')}
+                    className="text-[10px] h-7 px-2"
+                  >
+                    <Globe className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={learnScope === 'regional' ? 'default' : 'outline'}
+                    onClick={() => setLearnScope('regional')}
+                    className="text-[10px] h-7 px-2"
+                  >
+                    <Flag className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary" />
+                <Input 
+                  placeholder="Search learn content..." 
+                  value={docSearch} 
+                  onChange={(e) => setDocSearch(e.target.value)} 
+                  className="pl-8 h-8 text-xs border-primary/30 focus:border-primary bg-primary/5"
+                />
+              </div>
+
+              {/* Content Grid */}
+              {docLoading ? (
+                <p className="text-center py-6 text-muted-foreground text-xs">Loading...</p>
+              ) : publicDocuments.length === 0 ? (
+                <Card className="glass-card">
+                  <CardContent className="py-8 text-center">
+                    <GraduationCap className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
+                    <p className="text-xs text-muted-foreground">No public content yet</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-2">
+                  {publicDocuments
+                    .filter(doc => {
+                      if (learnSubTab === 'docs') return ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt'].includes(doc.file_type || '');
+                      if (learnSubTab === 'images') return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(doc.file_type || '');
+                      if (learnSubTab === 'vdos') return ['mp4', 'mov', 'webm', 'avi'].includes(doc.file_type || '');
+                      return true;
+                    })
+                    .filter(doc => doc.title?.toLowerCase().includes(docSearch.toLowerCase()))
+                    .slice(0, 20)
+                    .map((doc) => (
+                      <LearnMediaCard
+                        key={doc.id}
+                        id={doc.id}
+                        mediaUrls={[doc.file_url]}
+                        mediaTypes={[
+                          ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(doc.file_type || '') ? 'image' :
+                          ['mp4', 'mov', 'webm', 'avi'].includes(doc.file_type || '') ? 'video' : 'document'
+                        ]}
+                        title={doc.title}
+                        description={doc.description || ''}
+                        authorId={doc.user_id}
+                        authorName={doc.profiles?.name || 'Unknown'}
+                        authorAvatar={doc.profiles?.avatar_url || undefined}
+                        visibility={doc.visibility as 'public' | 'private'}
+                        isSaved={savedDocIds.has(doc.id)}
+                        isLiked={false}
+                        likesCount={0}
+                        onToggleSave={() => handleSaveDoc(doc.id)}
+                        onToggleLike={() => {}}
+                        onComment={() => {}}
+                        createdAt={doc.created_at}
+                      />
+                    ))
+                  }
+                </div>
               )}
+            </TabsContent>
+
+            {/* PRIVATE - Own / Saved sub-tabs */}
+            <TabsContent value="private" className="space-y-2 mt-2">
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant={privateSubTab === 'own' ? 'default' : 'ghost'}
+                  onClick={() => setPrivateSubTab('own')}
+                  className="text-[10px] h-7"
+                >
+                  <Lock className="w-3 h-3 mr-0.5" />
+                  Own
+                </Button>
+                <Button
+                  size="sm"
+                  variant={privateSubTab === 'saved' ? 'default' : 'ghost'}
+                  onClick={() => setPrivateSubTab('saved')}
+                  className="text-[10px] h-7"
+                >
+                  <Bookmark className="w-3 h-3 mr-0.5" />
+                  Saved
+                </Button>
+              </div>
+
+              {privateSubTab === 'own' ? (
+                myDocuments.length === 0 ? (
+                  <Card className="glass-card">
+                    <CardContent className="py-8 text-center">
+                      <Lock className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
+                      <p className="text-xs text-muted-foreground">Your private content will appear here</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-2">
+                    {myDocuments.map((doc) => (
+                      <DocumentCard 
+                        key={doc.id}
+                        doc={doc}
+                        onDelete={handleDeleteDoc}
+                        onDownload={handleDownload}
+                        onOpenInBrowser={handleOpenInBrowser}
+                        onRefresh={fetchDocuments}
+                        onSave={() => handleSaveDoc(doc.id)}
+                        isSaved={savedDocIds.has(doc.id)}
+                      />
+                    ))}
+                  </div>
+                )
+              ) : (
+                savedDocuments.length === 0 ? (
+                  <Card className="glass-card">
+                    <CardContent className="py-8 text-center">
+                      <Bookmark className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
+                      <p className="text-xs text-muted-foreground">No saved content</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-2">
+                    {savedDocuments.map((doc) => (
+                      <DocumentCard 
+                        key={doc.id}
+                        doc={doc}
+                        onDelete={handleDeleteDoc}
+                        onDownload={handleDownload}
+                        onOpenInBrowser={handleOpenInBrowser}
+                        onRefresh={fetchDocuments}
+                        onSave={() => handleSaveDoc(doc.id)}
+                        isSaved={true}
+                      />
+                    ))}
+                  </div>
+                )
+              )}
+            </TabsContent>
+
+            {/* CREATE - Upload new content */}
+            <TabsContent value="create" className="space-y-3 mt-2">
+              <Card className="glass-card border-dashed border-primary/30">
+                <CardContent className="p-4 space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Plus className="w-4 h-4 text-primary" />
+                    Create New Content
+                  </h3>
+                  
+                  <div>
+                    <Label className="text-[10px]">Upload File (Docs, Images, Videos)</Label>
+                    <Input 
+                      type="file" 
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.webm,.avi" 
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)} 
+                      className="glass-card text-xs h-8 mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label className="text-[10px]">Title</Label>
+                    <Input 
+                      value={uploadTitle} 
+                      onChange={(e) => setUploadTitle(e.target.value)} 
+                      placeholder="Enter title..." 
+                      className="glass-card h-8 text-xs mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label className="text-[10px]">Description</Label>
+                    <Textarea 
+                      value={uploadDescription} 
+                      onChange={(e) => setUploadDescription(e.target.value)} 
+                      placeholder="Add description..."
+                      className="glass-card text-xs mt-1" 
+                      rows={2}
+                    />
+                  </div>
+                  
+                  <RadioGroup value={visibility} onValueChange={(val) => setVisibility(val as 'private' | 'public')} className="flex gap-4">
+                    <div className="flex items-center gap-1">
+                      <RadioGroupItem value="private" id="create-priv" />
+                      <Label htmlFor="create-priv" className="flex items-center gap-1 text-[10px] cursor-pointer">
+                        <Lock className="w-3 h-3" />Private
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <RadioGroupItem value="public" id="create-pub" />
+                      <Label htmlFor="create-pub" className="flex items-center gap-1 text-[10px] cursor-pointer">
+                        <Globe className="w-3 h-3" />Public
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  
+                  <Button onClick={handleUpload} disabled={uploading || !uploadFile || !uploadTitle.trim()} className="w-full h-9 text-xs gap-1">
+                    {uploading ? (
+                      <>Uploading...</>
+                    ) : (
+                      <><Plus className="w-3.5 h-3.5" /> Create Content</>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </TabsContent>
