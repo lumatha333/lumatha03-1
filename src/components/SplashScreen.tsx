@@ -29,41 +29,41 @@ export function SplashScreen() {
       {/* Subtle golden glow behind logo */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div 
-          className="w-64 h-64 rounded-full blur-3xl opacity-30"
+          className="w-80 h-80 rounded-full blur-3xl opacity-20"
           style={{ background: 'radial-gradient(circle, #c9a227 0%, transparent 70%)' }}
         />
       </div>
 
       {/* Center content */}
-      <div className="relative flex flex-col items-center gap-6 animate-fade-in">
-        {/* Logo */}
+      <div className="relative flex flex-col items-center gap-8 animate-fade-in">
+        {/* Logo - larger and cleaner */}
         <div className="relative">
           <img 
             src={zenpeaceLogo} 
             alt="Zenpeace" 
-            className="w-32 h-32 sm:w-40 sm:h-40 object-contain rounded-2xl shadow-2xl"
+            className="w-40 h-40 sm:w-52 sm:h-52 object-contain rounded-3xl"
             style={{ 
-              boxShadow: '0 0 60px rgba(201, 162, 39, 0.3), 0 0 120px rgba(201, 162, 39, 0.1)'
+              boxShadow: '0 0 80px rgba(201, 162, 39, 0.4), 0 0 160px rgba(201, 162, 39, 0.15)'
             }}
           />
         </div>
 
         {/* Brand text */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-3">
           <h1 
-            className="text-3xl sm:text-4xl font-bold tracking-widest"
+            className="text-4xl sm:text-5xl font-bold tracking-widest"
             style={{ 
               color: '#e8d5a3',
-              textShadow: '0 0 30px rgba(201, 162, 39, 0.5)'
+              textShadow: '0 0 40px rgba(201, 162, 39, 0.5)'
             }}
           >
             ZENPEACE
           </h1>
-          <p className="text-sm text-white/40 tracking-wider">Find Your Inner Peace</p>
+          <p className="text-sm sm:text-base text-white/40 tracking-wider">Find Your Inner Peace</p>
         </div>
 
         {/* Simple loading bar */}
-        <div className="w-48 h-0.5 bg-white/10 rounded-full overflow-hidden mt-4">
+        <div className="w-56 h-1 bg-white/10 rounded-full overflow-hidden mt-2">
           <div 
             className="h-full rounded-full"
             style={{ 
