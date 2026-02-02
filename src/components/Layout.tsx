@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Crown, Menu, ArrowLeft } from 'lucide-react';
+import { Menu, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
@@ -10,6 +10,7 @@ import { SubNavigation } from '@/components/SubNavigation';
 import { DesktopMessagesPanel } from './DesktopMessagesPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
+import zenpeaceLogo from '@/assets/zenpeace-logo.png';
 
 interface LayoutProps {
   children: ReactNode;
@@ -53,7 +54,7 @@ function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => b
       </SheetTrigger>
       <SheetContent side="left" className="w-[280px] p-0 glass-card border-r border-primary/20">
         <div className="flex items-center gap-3 p-4 border-b border-border">
-          <Crown className="w-8 h-8 text-primary animate-pulse" />
+          <img src={zenpeaceLogo} alt="Zenpeace" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-2xl font-bold gradient-text tracking-tight">Zenpeace</span>
         </div>
         <nav className="p-2 space-y-1">
@@ -215,8 +216,7 @@ function LayoutContent({ children }: LayoutProps) {
             
             <div className="relative flex items-center gap-2 p-4 border-b border-border/30">
               <div className="relative">
-                <Crown className="w-8 h-8 text-primary" />
-                <div className="absolute inset-0 w-8 h-8 bg-primary/30 blur-lg rounded-full animate-pulse" />
+                <img src={zenpeaceLogo} alt="Zenpeace" className="w-8 h-8 rounded-lg object-contain" />
               </div>
               <span className="text-xl font-bold gradient-text tracking-tight">Zenpeace</span>
             </div>
@@ -286,13 +286,13 @@ function LayoutContent({ children }: LayoutProps) {
               ) : null}
             </div>
 
-            {/* Right side - Zenpeace Branding (BIGGER) */}
+            {/* Right side - Zenpeace Branding with new logo */}
             <Link 
               to="/" 
               className="flex items-center gap-2" 
               onClick={handleLogoClick}
             >
-              <Crown className="w-6 h-6 text-primary" />
+              <img src={zenpeaceLogo} alt="Zenpeace" className="w-7 h-7 rounded-lg object-contain" />
               <span className="font-bold text-xl gradient-text whitespace-nowrap tracking-tight">Zenpeace</span>
             </Link>
           </div>
