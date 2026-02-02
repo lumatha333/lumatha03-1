@@ -214,9 +214,14 @@ function LayoutContent({ children }: LayoutProps) {
             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none" />
             <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary/20 to-transparent pointer-events-none" />
             
-            <div className="relative flex items-center gap-2 p-4 border-b border-border/30">
+            <div className="relative flex items-center gap-3 p-4 border-b border-border/30">
               <div className="relative">
-                <img src={zenpeaceLogo} alt="Zenpeace" className="w-8 h-8 rounded-lg object-contain" />
+                <img 
+                  src={zenpeaceLogo} 
+                  alt="Zenpeace" 
+                  className="w-12 h-12 rounded-xl object-contain"
+                  style={{ boxShadow: '0 0 20px rgba(201, 162, 39, 0.3)' }}
+                />
               </div>
               <span className="text-xl font-bold gradient-text tracking-tight">Zenpeace</span>
             </div>
@@ -286,13 +291,12 @@ function LayoutContent({ children }: LayoutProps) {
               ) : null}
             </div>
 
-            {/* Right side - Zenpeace Branding with new logo */}
+            {/* Right side - Zenpeace Text only (no logo in header) */}
             <Link 
               to="/" 
-              className="flex items-center gap-2" 
+              className="flex items-center" 
               onClick={handleLogoClick}
             >
-              <img src={zenpeaceLogo} alt="Zenpeace" className="w-7 h-7 rounded-lg object-contain" />
               <span className="font-bold text-xl gradient-text whitespace-nowrap tracking-tight">Zenpeace</span>
             </Link>
           </div>

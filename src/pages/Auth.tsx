@@ -12,7 +12,7 @@ import { validateLoginForm, validateSignupForm, getValidationErrors } from '@/li
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import zenpeaceLogo from '@/assets/zenpeace-logo.png';
 
-// Complete world countries list
+// Complete world countries list - sorted A-Z
 const ALL_COUNTRIES = [
   { name: 'Afghanistan', flag: '🇦🇫' },
   { name: 'Albania', flag: '🇦🇱' },
@@ -127,7 +127,7 @@ const ALL_COUNTRIES = [
   { name: 'Yemen', flag: '🇾🇪' },
   { name: 'Zambia', flag: '🇿🇲' },
   { name: 'Zimbabwe', flag: '🇿🇼' },
-];
+].sort((a, b) => a.name.localeCompare(b.name));
 
 // Generate years for date of birth (ages 13-100)
 const currentYear = new Date().getFullYear();
@@ -381,7 +381,7 @@ export default function Auth() {
           <div className="space-y-4 animate-fade-in">
             <div className="text-center mb-6">
               <h2 className="text-xl font-semibold text-white">When were you born?</h2>
-              <p className="text-sm text-white/50 mt-1">This helps personalize your experience (optional)</p>
+              <p className="text-sm text-white/50 mt-1">This helps personalize your experience</p>
             </div>
             
             <div className="grid grid-cols-3 gap-2">
@@ -424,14 +424,6 @@ export default function Auth() {
                 </SelectContent>
               </Select>
             </div>
-            
-            <button
-              type="button"
-              onClick={handleNextStep}
-              className="text-sm text-violet-400 hover:text-violet-300 mt-2"
-            >
-              Skip this step →
-            </button>
           </div>
         );
       
@@ -443,36 +435,40 @@ export default function Auth() {
               <p className="text-sm text-white/50 mt-1">Select your country for regional content</p>
             </div>
             
-            <Select value={country} onValueChange={setCountry}>
-              <SelectTrigger className="bg-white/5 border-white/20 text-white h-12">
-                <SelectValue>
-                  <span className="flex items-center gap-2">
-                    <span>{selectedCountryFlag}</span>
-                    <span>{country}</span>
-                  </span>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-white/20 max-h-60">
-                <div className="p-2 sticky top-0 bg-slate-900">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                    <Input 
-                      placeholder="Search country..." 
-                      value={countrySearch}
-                      onChange={(e) => setCountrySearch(e.target.value)}
-                      className="pl-8 h-9 bg-white/10 border-white/20 text-white"
-                    />
-                  </div>
-                </div>
-                {filteredCountries.map((c) => (
-                  <SelectItem key={c.name} value={c.name} className="text-white hover:bg-white/10">
-                    <span className="flex items-center gap-2">
-                      <span>{c.flag}</span> {c.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Search bar at top */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+              <Input 
+                placeholder="Search country..." 
+                value={countrySearch}
+                onChange={(e) => setCountrySearch(e.target.value)}
+                className="pl-10 h-12 bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                autoFocus
+              />
+            </div>
+            
+            {/* Country list */}
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-white/20 bg-white/5">
+              {filteredCountries.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onClick={() => setCountry(c.name)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                    country === c.name 
+                      ? 'bg-violet-600/30 text-white' 
+                      : 'text-white/80 hover:bg-white/10'
+                  }`}
+                >
+                  <span className="text-xl">{c.flag}</span>
+                  <span className="flex-1">{c.name}</span>
+                  {country === c.name && <Check className="w-4 h-4 text-violet-400" />}
+                </button>
+              ))}
+              {filteredCountries.length === 0 && (
+                <p className="text-center text-white/40 py-6">No countries found</p>
+              )}
+            </div>
           </div>
         );
       
@@ -481,7 +477,7 @@ export default function Auth() {
           <div className="space-y-4 animate-fade-in">
             <div className="text-center mb-6">
               <h2 className="text-xl font-semibold text-white">Add a profile picture</h2>
-              <p className="text-sm text-white/50 mt-1">Help others recognize you (optional)</p>
+              <p className="text-sm text-white/50 mt-1">Help others recognize you</p>
             </div>
             
             <div className="flex flex-col items-center gap-4">
@@ -506,16 +502,8 @@ export default function Auth() {
                 onChange={handleProfilePicChange}
                 className="hidden"
               />
-              <p className="text-xs text-white/40">Tap to upload</p>
+              <p className="text-xs text-white/40">Tap to upload your photo</p>
             </div>
-            
-            <button
-              type="button"
-              onClick={handleNextStep}
-              className="text-sm text-violet-400 hover:text-violet-300 mt-2 block mx-auto"
-            >
-              Skip this step →
-            </button>
           </div>
         );
       
