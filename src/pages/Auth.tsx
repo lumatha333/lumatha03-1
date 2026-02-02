@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Eye, EyeOff, LogIn, UserPlus, Globe, Calendar, Crown, Search, Laptop, Smartphone, Tablet, Check, X, Info, Sparkles, Zap, Star, Heart } from 'lucide-react';
+import { Eye, EyeOff, LogIn, UserPlus, Globe, Calendar, Search, Check, X, ArrowRight, ArrowLeft, Camera, User } from 'lucide-react';
 import { validateLoginForm, validateSignupForm, getValidationErrors } from '@/lib/authValidation';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import zenpeaceLogo from '@/assets/zenpeace-logo.png';
 
 // Complete world countries list
 const ALL_COUNTRIES = [
@@ -128,54 +129,38 @@ const ALL_COUNTRIES = [
   { name: 'Zimbabwe', flag: '🇿🇼' },
 ];
 
-const AGE_GROUPS = [
-  { value: '13-17', label: '13-17 years (Teen)' },
-  { value: '18-25', label: '18-25 years (Young Adult)' },
-  { value: '26-35', label: '26-35 years (Adult)' },
-  { value: '36-45', label: '36-45 years (Middle Age)' },
-  { value: '46-55', label: '46-55 years (Mature)' },
-  { value: '56+', label: '56+ years (Senior)' },
+// Generate years for date of birth (ages 13-100)
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 88 }, (_, i) => currentYear - 13 - i);
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
 ];
-
-// Floating particle component
-const FloatingParticle = ({ delay, size, color, duration, left, top }: {
-  delay: number; size: number; color: string; duration: number; left: string; top: string;
-}) => (
-  <div
-    className="absolute rounded-full pointer-events-none"
-    style={{
-      width: size,
-      height: size,
-      background: color,
-      left,
-      top,
-      animation: `float ${duration}s ease-in-out infinite`,
-      animationDelay: `${delay}s`,
-      filter: 'blur(1px)',
-    }}
-  />
-);
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export default function Auth() {
   const navigate = useNavigate();
-  const [showSplash, setShowSplash] = useState(true);
   const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState('');
+  const [step, setStep] = useState(1); // Multi-step for signup: 1=name, 2=DOB, 3=country, 4=profile pic, 5=credentials
+  
+  // Form fields
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [country, setCountry] = useState('Nepal');
-  const [ageGroup, setAgeGroup] = useState('18-25');
-  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
+  const [birthDay, setBirthDay] = useState('');
+  const [birthMonth, setBirthMonth] = useState('');
+  const [birthYear, setBirthYear] = useState('');
+  const [profilePic, setProfilePic] = useState<string | null>(null);
+  const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
+  
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-  // Splash screen timer
-  useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 3500);
-    return () => clearTimeout(timer);
-  }, []);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredCountries = useMemo(() => {
     if (!countrySearch.trim()) return ALL_COUNTRIES;
@@ -193,434 +178,584 @@ export default function Auth() {
 
   const isPasswordValid = passwordChecks.minLength && passwordChecks.hasNumber && passwordChecks.hasSpecial;
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormErrors({});
-    
-    if (isLogin) {
-      const result = validateLoginForm({ email, password });
-      if (!result.success) {
-        const errors = getValidationErrors(result);
-        setFormErrors(errors);
-        toast.error(Object.values(errors)[0]);
+  const username = `${firstName.trim()} ${lastName.trim()}`.trim();
+
+  const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProfilePicFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfilePic(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const calculateAge = () => {
+    if (!birthYear || !birthMonth || !birthDay) return null;
+    const today = new Date();
+    const birthDate = new Date(parseInt(birthYear), parseInt(birthMonth) - 1, parseInt(birthDay));
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const getAgeGroup = () => {
+    const age = calculateAge();
+    if (!age) return '18-25';
+    if (age < 18) return '13-17';
+    if (age <= 25) return '18-25';
+    if (age <= 35) return '26-35';
+    if (age <= 45) return '36-45';
+    if (age <= 55) return '46-55';
+    return '56+';
+  };
+
+  const handleNextStep = () => {
+    if (step === 1) {
+      if (!firstName.trim()) {
+        toast.error('Please enter your first name');
         return;
       }
-    } else {
-      const result = validateSignupForm({ username, email, password, country, ageGroup, deviceType });
-      if (!result.success) {
-        const errors = getValidationErrors(result);
-        setFormErrors(errors);
-        toast.error(Object.values(errors)[0]);
+    } else if (step === 2) {
+      // DOB is optional, can skip
+    } else if (step === 3) {
+      if (!country) {
+        toast.error('Please select your country');
         return;
       }
     }
+    setStep(step + 1);
+  };
+
+  const handlePrevStep = () => {
+    setStep(step - 1);
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormErrors({});
+    
+    const result = validateLoginForm({ email, password });
+    if (!result.success) {
+      const errors = getValidationErrors(result);
+      setFormErrors(errors);
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
     
     setLoading(true);
-
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
-        if (error) throw error;
-        toast.success('Welcome back to Zenpeace!');
-        navigate('/');
-      } else {
-        const sanitizedUsername = username.trim().replace(/[<>'"`;]/g, '').slice(0, 50);
-        if (!sanitizedUsername) {
-          toast.error('Please enter a valid username');
-          setLoading(false);
-          return;
-        }
+      const { error } = await supabase.auth.signInWithPassword({ 
+        email: email.trim().toLowerCase(), 
+        password 
+      });
+      if (error) throw error;
+      toast.success('Welcome back to Zenpeace!');
+      navigate('/');
+    } catch (error: any) {
+      toast.error(error.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-            data: { name: sanitizedUsername, country, age_group: ageGroup, device_type: deviceType }
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormErrors({});
+    
+    const ageGroup = getAgeGroup();
+    const result = validateSignupForm({ 
+      username, 
+      email, 
+      password, 
+      country, 
+      ageGroup,
+      deviceType: 'mobile' // Default, we removed this field
+    });
+    
+    if (!result.success) {
+      const errors = getValidationErrors(result);
+      setFormErrors(errors);
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const sanitizedUsername = username.replace(/[<>'"`;]/g, '').slice(0, 50);
+      
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: { 
+            name: sanitizedUsername, 
+            country, 
+            age_group: ageGroup,
+            birth_date: birthYear && birthMonth && birthDay 
+              ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}` 
+              : null
           }
-        });
-        
-        if (error) throw error;
+        }
+      });
+      
+      if (error) throw error;
 
-        if (data.user) {
-          await supabase.from('profiles').upsert({
-            id: data.user.id,
-            name: sanitizedUsername,
-            country,
-            age_group: ageGroup
-          });
-          localStorage.setItem('zenpeace_device_type', deviceType);
+      if (data.user) {
+        // Upload profile picture if provided
+        let avatarUrl = null;
+        if (profilePicFile) {
+          const fileExt = profilePicFile.name.split('.').pop();
+          const fileName = `${data.user.id}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(fileName, profilePicFile, { upsert: true });
+          
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage
+              .from('avatars')
+              .getPublicUrl(fileName);
+            avatarUrl = urlData.publicUrl;
+          }
         }
 
-        toast.success('Welcome to Zenpeace! Account created.');
-        navigate('/');
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          name: sanitizedUsername,
+          country,
+          age_group: ageGroup,
+          avatar_url: avatarUrl
+        });
       }
+
+      toast.success('Welcome to Zenpeace! Account created.');
+      navigate('/');
     } catch (error: any) {
       if (error.message?.includes('already registered')) {
         toast.error('This email is already registered. Please login instead.');
       } else {
-        toast.error(error.message || 'Authentication failed');
+        toast.error(error.message || 'Registration failed');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // Spectacular splash screen with meteor effects
-  if (showSplash) {
-    return (
-      <div className="fixed inset-0 z-[200] overflow-hidden bg-black">
-        {/* Animated gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-900 via-purple-900 to-fuchsia-900 animate-pulse" />
-        
-        {/* Meteor shower effect */}
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 bg-gradient-to-b from-white via-yellow-200 to-transparent"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `-10%`,
-                height: `${50 + Math.random() * 100}px`,
-                animation: `meteorFall ${1 + Math.random() * 2}s linear infinite`,
-                animationDelay: `${Math.random() * 3}s`,
-                opacity: 0.8,
-                transform: `rotate(${-15 + Math.random() * 30}deg)`,
-              }}
-            />
-          ))}
-        </div>
-
-        {/* Aurora borealis effect */}
-        <div className="absolute inset-0">
-          <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-cyan-500/20 via-green-500/10 to-transparent animate-pulse" style={{ animationDuration: '3s' }} />
-          <div className="absolute top-0 left-1/4 w-1/2 h-1/3 bg-gradient-to-b from-pink-500/20 via-purple-500/10 to-transparent animate-pulse" style={{ animationDuration: '4s', animationDelay: '1s' }} />
-        </div>
-
-        {/* Floating orbs */}
-        <div className="absolute inset-0">
-          {[...Array(15)].map((_, i) => (
-            <FloatingParticle
-              key={i}
-              delay={i * 0.3}
-              size={10 + Math.random() * 30}
-              color={['#ff6b6b', '#4ecdc4', '#ffe66d', '#ff8fd8', '#a78bfa', '#34d399'][i % 6]}
-              duration={4 + Math.random() * 4}
-              left={`${Math.random() * 100}%`}
-              top={`${Math.random() * 100}%`}
-            />
-          ))}
-        </div>
-
-        {/* Center content */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center space-y-6 animate-fade-in z-10">
-            {/* Glowing crown */}
-            <div className="relative mx-auto w-32 h-32">
-              <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 rounded-full blur-2xl opacity-60 animate-pulse" />
-              <div className="absolute inset-2 bg-gradient-to-br from-primary via-purple-600 to-pink-500 rounded-full flex items-center justify-center shadow-2xl">
-                <Crown className="w-16 h-16 text-white drop-shadow-2xl" />
-              </div>
-              {/* Sparkle effects around crown */}
-              <Sparkles className="absolute -top-2 -right-2 w-8 h-8 text-yellow-300 animate-pulse" />
-              <Star className="absolute -bottom-1 -left-3 w-6 h-6 text-pink-300 animate-pulse" style={{ animationDelay: '0.5s' }} />
-              <Zap className="absolute top-0 -left-4 w-5 h-5 text-cyan-300 animate-pulse" style={{ animationDelay: '1s' }} />
-              <Heart className="absolute -bottom-2 right-0 w-5 h-5 text-red-400 animate-pulse" style={{ animationDelay: '1.5s' }} />
+  // Render step content for signup
+  const renderSignupStep = () => {
+    switch (step) {
+      case 1:
+        return (
+          <div className="space-y-4 animate-fade-in">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-semibold text-white">What's your name?</h2>
+              <p className="text-sm text-white/50 mt-1">Enter your name as it appears on official documents</p>
             </div>
-
-            {/* Brand text with gradient glow */}
-            <div className="space-y-2">
-              <h1 className="text-5xl sm:text-6xl font-black tracking-tight">
-                <span className="bg-gradient-to-r from-yellow-200 via-pink-300 to-cyan-200 bg-clip-text text-transparent drop-shadow-2xl animate-pulse">
-                  ZENPEACE
-                </span>
-              </h1>
-              <p className="text-lg text-white/80 font-light tracking-wider animate-fade-in" style={{ animationDelay: '0.5s' }}>
-                Find Your Inner Peace
-              </p>
-            </div>
-
-            {/* Loading bar */}
-            <div className="w-64 mx-auto">
-              <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 rounded-full"
-                  style={{ 
-                    animation: 'loadProgress 3s ease-out forwards',
-                    width: '0%'
-                  }}
-                />
-              </div>
-              <p className="text-xs text-white/50 mt-2 animate-pulse">Preparing your cosmic journey...</p>
+            
+            <div className="space-y-3">
+              <Input
+                placeholder="First name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12"
+                autoFocus
+              />
+              <Input
+                placeholder="Last name (optional)"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12"
+              />
             </div>
           </div>
-        </div>
-
-        {/* CSS for animations */}
-        <style>{`
-          @keyframes meteorFall {
-            0% { transform: translateY(-100px) translateX(0); opacity: 1; }
-            100% { transform: translateY(100vh) translateX(100px); opacity: 0; }
-          }
-          @keyframes float {
-            0%, 100% { transform: translateY(0) scale(1); opacity: 0.6; }
-            50% { transform: translateY(-30px) scale(1.1); opacity: 1; }
-          }
-          @keyframes loadProgress {
-            0% { width: 0%; }
-            100% { width: 100%; }
-          }
-        `}</style>
-      </div>
-    );
-  }
+        );
+      
+      case 2:
+        return (
+          <div className="space-y-4 animate-fade-in">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-semibold text-white">When were you born?</h2>
+              <p className="text-sm text-white/50 mt-1">This helps personalize your experience (optional)</p>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2">
+              <Select value={birthMonth} onValueChange={setBirthMonth}>
+                <SelectTrigger className="bg-white/5 border-white/20 text-white h-12">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-white/20 max-h-60">
+                  {MONTHS.map((month, i) => (
+                    <SelectItem key={month} value={String(i + 1)} className="text-white">
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={birthDay} onValueChange={setBirthDay}>
+                <SelectTrigger className="bg-white/5 border-white/20 text-white h-12">
+                  <SelectValue placeholder="Day" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-white/20 max-h-60">
+                  {DAYS.map((day) => (
+                    <SelectItem key={day} value={String(day)} className="text-white">
+                      {day}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select value={birthYear} onValueChange={setBirthYear}>
+                <SelectTrigger className="bg-white/5 border-white/20 text-white h-12">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-white/20 max-h-60">
+                  {YEARS.map((year) => (
+                    <SelectItem key={year} value={String(year)} className="text-white">
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <button
+              type="button"
+              onClick={handleNextStep}
+              className="text-sm text-violet-400 hover:text-violet-300 mt-2"
+            >
+              Skip this step →
+            </button>
+          </div>
+        );
+      
+      case 3:
+        return (
+          <div className="space-y-4 animate-fade-in">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-semibold text-white">Where are you from?</h2>
+              <p className="text-sm text-white/50 mt-1">Select your country for regional content</p>
+            </div>
+            
+            <Select value={country} onValueChange={setCountry}>
+              <SelectTrigger className="bg-white/5 border-white/20 text-white h-12">
+                <SelectValue>
+                  <span className="flex items-center gap-2">
+                    <span>{selectedCountryFlag}</span>
+                    <span>{country}</span>
+                  </span>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-white/20 max-h-60">
+                <div className="p-2 sticky top-0 bg-slate-900">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                    <Input 
+                      placeholder="Search country..." 
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      className="pl-8 h-9 bg-white/10 border-white/20 text-white"
+                    />
+                  </div>
+                </div>
+                {filteredCountries.map((c) => (
+                  <SelectItem key={c.name} value={c.name} className="text-white hover:bg-white/10">
+                    <span className="flex items-center gap-2">
+                      <span>{c.flag}</span> {c.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
+      
+      case 4:
+        return (
+          <div className="space-y-4 animate-fade-in">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-semibold text-white">Add a profile picture</h2>
+              <p className="text-sm text-white/50 mt-1">Help others recognize you (optional)</p>
+            </div>
+            
+            <div className="flex flex-col items-center gap-4">
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="relative cursor-pointer group"
+              >
+                <Avatar className="w-32 h-32 border-4 border-white/20 group-hover:border-violet-500 transition-colors">
+                  <AvatarImage src={profilePic || undefined} />
+                  <AvatarFallback className="bg-white/10 text-white text-3xl">
+                    <User className="w-12 h-12 text-white/40" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="absolute bottom-1 right-1 w-10 h-10 rounded-full bg-violet-600 flex items-center justify-center shadow-lg group-hover:bg-violet-500 transition-colors">
+                  <Camera className="w-5 h-5 text-white" />
+                </div>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleProfilePicChange}
+                className="hidden"
+              />
+              <p className="text-xs text-white/40">Tap to upload</p>
+            </div>
+            
+            <button
+              type="button"
+              onClick={handleNextStep}
+              className="text-sm text-violet-400 hover:text-violet-300 mt-2 block mx-auto"
+            >
+              Skip this step →
+            </button>
+          </div>
+        );
+      
+      case 5:
+        return (
+          <div className="space-y-4 animate-fade-in">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-semibold text-white">Create your account</h2>
+              <p className="text-sm text-white/50 mt-1">Set up your email and password</p>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-white/80 text-sm">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-white/80 text-sm">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Create a strong password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40 pr-10 h-12"
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 p-0 text-white/60 hover:text-white"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                </div>
+                
+                {password.length > 0 && (
+                  <div className="mt-2 p-3 rounded-lg bg-white/5 border border-white/10 space-y-1.5">
+                    {[
+                      { check: passwordChecks.minLength, label: 'At least 8 characters' },
+                      { check: passwordChecks.hasNumber, label: 'Contains a number' },
+                      { check: passwordChecks.hasSpecial, label: 'Contains special character' },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        {item.check ? (
+                          <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                        ) : (
+                          <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center">
+                            <X className="w-3 h-3 text-white/40" />
+                          </div>
+                        )}
+                        <span className={`text-xs ${item.check ? 'text-green-400' : 'text-white/40'}`}>
+                          {item.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 overflow-hidden relative">
-      {/* Spectacular animated background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950">
-        {/* Animated gradient orbs */}
-        <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-gradient-to-br from-violet-600/30 to-fuchsia-600/20 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
-        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-cyan-600/25 to-blue-600/15 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '5s', animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-gradient-to-br from-pink-500/20 to-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }} />
-        
-        {/* Floating particles */}
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(30)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-2 h-2 rounded-full opacity-40"
-              style={{
-                background: ['#ff6b6b', '#4ecdc4', '#ffe66d', '#ff8fd8', '#a78bfa', '#34d399', '#60a5fa'][i % 7],
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animation: `float ${6 + Math.random() * 6}s ease-in-out infinite`,
-                animationDelay: `${Math.random() * 5}s`,
-              }}
-            />
-          ))}
-        </div>
-
-        {/* Subtle grid pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.02)_1px,transparent_1px)] bg-[size:50px_50px]" />
+      {/* Elegant dark background */}
+      <div className="fixed inset-0" style={{ 
+        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)'
+      }}>
+        {/* Subtle golden glow */}
+        <div 
+          className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full blur-3xl opacity-10"
+          style={{ background: 'radial-gradient(circle, #c9a227 0%, transparent 70%)' }}
+        />
       </div>
 
-      <Card className="w-full max-w-lg bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl relative z-10">
+      <Card className="w-full max-w-md bg-black/50 backdrop-blur-xl border border-white/10 shadow-2xl relative z-10">
         <CardHeader className="text-center space-y-4 pb-4">
-          {/* Glowing logo */}
-          <div className="relative mx-auto w-20 h-20">
-            <div className="absolute inset-0 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500 rounded-full blur-xl opacity-70 animate-pulse" />
-            <div className="relative w-full h-full rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center shadow-2xl">
-              <Crown className="w-10 h-10 text-white drop-shadow-lg" />
-            </div>
+          {/* Logo */}
+          <div className="mx-auto">
+            <img 
+              src={zenpeaceLogo} 
+              alt="Zenpeace" 
+              className="w-16 h-16 object-contain rounded-xl mx-auto"
+              style={{ boxShadow: '0 0 30px rgba(201, 162, 39, 0.2)' }}
+            />
           </div>
           
-          <CardTitle className="text-3xl font-black">
-            <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">
-              {isLogin ? 'Welcome Back' : 'Join Zenpeace'}
-            </span>
+          <CardTitle className="text-2xl font-bold text-white">
+            {isLogin ? 'Welcome Back' : step <= 5 ? 'Create Account' : 'Join Zenpeace'}
           </CardTitle>
-          <CardDescription className="text-white/60">
-            {isLogin ? 'Continue your peaceful journey' : 'Start your journey to inner peace'}
+          <CardDescription className="text-white/50">
+            {isLogin ? 'Sign in to continue your journey' : `Step ${step} of 5`}
           </CardDescription>
+          
+          {/* Progress bar for signup */}
+          {!isLogin && (
+            <div className="flex gap-1 mt-2">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <div 
+                  key={s}
+                  className={`h-1 flex-1 rounded-full transition-colors ${
+                    s <= step ? 'bg-violet-500' : 'bg-white/20'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="pt-0">
-          <form onSubmit={handleAuth} className="space-y-4">
-            {!isLogin && (
+          {isLogin ? (
+            <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="username" className="text-white/80 flex items-center gap-2 text-sm">
-                  <span className="text-lg">👤</span> Username
-                </Label>
+                <Label htmlFor="login-email" className="text-white/80 text-sm">Email</Label>
                 <Input
-                  id="username"
-                  placeholder="Choose a unique username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-11 focus:border-violet-500 focus:ring-violet-500/20"
-                  required={!isLogin}
-                />
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-white/80 flex items-center gap-2 text-sm">
-                <span className="text-lg">📧</span> Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-11 focus:border-violet-500"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-white/80 flex items-center gap-2 text-sm">
-                <span className="text-lg">🔒</span> Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Create a strong password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40 pr-10 h-11 focus:border-violet-500"
+                  id="login-email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12"
                   required
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 p-0 text-white/60 hover:text-white hover:bg-white/10"
-                  onClick={() => setShowPassword(!showPassword)}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="login-password" className="text-white/80 text-sm">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40 pr-10 h-12"
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 p-0 text-white/60 hover:text-white"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <Button 
+                type="submit" 
+                disabled={loading}
+                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Signing in...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <LogIn className="w-5 h-5" />
+                    Sign In
+                  </span>
+                )}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={step === 5 ? handleSignup : (e) => { e.preventDefault(); handleNextStep(); }}>
+              {renderSignupStep()}
+              
+              <div className="flex gap-3 mt-6">
+                {step > 1 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePrevStep}
+                    className="flex-1 h-12 border-white/20 text-white hover:bg-white/10"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back
+                  </Button>
+                )}
+                
+                <Button 
+                  type="submit" 
+                  disabled={loading || (step === 5 && !isPasswordValid)}
+                  className={`h-12 text-base font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white ${
+                    step > 1 ? 'flex-1' : 'w-full'
+                  }`}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Creating...
+                    </span>
+                  ) : step === 5 ? (
+                    <span className="flex items-center gap-2">
+                      <UserPlus className="w-5 h-5" />
+                      Create Account
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      Next
+                      <ArrowRight className="w-5 h-5" />
+                    </span>
+                  )}
                 </Button>
               </div>
-              
-              {!isLogin && password.length > 0 && (
-                <div className="mt-2 p-3 rounded-lg bg-white/5 border border-white/10 space-y-1.5">
-                  <p className="text-xs text-white/60 font-medium mb-2">Password Requirements:</p>
-                  {[
-                    { check: passwordChecks.minLength, label: 'At least 8 characters' },
-                    { check: passwordChecks.hasNumber, label: 'Contains a number' },
-                    { check: passwordChecks.hasSpecial, label: 'Contains special character' },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      {item.check ? (
-                        <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                          <Check className="w-3 h-3 text-white" />
-                        </div>
-                      ) : (
-                        <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center">
-                          <X className="w-3 h-3 text-white/40" />
-                        </div>
-                      )}
-                      <span className={`text-xs ${item.check ? 'text-green-400' : 'text-white/40'}`}>
-                        {item.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {!isLogin && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-white/80 flex items-center gap-2 text-sm">
-                      <Globe className="w-4 h-4 text-violet-400" /> Country
-                    </Label>
-                    <Select value={country} onValueChange={setCountry}>
-                      <SelectTrigger className="bg-white/5 border-white/20 text-white h-10">
-                        <SelectValue>
-                          <span className="flex items-center gap-2">
-                            <span>{selectedCountryFlag}</span>
-                            <span className="truncate">{country}</span>
-                          </span>
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-900 border-white/20 max-h-60">
-                        <div className="p-2 sticky top-0 bg-slate-900">
-                          <div className="relative">
-                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40" />
-                            <Input 
-                              placeholder="Search country..." 
-                              value={countrySearch}
-                              onChange={(e) => setCountrySearch(e.target.value)}
-                              className="pl-7 h-8 text-xs bg-white/10 border-white/20 text-white"
-                            />
-                          </div>
-                        </div>
-                        {filteredCountries.map((c) => (
-                          <SelectItem key={c.name} value={c.name} className="text-white hover:bg-white/10">
-                            <span className="flex items-center gap-2">
-                              <span>{c.flag}</span> {c.name}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-white/80 flex items-center gap-2 text-sm">
-                      <Calendar className="w-4 h-4 text-violet-400" /> Age Group
-                    </Label>
-                    <Select value={ageGroup} onValueChange={setAgeGroup}>
-                      <SelectTrigger className="bg-white/5 border-white/20 text-white h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-900 border-white/20">
-                        {AGE_GROUPS.map((ag) => (
-                          <SelectItem key={ag.value} value={ag.value} className="text-white hover:bg-white/10">
-                            {ag.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-white/80 flex items-center gap-2 text-sm">
-                    <Laptop className="w-4 h-4 text-violet-400" /> Primary Device
-                  </Label>
-                  <RadioGroup value={deviceType} onValueChange={(v) => setDeviceType(v as any)} className="flex gap-3">
-                    {[
-                      { value: 'mobile', icon: Smartphone, label: 'Mobile' },
-                      { value: 'tablet', icon: Tablet, label: 'Tablet' },
-                      { value: 'desktop', icon: Laptop, label: 'Desktop' },
-                    ].map((d) => (
-                      <Label
-                        key={d.value}
-                        htmlFor={d.value}
-                        className={`flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl cursor-pointer transition-all border ${
-                          deviceType === d.value 
-                            ? 'bg-violet-500/20 border-violet-500 text-violet-300' 
-                            : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
-                        }`}
-                      >
-                        <RadioGroupItem value={d.value} id={d.value} className="sr-only" />
-                        <d.icon className="w-5 h-5" />
-                        <span className="text-xs font-medium">{d.label}</span>
-                      </Label>
-                    ))}
-                  </RadioGroup>
-                </div>
-              </>
-            )}
-
-            <Button 
-              type="submit" 
-              disabled={loading || (!isLogin && !isPasswordValid)}
-              className="w-full h-12 text-base font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white shadow-lg shadow-violet-500/25 border-0"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Processing...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  {isLogin ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-                  {isLogin ? 'Sign In' : 'Create Account'}
-                </span>
-              )}
-            </Button>
-          </form>
+            </form>
+          )}
 
           <div className="mt-6 text-center">
             <button
               type="button"
-              onClick={() => { setIsLogin(!isLogin); setFormErrors({}); }}
+              onClick={() => { 
+                setIsLogin(!isLogin); 
+                setStep(1);
+                setFormErrors({}); 
+              }}
               className="text-sm text-violet-400 hover:text-violet-300 transition-colors"
             >
               {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
@@ -628,14 +763,6 @@ export default function Auth() {
           </div>
         </CardContent>
       </Card>
-
-      {/* CSS for float animation */}
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-          50% { transform: translateY(-30px) scale(1.2); opacity: 0.6; }
-        }
-      `}</style>
     </div>
   );
 }

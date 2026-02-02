@@ -1,72 +1,86 @@
-import { useEffect, useState, useRef } from 'react';
-import zenpeaceIntro from '@/assets/zenpeace-intro.mp4';
+import { useEffect, useState } from 'react';
+import zenpeaceLogo from '@/assets/zenpeace-logo.png';
 
 export function SplashScreen() {
   const [show, setShow] = useState(true);
-  const [showSkip, setShowSkip] = useState(false);
   const [isFading, setIsFading] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    // Show skip button after 5 seconds
-    const skipTimer = setTimeout(() => {
-      setShowSkip(true);
-    }, 5000);
+    // Auto-hide after 2.5 seconds with fade
+    const timer = setTimeout(() => {
+      setIsFading(true);
+      setTimeout(() => setShow(false), 800);
+    }, 2500);
 
-    return () => clearTimeout(skipTimer);
+    return () => clearTimeout(timer);
   }, []);
-
-  const handleVideoEnd = () => {
-    setIsFading(true);
-    setTimeout(() => setShow(false), 1000);
-  };
-
-  const handleSkip = () => {
-    setIsFading(true);
-    setTimeout(() => setShow(false), 500);
-  };
 
   if (!show) return null;
 
   return (
     <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-black transition-opacity duration-1000 ${
+      className={`fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-800 ${
         isFading ? 'opacity-0' : 'opacity-100'
       }`}
+      style={{ 
+        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)'
+      }}
     >
-      {/* Nature Video Background */}
-      <video
-        ref={videoRef}
-        src={zenpeaceIntro}
-        autoPlay
-        muted
-        playsInline
-        onEnded={handleVideoEnd}
-        className="absolute inset-0 w-full h-full object-cover"
-      />
-
-      {/* Subtle Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
-
-      {/* Skip Button - appears after 5 seconds */}
-      {showSkip && (
-        <button
-          onClick={handleSkip}
-          className="absolute top-6 right-6 px-4 py-2 text-sm text-white/60 hover:text-white/90 
-                     bg-black/20 hover:bg-black/40 backdrop-blur-sm rounded-full 
-                     transition-all duration-300 animate-fade-in z-10"
-        >
-          Skip
-        </button>
-      )}
-
-      {/* Minimal Loading Indicator at bottom */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-10">
-        <div className="w-32 h-0.5 bg-white/20 rounded-full overflow-hidden">
-          <div className="h-full bg-white/60 animate-pulse-glow rounded-full" style={{ width: '100%' }} />
-        </div>
-        <p className="text-xs text-white/40 tracking-widest uppercase">Zenpeace</p>
+      {/* Subtle golden glow behind logo */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div 
+          className="w-64 h-64 rounded-full blur-3xl opacity-30"
+          style={{ background: 'radial-gradient(circle, #c9a227 0%, transparent 70%)' }}
+        />
       </div>
+
+      {/* Center content */}
+      <div className="relative flex flex-col items-center gap-6 animate-fade-in">
+        {/* Logo */}
+        <div className="relative">
+          <img 
+            src={zenpeaceLogo} 
+            alt="Zenpeace" 
+            className="w-32 h-32 sm:w-40 sm:h-40 object-contain rounded-2xl shadow-2xl"
+            style={{ 
+              boxShadow: '0 0 60px rgba(201, 162, 39, 0.3), 0 0 120px rgba(201, 162, 39, 0.1)'
+            }}
+          />
+        </div>
+
+        {/* Brand text */}
+        <div className="text-center space-y-2">
+          <h1 
+            className="text-3xl sm:text-4xl font-bold tracking-widest"
+            style={{ 
+              color: '#e8d5a3',
+              textShadow: '0 0 30px rgba(201, 162, 39, 0.5)'
+            }}
+          >
+            ZENPEACE
+          </h1>
+          <p className="text-sm text-white/40 tracking-wider">Find Your Inner Peace</p>
+        </div>
+
+        {/* Simple loading bar */}
+        <div className="w-48 h-0.5 bg-white/10 rounded-full overflow-hidden mt-4">
+          <div 
+            className="h-full rounded-full"
+            style={{ 
+              background: 'linear-gradient(90deg, #c9a227, #e8d5a3)',
+              animation: 'loadProgress 2.5s ease-out forwards',
+              width: '0%'
+            }}
+          />
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes loadProgress {
+          0% { width: 0%; }
+          100% { width: 100%; }
+        }
+      `}</style>
     </div>
   );
 }
