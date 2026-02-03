@@ -11,11 +11,12 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Trash2, Bookmark, RotateCcw, Sparkles, GraduationCap, Video, ExternalLink, Download } from 'lucide-react';
+import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Trash2, Bookmark, RotateCcw, Sparkles, GraduationCap, Video, ExternalLink, Download, FolderOpen, Folder, FolderPlus, X, Filter, File, FileSpreadsheet, FileImage } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import { DEFAULT_DAILY_TODOS, DEFAULT_WEEKLY_TODOS, DEFAULT_MONTHLY_TODOS, DEFAULT_YEARLY_TODOS, TODO_CATEGORIES, TodoCategory, getDefaultTodos } from '@/data/defaultTodos';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type Document = Database['public']['Tables']['documents']['Row'];
 type Todo = Database['public']['Tables']['todos']['Row'];
@@ -29,6 +30,20 @@ type PostWithProfile = Post & { profiles?: Profile };
 interface CategorizedTodo extends Todo {
   category?: TodoCategory;
 }
+
+// File type filter options
+const FILE_TYPE_FILTERS = [
+  { id: 'all', label: 'All Types', icon: File },
+  { id: 'pdf', label: 'PDF', icon: FileText },
+  { id: 'doc', label: 'DOC/DOCX', icon: FileText },
+  { id: 'ppt', label: 'PPT/PPTX', icon: FileImage },
+  { id: 'xls', label: 'XLS/XLSX', icon: FileSpreadsheet },
+] as const;
+
+type FileTypeFilter = typeof FILE_TYPE_FILTERS[number]['id'];
+
+// Default folder categories
+const DEFAULT_FOLDERS = ['General', 'Work', 'Study', 'Personal', 'Projects'] as const;
 
 // Education Section: To-Do, Notes, Education
 export default function Education() {
@@ -58,10 +73,32 @@ export default function Education() {
   const [docSearch, setDocSearch] = useState('');
   const [docLoading, setDocLoading] = useState(true);
   
+  // File type filter state
+  const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>('all');
+  
+  // Folder/Category state
+  const [folders, setFolders] = useState<string[]>(() => {
+    const saved = localStorage.getItem('zenpeace_doc_folders');
+    return saved ? JSON.parse(saved) : [...DEFAULT_FOLDERS];
+  });
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [docFolderMap, setDocFolderMap] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('zenpeace_doc_folder_map');
+    return saved ? JSON.parse(saved) : {};
+  });
+  
   // Video posts from home section
   const [videoPosts, setVideoPosts] = useState<PostWithProfile[]>([]);
   const [videoLoading, setVideoLoading] = useState(true);
   const [savedPostIds, setSavedPostIds] = useState<Set<string>>(new Set());
+  
+  // Video folder state
+  const [videoFolderMap, setVideoFolderMap] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('zenpeace_video_folder_map');
+    return saved ? JSON.parse(saved) : {};
+  });
   
   // Create state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -69,6 +106,7 @@ export default function Education() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [uploading, setUploading] = useState(false);
+  const [uploadFolder, setUploadFolder] = useState<string>('General');
 
   // Todos state
   const [todos, setTodos] = useState<CategorizedTodo[]>([]);
@@ -83,6 +121,19 @@ export default function Education() {
   const [noteContent, setNoteContent] = useState('');
   const [noteVisibility, setNoteVisibility] = useState<'private' | 'public'>('private');
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+
+  // Save folder data to localStorage
+  useEffect(() => {
+    localStorage.setItem('zenpeace_doc_folders', JSON.stringify(folders));
+  }, [folders]);
+  
+  useEffect(() => {
+    localStorage.setItem('zenpeace_doc_folder_map', JSON.stringify(docFolderMap));
+  }, [docFolderMap]);
+  
+  useEffect(() => {
+    localStorage.setItem('zenpeace_video_folder_map', JSON.stringify(videoFolderMap));
+  }, [videoFolderMap]);
 
   useEffect(() => {
     fetchDocuments();
@@ -178,6 +229,61 @@ export default function Education() {
     }
   };
 
+  // Folder management functions
+  const handleAddFolder = () => {
+    if (!newFolderName.trim()) return toast.error('Folder name required');
+    if (folders.includes(newFolderName.trim())) return toast.error('Folder already exists');
+    setFolders([...folders, newFolderName.trim()]);
+    setNewFolderName('');
+    setFolderDialogOpen(false);
+    toast.success('Folder created!');
+  };
+  
+  const handleDeleteFolder = (folderName: string) => {
+    if (DEFAULT_FOLDERS.includes(folderName as any)) {
+      return toast.error('Cannot delete default folders');
+    }
+    setFolders(folders.filter(f => f !== folderName));
+    // Move items from deleted folder to General
+    const newDocMap = { ...docFolderMap };
+    const newVideoMap = { ...videoFolderMap };
+    Object.keys(newDocMap).forEach(key => {
+      if (newDocMap[key] === folderName) newDocMap[key] = 'General';
+    });
+    Object.keys(newVideoMap).forEach(key => {
+      if (newVideoMap[key] === folderName) newVideoMap[key] = 'General';
+    });
+    setDocFolderMap(newDocMap);
+    setVideoFolderMap(newVideoMap);
+    if (selectedFolder === folderName) setSelectedFolder(null);
+    toast.success('Folder deleted');
+  };
+  
+  const moveDocToFolder = (docId: string, folder: string) => {
+    setDocFolderMap(prev => ({ ...prev, [docId]: folder }));
+    toast.success(`Moved to ${folder}`);
+  };
+  
+  const moveVideoToFolder = (postId: string, folder: string) => {
+    setVideoFolderMap(prev => ({ ...prev, [postId]: folder }));
+    toast.success(`Moved to ${folder}`);
+  };
+  
+  // Filter documents by file type
+  const filterByFileType = (docs: DocumentWithProfile[], filter: FileTypeFilter) => {
+    if (filter === 'all') return docs;
+    return docs.filter(doc => {
+      const ext = doc.file_type?.toLowerCase() || '';
+      switch (filter) {
+        case 'pdf': return ext === 'pdf';
+        case 'doc': return ['doc', 'docx'].includes(ext);
+        case 'ppt': return ['ppt', 'pptx'].includes(ext);
+        case 'xls': return ['xls', 'xlsx'].includes(ext);
+        default: return true;
+      }
+    });
+  };
+
   const handleUpload = async () => {
     if (!uploadFile || !uploadTitle.trim()) return toast.error('File and title required');
     setUploading(true);
@@ -194,7 +300,7 @@ export default function Education() {
         // Upload video as a post
         await supabase.storage.from('posts-media').upload(fileName, uploadFile);
         const { data: { publicUrl } } = supabase.storage.from('posts-media').getPublicUrl(fileName);
-        await supabase.from('posts').insert({
+        const { data: insertedPost } = await supabase.from('posts').insert({
           user_id: user.id,
           title: uploadTitle,
           content: uploadDescription || null,
@@ -202,20 +308,30 @@ export default function Education() {
           media_types: [uploadFile.type || 'video/mp4'],
           category: 'knowledge',
           visibility
-        });
+        }).select().single();
+        
+        // Assign to folder
+        if (insertedPost) {
+          setVideoFolderMap(prev => ({ ...prev, [insertedPost.id]: uploadFolder }));
+        }
       } else {
         // Upload as document
         await supabase.storage.from('documents').upload(fileName, uploadFile);
         const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(fileName);
-        await supabase.from('documents').insert({ 
+        const { data: insertedDoc } = await supabase.from('documents').insert({ 
           user_id: user.id, title: uploadTitle, description: uploadDescription || null, 
           file_url: publicUrl, file_name: uploadFile.name, file_type: fileExt, visibility 
-        });
+        }).select().single();
+        
+        // Assign to folder
+        if (insertedDoc) {
+          setDocFolderMap(prev => ({ ...prev, [insertedDoc.id]: uploadFolder }));
+        }
       }
       
       toast.success('Uploaded!');
       setUploadFile(null); setUploadTitle(''); setUploadDescription('');
-      setVisibility('private');
+      setVisibility('private'); setUploadFolder('General');
       fetchDocuments();
       fetchVideoPosts();
     } catch { toast.error('Upload failed'); } 
@@ -394,8 +510,18 @@ export default function Education() {
     return Math.round((completed / categoryTodos.length) * 100);
   };
 
+  // Get file type badge color
+  const getFileTypeBadgeColor = (fileType: string) => {
+    const ext = fileType?.toLowerCase() || '';
+    if (ext === 'pdf') return 'bg-red-500/20 text-red-400';
+    if (['doc', 'docx'].includes(ext)) return 'bg-blue-500/20 text-blue-400';
+    if (['ppt', 'pptx'].includes(ext)) return 'bg-orange-500/20 text-orange-400';
+    if (['xls', 'xlsx'].includes(ext)) return 'bg-green-500/20 text-green-400';
+    return 'bg-muted text-muted-foreground';
+  };
+
   // Document Card Component
-  const DocCard = ({ doc, showDelete = false }: { doc: DocumentWithProfile; showDelete?: boolean }) => (
+  const DocCard = ({ doc, showDelete = false, showFolderSelect = false }: { doc: DocumentWithProfile; showDelete?: boolean; showFolderSelect?: boolean }) => (
     <Card className="glass-card overflow-hidden">
       <CardContent className="p-3">
         <div className="flex items-start gap-3">
@@ -407,42 +533,64 @@ export default function Education() {
             {doc.description && (
               <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{doc.description}</p>
             )}
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <Avatar className="w-4 h-4">
                 <AvatarImage src={doc.profiles?.avatar_url || undefined} />
                 <AvatarFallback className="text-[8px]">{doc.profiles?.name?.[0] || '?'}</AvatarFallback>
               </Avatar>
               <span className="text-[10px] text-muted-foreground truncate">{doc.profiles?.name || 'Unknown'}</span>
-              <span className="text-[10px] text-muted-foreground">•</span>
-              <span className="text-[10px] text-muted-foreground uppercase">{doc.file_type}</span>
+              <span className={cn("text-[9px] px-1.5 py-0.5 rounded uppercase font-medium", getFileTypeBadgeColor(doc.file_type || ''))}>
+                {doc.file_type}
+              </span>
+              {docFolderMap[doc.id] && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5">
+                  <Folder className="w-2.5 h-2.5" />
+                  {docFolderMap[doc.id]}
+                </span>
+              )}
             </div>
           </div>
-          <div className="flex gap-1">
-            <Button 
-              size="icon" 
-              variant="ghost" 
-              className="h-7 w-7"
-              onClick={() => handleOpenInBrowser(doc.file_url, doc.file_type || '')}
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </Button>
-            <Button 
-              size="icon" 
-              variant="ghost" 
-              className="h-7 w-7"
-              onClick={() => handleSaveDoc(doc.id)}
-            >
-              <Bookmark className={cn("w-3.5 h-3.5", savedDocIds.has(doc.id) && "fill-primary text-primary")} />
-            </Button>
-            {showDelete && (
+          <div className="flex flex-col gap-1">
+            <div className="flex gap-1">
               <Button 
                 size="icon" 
                 variant="ghost" 
-                className="h-7 w-7 text-destructive"
-                onClick={() => handleDeleteDoc(doc.id, doc.file_url)}
+                className="h-7 w-7"
+                onClick={() => handleOpenInBrowser(doc.file_url, doc.file_type || '')}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <ExternalLink className="w-3.5 h-3.5" />
               </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                className="h-7 w-7"
+                onClick={() => handleSaveDoc(doc.id)}
+              >
+                <Bookmark className={cn("w-3.5 h-3.5", savedDocIds.has(doc.id) && "fill-primary text-primary")} />
+              </Button>
+              {showDelete && (
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="h-7 w-7 text-destructive"
+                  onClick={() => handleDeleteDoc(doc.id, doc.file_url)}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+            {showFolderSelect && (
+              <Select value={docFolderMap[doc.id] || 'General'} onValueChange={(val) => moveDocToFolder(doc.id, val)}>
+                <SelectTrigger className="h-6 text-[9px] w-20">
+                  <Folder className="w-2.5 h-2.5 mr-0.5" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {folders.map(folder => (
+                    <SelectItem key={folder} value={folder} className="text-[10px]">{folder}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
         </div>
@@ -451,7 +599,7 @@ export default function Education() {
   );
 
   // Video Card Component
-  const VideoCard = ({ post, showDelete = false }: { post: PostWithProfile; showDelete?: boolean }) => {
+  const VideoCard = ({ post, showDelete = false, showFolderSelect = false }: { post: PostWithProfile; showDelete?: boolean; showFolderSelect?: boolean }) => {
     const videoUrl = post.media_urls?.[0] || post.file_url || '';
     
     return (
@@ -467,22 +615,43 @@ export default function Education() {
         <CardContent className="p-3">
           <h4 className="font-medium text-sm line-clamp-1">{post.title}</h4>
           <div className="flex items-center justify-between mt-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Avatar className="w-5 h-5">
                 <AvatarImage src={post.profiles?.avatar_url || undefined} />
                 <AvatarFallback className="text-[8px]">{post.profiles?.name?.[0] || '?'}</AvatarFallback>
               </Avatar>
               <span className="text-[10px] text-muted-foreground truncate">{post.profiles?.name || 'Unknown'}</span>
+              {videoFolderMap[post.id] && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5">
+                  <Folder className="w-2.5 h-2.5" />
+                  {videoFolderMap[post.id]}
+                </span>
+              )}
             </div>
-            <div className="flex gap-1">
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                className="h-7 w-7"
-                onClick={() => toggleSavePost(post.id)}
-              >
-                <Bookmark className={cn("w-3.5 h-3.5", savedPostIds.has(post.id) && "fill-primary text-primary")} />
-              </Button>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex gap-1">
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="h-7 w-7"
+                  onClick={() => toggleSavePost(post.id)}
+                >
+                  <Bookmark className={cn("w-3.5 h-3.5", savedPostIds.has(post.id) && "fill-primary text-primary")} />
+                </Button>
+              </div>
+              {showFolderSelect && (
+                <Select value={videoFolderMap[post.id] || 'General'} onValueChange={(val) => moveVideoToFolder(post.id, val)}>
+                  <SelectTrigger className="h-6 text-[9px] w-20">
+                    <Folder className="w-2.5 h-2.5 mr-0.5" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {folders.map(folder => (
+                      <SelectItem key={folder} value={folder} className="text-[10px]">{folder}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </CardContent>
@@ -690,25 +859,131 @@ export default function Education() {
             {/* PUBLIC - Docs and VDOs only */}
             <TabsContent value="public" className="space-y-2 mt-2">
               {/* Sub-tabs: Docs, VDOs only */}
-              <div className="flex gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={publicSubTab === 'docs' ? 'default' : 'ghost'}
+                    onClick={() => setPublicSubTab('docs')}
+                    className="text-[10px] h-7 px-3"
+                  >
+                    <FileText className="w-3 h-3 mr-1" />
+                    Docs
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={publicSubTab === 'vdos' ? 'default' : 'ghost'}
+                    onClick={() => setPublicSubTab('vdos')}
+                    className="text-[10px] h-7 px-3"
+                  >
+                    <Video className="w-3 h-3 mr-1" />
+                    VDOs
+                  </Button>
+                </div>
+                
+                {/* Folder Management Button */}
+                <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1">
+                      <FolderPlus className="w-3 h-3" />
+                      Folders
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="glass-card max-w-xs mx-4">
+                    <DialogHeader>
+                      <DialogTitle className="text-sm flex items-center gap-2">
+                        <FolderOpen className="w-4 h-4 text-primary" />
+                        Manage Folders
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <Input
+                          value={newFolderName}
+                          onChange={(e) => setNewFolderName(e.target.value)}
+                          placeholder="New folder name..."
+                          className="h-8 text-xs flex-1"
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddFolder()}
+                        />
+                        <Button size="sm" onClick={handleAddFolder} className="h-8">
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {folders.map(folder => (
+                          <div key={folder} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                            <div className="flex items-center gap-2">
+                              <Folder className="w-3.5 h-3.5 text-primary" />
+                              <span className="text-xs">{folder}</span>
+                            </div>
+                            {!DEFAULT_FOLDERS.includes(folder as any) && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-destructive"
+                                onClick={() => handleDeleteFolder(folder)}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              {/* File Type Filter (for Docs only) */}
+              {publicSubTab === 'docs' && (
+                <div className="flex gap-1 overflow-x-auto pb-1">
+                  {FILE_TYPE_FILTERS.map(filter => (
+                    <Button
+                      key={filter.id}
+                      size="sm"
+                      variant={fileTypeFilter === filter.id ? 'secondary' : 'ghost'}
+                      onClick={() => setFileTypeFilter(filter.id)}
+                      className={cn(
+                        "text-[9px] h-6 px-2 gap-1 flex-shrink-0",
+                        fileTypeFilter === filter.id && "bg-primary/20 text-primary"
+                      )}
+                    >
+                      <filter.icon className="w-2.5 h-2.5" />
+                      {filter.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+
+              {/* Folder Filter */}
+              <div className="flex gap-1 overflow-x-auto pb-1">
                 <Button
                   size="sm"
-                  variant={publicSubTab === 'docs' ? 'default' : 'ghost'}
-                  onClick={() => setPublicSubTab('docs')}
-                  className="text-[10px] h-7 px-3"
+                  variant={selectedFolder === null ? 'secondary' : 'ghost'}
+                  onClick={() => setSelectedFolder(null)}
+                  className={cn(
+                    "text-[9px] h-6 px-2 gap-1 flex-shrink-0",
+                    selectedFolder === null && "bg-primary/20 text-primary"
+                  )}
                 >
-                  <FileText className="w-3 h-3 mr-1" />
-                  Docs
+                  <FolderOpen className="w-2.5 h-2.5" />
+                  All
                 </Button>
-                <Button
-                  size="sm"
-                  variant={publicSubTab === 'vdos' ? 'default' : 'ghost'}
-                  onClick={() => setPublicSubTab('vdos')}
-                  className="text-[10px] h-7 px-3"
-                >
-                  <Video className="w-3 h-3 mr-1" />
-                  VDOs
-                </Button>
+                {folders.map(folder => (
+                  <Button
+                    key={folder}
+                    size="sm"
+                    variant={selectedFolder === folder ? 'secondary' : 'ghost'}
+                    onClick={() => setSelectedFolder(folder)}
+                    className={cn(
+                      "text-[9px] h-6 px-2 gap-1 flex-shrink-0",
+                      selectedFolder === folder && "bg-primary/20 text-primary"
+                    )}
+                  >
+                    <Folder className="w-2.5 h-2.5" />
+                    {folder}
+                  </Button>
+                ))}
               </div>
 
               {/* Search */}
@@ -726,91 +1001,167 @@ export default function Education() {
               {publicSubTab === 'docs' ? (
                 docLoading ? (
                   <p className="text-center py-6 text-muted-foreground text-xs">Loading...</p>
-                ) : publicDocuments.filter(d => d.title?.toLowerCase().includes(docSearch.toLowerCase())).length === 0 ? (
-                  <Card className="glass-card">
-                    <CardContent className="py-8 text-center">
-                      <FileText className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-                      <p className="text-xs text-muted-foreground">No public documents yet</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="space-y-2">
-                    {publicDocuments
-                      .filter(d => d.title?.toLowerCase().includes(docSearch.toLowerCase()))
-                      .map(doc => <DocCard key={doc.id} doc={doc} />)}
-                  </div>
-                )
+                ) : (() => {
+                  const filteredDocs = filterByFileType(publicDocuments, fileTypeFilter)
+                    .filter(d => d.title?.toLowerCase().includes(docSearch.toLowerCase()))
+                    .filter(d => !selectedFolder || docFolderMap[d.id] === selectedFolder);
+                  return filteredDocs.length === 0 ? (
+                    <Card className="glass-card">
+                      <CardContent className="py-8 text-center">
+                        <FileText className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
+                        <p className="text-xs text-muted-foreground">No documents found</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredDocs.map(doc => <DocCard key={doc.id} doc={doc} />)}
+                    </div>
+                  );
+                })()
               ) : (
                 videoLoading ? (
                   <p className="text-center py-6 text-muted-foreground text-xs">Loading...</p>
-                ) : publicVideoPosts.filter(p => p.title?.toLowerCase().includes(docSearch.toLowerCase())).length === 0 ? (
-                  <Card className="glass-card">
-                    <CardContent className="py-8 text-center">
-                      <Video className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-                      <p className="text-xs text-muted-foreground">No public videos yet</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {publicVideoPosts
-                      .filter(p => p.title?.toLowerCase().includes(docSearch.toLowerCase()))
-                      .map(post => <VideoCard key={post.id} post={post} />)}
-                  </div>
-                )
+                ) : (() => {
+                  const filteredVideos = publicVideoPosts
+                    .filter(p => p.title?.toLowerCase().includes(docSearch.toLowerCase()))
+                    .filter(p => !selectedFolder || videoFolderMap[p.id] === selectedFolder);
+                  return filteredVideos.length === 0 ? (
+                    <Card className="glass-card">
+                      <CardContent className="py-8 text-center">
+                        <Video className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
+                        <p className="text-xs text-muted-foreground">No videos found</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {filteredVideos.map(post => <VideoCard key={post.id} post={post} />)}
+                    </div>
+                  );
+                })()
               )}
             </TabsContent>
 
             {/* PRIVATE - Own / Saved */}
             <TabsContent value="private" className="space-y-2 mt-2">
-              <div className="flex gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={privateSubTab === 'own' ? 'default' : 'ghost'}
+                    onClick={() => setPrivateSubTab('own')}
+                    className="text-[10px] h-7"
+                  >
+                    <Lock className="w-3 h-3 mr-0.5" />
+                    Own
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={privateSubTab === 'saved' ? 'default' : 'ghost'}
+                    onClick={() => setPrivateSubTab('saved')}
+                    className="text-[10px] h-7"
+                  >
+                    <Bookmark className="w-3 h-3 mr-0.5" />
+                    Saved
+                  </Button>
+                </div>
+              </div>
+
+              {/* File Type Filter for Private Docs */}
+              {privateSubTab === 'own' && (
+                <div className="flex gap-1 overflow-x-auto pb-1">
+                  {FILE_TYPE_FILTERS.map(filter => (
+                    <Button
+                      key={filter.id}
+                      size="sm"
+                      variant={fileTypeFilter === filter.id ? 'secondary' : 'ghost'}
+                      onClick={() => setFileTypeFilter(filter.id)}
+                      className={cn(
+                        "text-[9px] h-6 px-2 gap-1 flex-shrink-0",
+                        fileTypeFilter === filter.id && "bg-primary/20 text-primary"
+                      )}
+                    >
+                      <filter.icon className="w-2.5 h-2.5" />
+                      {filter.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+
+              {/* Folder Filter for Private */}
+              <div className="flex gap-1 overflow-x-auto pb-1">
                 <Button
                   size="sm"
-                  variant={privateSubTab === 'own' ? 'default' : 'ghost'}
-                  onClick={() => setPrivateSubTab('own')}
-                  className="text-[10px] h-7"
+                  variant={selectedFolder === null ? 'secondary' : 'ghost'}
+                  onClick={() => setSelectedFolder(null)}
+                  className={cn(
+                    "text-[9px] h-6 px-2 gap-1 flex-shrink-0",
+                    selectedFolder === null && "bg-primary/20 text-primary"
+                  )}
                 >
-                  <Lock className="w-3 h-3 mr-0.5" />
-                  Own
+                  <FolderOpen className="w-2.5 h-2.5" />
+                  All
                 </Button>
-                <Button
-                  size="sm"
-                  variant={privateSubTab === 'saved' ? 'default' : 'ghost'}
-                  onClick={() => setPrivateSubTab('saved')}
-                  className="text-[10px] h-7"
-                >
-                  <Bookmark className="w-3 h-3 mr-0.5" />
-                  Saved
-                </Button>
+                {folders.map(folder => (
+                  <Button
+                    key={folder}
+                    size="sm"
+                    variant={selectedFolder === folder ? 'secondary' : 'ghost'}
+                    onClick={() => setSelectedFolder(folder)}
+                    className={cn(
+                      "text-[9px] h-6 px-2 gap-1 flex-shrink-0",
+                      selectedFolder === folder && "bg-primary/20 text-primary"
+                    )}
+                  >
+                    <Folder className="w-2.5 h-2.5" />
+                    {folder}
+                  </Button>
+                ))}
               </div>
 
               {privateSubTab === 'own' ? (
-                myDocuments.length === 0 && myVideoPosts.length === 0 ? (
-                  <Card className="glass-card">
-                    <CardContent className="py-8 text-center">
-                      <Lock className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-                      <p className="text-xs text-muted-foreground">Your content will appear here</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="space-y-2">
-                    {myDocuments.map(doc => <DocCard key={doc.id} doc={doc} showDelete />)}
-                    {myVideoPosts.map(post => <VideoCard key={post.id} post={post} showDelete />)}
-                  </div>
-                )
+                (() => {
+                  const filteredMyDocs = filterByFileType(myDocuments, fileTypeFilter)
+                    .filter(d => !selectedFolder || docFolderMap[d.id] === selectedFolder);
+                  const filteredMyVideos = myVideoPosts
+                    .filter(p => !selectedFolder || videoFolderMap[p.id] === selectedFolder);
+                  
+                  return filteredMyDocs.length === 0 && filteredMyVideos.length === 0 ? (
+                    <Card className="glass-card">
+                      <CardContent className="py-8 text-center">
+                        <Lock className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
+                        <p className="text-xs text-muted-foreground">
+                          {selectedFolder ? `No content in "${selectedFolder}"` : 'Your content will appear here'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredMyDocs.map(doc => <DocCard key={doc.id} doc={doc} showDelete showFolderSelect />)}
+                      {filteredMyVideos.map(post => <VideoCard key={post.id} post={post} showDelete showFolderSelect />)}
+                    </div>
+                  );
+                })()
               ) : (
-                savedDocuments.length === 0 && savedVideoPosts.length === 0 ? (
-                  <Card className="glass-card">
-                    <CardContent className="py-8 text-center">
-                      <Bookmark className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-                      <p className="text-xs text-muted-foreground">No saved content</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="space-y-2">
-                    {savedDocuments.map(doc => <DocCard key={doc.id} doc={doc} />)}
-                    {savedVideoPosts.map(post => <VideoCard key={post.id} post={post} />)}
-                  </div>
-                )
+                (() => {
+                  const filteredSavedDocs = savedDocuments
+                    .filter(d => !selectedFolder || docFolderMap[d.id] === selectedFolder);
+                  const filteredSavedVideos = savedVideoPosts
+                    .filter(p => !selectedFolder || videoFolderMap[p.id] === selectedFolder);
+                  
+                  return filteredSavedDocs.length === 0 && filteredSavedVideos.length === 0 ? (
+                    <Card className="glass-card">
+                      <CardContent className="py-8 text-center">
+                        <Bookmark className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
+                        <p className="text-xs text-muted-foreground">No saved content</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredSavedDocs.map(doc => <DocCard key={doc.id} doc={doc} showFolderSelect />)}
+                      {filteredSavedVideos.map(post => <VideoCard key={post.id} post={post} showFolderSelect />)}
+                    </div>
+                  );
+                })()
               )}
             </TabsContent>
 
@@ -855,6 +1206,27 @@ export default function Education() {
                       className="glass-card text-xs mt-1" 
                       rows={2}
                     />
+                  </div>
+                  
+                  {/* Folder Selection */}
+                  <div>
+                    <Label className="text-[10px]">Folder</Label>
+                    <Select value={uploadFolder} onValueChange={setUploadFolder}>
+                      <SelectTrigger className="h-8 text-xs mt-1 glass-card">
+                        <Folder className="w-3 h-3 mr-1 text-primary" />
+                        <SelectValue placeholder="Select folder" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {folders.map(folder => (
+                          <SelectItem key={folder} value={folder} className="text-xs">
+                            <span className="flex items-center gap-1">
+                              <Folder className="w-3 h-3" />
+                              {folder}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   
                   <RadioGroup value={visibility} onValueChange={(val) => setVisibility(val as 'private' | 'public')} className="flex gap-4">
