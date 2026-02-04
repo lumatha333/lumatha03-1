@@ -78,9 +78,9 @@ export default function Settings() {
     if (user?.email) {
       setEmail(user.email);
     }
-    const savedTheme = localStorage.getItem('zenpeace_theme') as 'light' | 'dark' || 'dark';
-    const savedLang = localStorage.getItem('zenpeace_language') || 'en';
-    const savedLastChange = localStorage.getItem('zenpeace_last_name_change');
+    const savedTheme = localStorage.getItem('lumatha_theme') as 'light' | 'dark' || 'dark';
+    const savedLang = localStorage.getItem('lumatha_language') || 'en';
+    const savedLastChange = localStorage.getItem('lumatha_last_name_change');
     setTheme(savedTheme);
     setLanguage(savedLang);
     setLastNameChange(savedLastChange);
@@ -128,7 +128,7 @@ export default function Settings() {
       if (error) throw error;
       
       // Track name change for 17-day rule
-      localStorage.setItem('zenpeace_last_name_change', new Date().toISOString());
+      localStorage.setItem('lumatha_last_name_change', new Date().toISOString());
       setLastNameChange(new Date().toISOString());
       
       toast.success('Profile updated!');
@@ -142,14 +142,14 @@ export default function Settings() {
 
   const handleThemeChange = (newTheme: 'dark' | 'light') => {
     setTheme(newTheme);
-    localStorage.setItem('zenpeace_theme', newTheme);
+    localStorage.setItem('lumatha_theme', newTheme);
     if (newTheme === 'light') document.body.classList.add('light');
     else document.body.classList.remove('light');
   };
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
-    localStorage.setItem('zenpeace_language', lang);
+    localStorage.setItem('lumatha_language', lang);
     toast.success(`Language changed to ${LANGUAGES.find(l => l.code === lang)?.name}`);
   };
 
@@ -347,7 +347,7 @@ export default function Settings() {
             </SelectContent>
           </Select>
           <p className="text-[10px] text-muted-foreground mt-2">
-            Note: "Zenpeace" and core section names stay in English.
+            Note: "Lumatha" and core section names stay in English.
           </p>
         </CardContent>
       </Card>
@@ -374,7 +374,7 @@ export default function Settings() {
           <div className="text-center flex items-center justify-center gap-2">
             <Crown className="w-5 h-5 text-primary" />
             <div>
-              <p className="text-sm font-bold gradient-text">Zenpeace</p>
+              <p className="text-sm font-bold gradient-text">Lumatha</p>
               <p className="text-xs text-muted-foreground">Version 1.0.0</p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Trash2, Bookmark, RotateCcw, Sparkles, GraduationCap, Video, ExternalLink, Download, FolderOpen, Folder, FolderPlus, X, Filter, File, FileSpreadsheet, FileImage } from 'lucide-react';
+import { BookOpen, Search, Lock, Globe, FileText, CheckSquare, Plus, StickyNote, Trash2, Bookmark, RotateCcw, GraduationCap, Video, ExternalLink, FolderOpen, Folder, FolderPlus, X, File, FileSpreadsheet, FileImage, Palette, GripVertical } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import { DEFAULT_DAILY_TODOS, DEFAULT_WEEKLY_TODOS, DEFAULT_MONTHLY_TODOS, DEFAULT_YEARLY_TODOS, TODO_CATEGORIES, TodoCategory, getDefaultTodos } from '@/data/defaultTodos';
 import { cn } from '@/lib/utils';
@@ -42,29 +42,46 @@ const FILE_TYPE_FILTERS = [
 
 type FileTypeFilter = typeof FILE_TYPE_FILTERS[number]['id'];
 
-// Default folder categories
+// Default folder categories with colors
 const DEFAULT_FOLDERS = ['General', 'Work', 'Study', 'Personal', 'Projects'] as const;
 
-// Education Section: To-Do, Notes, Education
+// Folder color options
+const FOLDER_COLORS = [
+  { id: 'blue', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  { id: 'green', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
+  { id: 'purple', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  { id: 'orange', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  { id: 'pink', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
+  { id: 'teal', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
+  { id: 'yellow', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+  { id: 'red', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
+] as const;
+
+const DEFAULT_FOLDER_COLORS: Record<string, string> = {
+  'General': 'blue',
+  'Work': 'orange',
+  'Study': 'purple',
+  'Personal': 'pink',
+  'Projects': 'teal',
+};
+
 export default function Education() {
   const { user: currentUser, profile } = useAuth();
   const navigate = useNavigate();
   
   // Main tab: todos, notes, education
   const [activeTab, setActiveTab] = useState(() => {
-    const saved = localStorage.getItem('zenpeace_education_tab');
+    const saved = localStorage.getItem('lumatha_education_tab');
     return saved && ['todos', 'notes', 'education'].includes(saved) ? saved : 'todos';
   });
   
-  // Education sub-tabs: public, private, create
+  // Education sub-tabs
   const [educationTab, setEducationTab] = useState<'public' | 'private' | 'create'>('public');
-  // Public sub-tabs: docs, vdos only (no all, no images)
   const [publicSubTab, setPublicSubTab] = useState<'docs' | 'vdos'>('docs');
   const [privateSubTab, setPrivateSubTab] = useState<'own' | 'saved'>('own');
   
-  // Save active tab preference
   useEffect(() => {
-    localStorage.setItem('zenpeace_education_tab', activeTab);
+    localStorage.setItem('lumatha_education_tab', activeTab);
   }, [activeTab]);
   
   // Documents state
@@ -76,27 +93,35 @@ export default function Education() {
   // File type filter state
   const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>('all');
   
-  // Folder/Category state
+  // Folder/Category state with colors
   const [folders, setFolders] = useState<string[]>(() => {
-    const saved = localStorage.getItem('zenpeace_doc_folders');
+    const saved = localStorage.getItem('lumatha_doc_folders');
     return saved ? JSON.parse(saved) : [...DEFAULT_FOLDERS];
+  });
+  const [folderColors, setFolderColors] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('lumatha_folder_colors');
+    return saved ? JSON.parse(saved) : { ...DEFAULT_FOLDER_COLORS };
   });
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderColor, setNewFolderColor] = useState('blue');
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [docFolderMap, setDocFolderMap] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('zenpeace_doc_folder_map');
+    const saved = localStorage.getItem('lumatha_doc_folder_map');
     return saved ? JSON.parse(saved) : {};
   });
   
-  // Video posts from home section
+  // Drag and drop state
+  const [draggedDocId, setDraggedDocId] = useState<string | null>(null);
+  const [draggedVideoId, setDraggedVideoId] = useState<string | null>(null);
+  
+  // Video posts state
   const [videoPosts, setVideoPosts] = useState<PostWithProfile[]>([]);
   const [videoLoading, setVideoLoading] = useState(true);
   const [savedPostIds, setSavedPostIds] = useState<Set<string>>(new Set());
   
-  // Video folder state
   const [videoFolderMap, setVideoFolderMap] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('zenpeace_video_folder_map');
+    const saved = localStorage.getItem('lumatha_video_folder_map');
     return saved ? JSON.parse(saved) : {};
   });
   
@@ -124,15 +149,19 @@ export default function Education() {
 
   // Save folder data to localStorage
   useEffect(() => {
-    localStorage.setItem('zenpeace_doc_folders', JSON.stringify(folders));
+    localStorage.setItem('lumatha_doc_folders', JSON.stringify(folders));
   }, [folders]);
   
   useEffect(() => {
-    localStorage.setItem('zenpeace_doc_folder_map', JSON.stringify(docFolderMap));
+    localStorage.setItem('lumatha_folder_colors', JSON.stringify(folderColors));
+  }, [folderColors]);
+  
+  useEffect(() => {
+    localStorage.setItem('lumatha_doc_folder_map', JSON.stringify(docFolderMap));
   }, [docFolderMap]);
   
   useEffect(() => {
-    localStorage.setItem('zenpeace_video_folder_map', JSON.stringify(videoFolderMap));
+    localStorage.setItem('lumatha_video_folder_map', JSON.stringify(videoFolderMap));
   }, [videoFolderMap]);
 
   useEffect(() => {
@@ -161,14 +190,13 @@ export default function Education() {
         setDocuments(docsWithProfiles);
       }
 
-      const savedDocs = localStorage.getItem('zenpeace_saved_docs');
+      const savedDocs = localStorage.getItem('lumatha_saved_docs');
       if (savedDocs) setSavedDocIds(new Set(JSON.parse(savedDocs)));
     } finally {
       setDocLoading(false);
     }
   };
 
-  // Fetch video posts from home section (posts table)
   const fetchVideoPosts = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -181,7 +209,6 @@ export default function Education() {
         .or(`user_id.eq.${user.id},visibility.eq.public`)
         .order('created_at', { ascending: false });
       
-      // Filter to only video posts
       const videoOnlyPosts = (data || []).filter(post => {
         const types = post.media_types || [];
         return types.some((t: string) => t?.startsWith('video')) || 
@@ -190,7 +217,6 @@ export default function Education() {
       
       setVideoPosts(videoOnlyPosts);
       
-      // Fetch saved status
       const { data: savedData } = await supabase
         .from('saved')
         .select('post_id')
@@ -211,7 +237,7 @@ export default function Education() {
       toast.success('Saved!');
     }
     setSavedDocIds(newSaved);
-    localStorage.setItem('zenpeace_saved_docs', JSON.stringify([...newSaved]));
+    localStorage.setItem('lumatha_saved_docs', JSON.stringify([...newSaved]));
   };
 
   const toggleSavePost = async (postId: string) => {
@@ -229,12 +255,14 @@ export default function Education() {
     }
   };
 
-  // Folder management functions
+  // Folder management
   const handleAddFolder = () => {
     if (!newFolderName.trim()) return toast.error('Folder name required');
     if (folders.includes(newFolderName.trim())) return toast.error('Folder already exists');
     setFolders([...folders, newFolderName.trim()]);
+    setFolderColors(prev => ({ ...prev, [newFolderName.trim()]: newFolderColor }));
     setNewFolderName('');
+    setNewFolderColor('blue');
     setFolderDialogOpen(false);
     toast.success('Folder created!');
   };
@@ -244,7 +272,6 @@ export default function Education() {
       return toast.error('Cannot delete default folders');
     }
     setFolders(folders.filter(f => f !== folderName));
-    // Move items from deleted folder to General
     const newDocMap = { ...docFolderMap };
     const newVideoMap = { ...videoFolderMap };
     Object.keys(newDocMap).forEach(key => {
@@ -259,6 +286,17 @@ export default function Education() {
     toast.success('Folder deleted');
   };
   
+  const updateFolderColor = (folderName: string, color: string) => {
+    setFolderColors(prev => ({ ...prev, [folderName]: color }));
+    toast.success('Color updated!');
+  };
+  
+  const getFolderColorClass = (folderName: string) => {
+    const colorId = folderColors[folderName] || 'blue';
+    const colorObj = FOLDER_COLORS.find(c => c.id === colorId);
+    return colorObj?.color || FOLDER_COLORS[0].color;
+  };
+  
   const moveDocToFolder = (docId: string, folder: string) => {
     setDocFolderMap(prev => ({ ...prev, [docId]: folder }));
     toast.success(`Moved to ${folder}`);
@@ -269,7 +307,38 @@ export default function Education() {
     toast.success(`Moved to ${folder}`);
   };
   
-  // Filter documents by file type
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, id: string, type: 'doc' | 'video') => {
+    if (type === 'doc') {
+      setDraggedDocId(id);
+    } else {
+      setDraggedVideoId(id);
+    }
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+  
+  const handleDropOnFolder = (e: React.DragEvent, folderName: string) => {
+    e.preventDefault();
+    if (draggedDocId) {
+      moveDocToFolder(draggedDocId, folderName);
+      setDraggedDocId(null);
+    }
+    if (draggedVideoId) {
+      moveVideoToFolder(draggedVideoId, folderName);
+      setDraggedVideoId(null);
+    }
+  };
+  
+  const handleDragEnd = () => {
+    setDraggedDocId(null);
+    setDraggedVideoId(null);
+  };
+  
   const filterByFileType = (docs: DocumentWithProfile[], filter: FileTypeFilter) => {
     if (filter === 'all') return docs;
     return docs.filter(doc => {
@@ -293,11 +362,9 @@ export default function Education() {
       const fileExt = uploadFile.name.split('.').pop()?.toLowerCase() || '';
       const fileName = `${user.id}/${Date.now()}_${uploadFile.name}`;
       
-      // Determine if it's a video or document
       const isVideo = ['mp4', 'mov', 'webm', 'avi'].includes(fileExt);
       
       if (isVideo) {
-        // Upload video as a post
         await supabase.storage.from('posts-media').upload(fileName, uploadFile);
         const { data: { publicUrl } } = supabase.storage.from('posts-media').getPublicUrl(fileName);
         const { data: insertedPost } = await supabase.from('posts').insert({
@@ -310,12 +377,10 @@ export default function Education() {
           visibility
         }).select().single();
         
-        // Assign to folder
         if (insertedPost) {
           setVideoFolderMap(prev => ({ ...prev, [insertedPost.id]: uploadFolder }));
         }
       } else {
-        // Upload as document
         await supabase.storage.from('documents').upload(fileName, uploadFile);
         const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(fileName);
         const { data: insertedDoc } = await supabase.from('documents').insert({ 
@@ -323,7 +388,6 @@ export default function Education() {
           file_url: publicUrl, file_name: uploadFile.name, file_type: fileExt, visibility 
         }).select().single();
         
-        // Assign to folder
         if (insertedDoc) {
           setDocFolderMap(prev => ({ ...prev, [insertedDoc.id]: uploadFolder }));
         }
@@ -348,32 +412,14 @@ export default function Education() {
     } catch { toast.error('Delete failed'); }
   };
 
-  // Open file in browser (Google Docs Viewer for PDFs/Office, direct for others)
   const handleOpenInBrowser = (fileUrl: string, fileType: string) => {
     const ext = fileType?.toLowerCase() || '';
     const encodedUrl = encodeURIComponent(fileUrl);
     
-    // Use Google Docs Viewer for PDFs and Office files
     if (['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'].includes(ext)) {
       window.open(`https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`, '_blank');
     } else {
-      // Direct open for other files
       window.open(fileUrl, '_blank');
-    }
-  };
-
-  const handleDownload = async (fileUrl: string, fileName: string) => {
-    try {
-      const response = await fetch(fileUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = fileName;
-      document.body.appendChild(a); a.click();
-      window.URL.revokeObjectURL(url); document.body.removeChild(a);
-      toast.success('Downloading...');
-    } catch {
-      toast.error('Download failed');
     }
   };
 
@@ -495,7 +541,6 @@ export default function Education() {
   const publicVideoPosts = videoPosts.filter(post => post.visibility === 'public');
   const savedVideoPosts = videoPosts.filter(post => savedPostIds.has(post.id));
 
-  // Filter todos by category
   const getTodosByCategory = (category: TodoCategory) => 
     todos.filter(t => t.category === category || t.text.startsWith(`[${category}]`));
 
@@ -510,7 +555,6 @@ export default function Education() {
     return Math.round((completed / categoryTodos.length) * 100);
   };
 
-  // Get file type badge color
   const getFileTypeBadgeColor = (fileType: string) => {
     const ext = fileType?.toLowerCase() || '';
     if (ext === 'pdf') return 'bg-red-500/20 text-red-400';
@@ -520,11 +564,21 @@ export default function Education() {
     return 'bg-muted text-muted-foreground';
   };
 
-  // Document Card Component
+  // Document Card Component with drag support
   const DocCard = ({ doc, showDelete = false, showFolderSelect = false }: { doc: DocumentWithProfile; showDelete?: boolean; showFolderSelect?: boolean }) => (
-    <Card className="glass-card overflow-hidden">
+    <Card 
+      className={cn("glass-card overflow-hidden", draggedDocId === doc.id && "opacity-50")}
+      draggable={showFolderSelect}
+      onDragStart={(e) => handleDragStart(e, doc.id, 'doc')}
+      onDragEnd={handleDragEnd}
+    >
       <CardContent className="p-3">
         <div className="flex items-start gap-3">
+          {showFolderSelect && (
+            <div className="cursor-grab active:cursor-grabbing flex-shrink-0 self-center">
+              <GripVertical className="w-4 h-4 text-muted-foreground" />
+            </div>
+          )}
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
             <FileText className="w-5 h-5 text-primary" />
           </div>
@@ -543,7 +597,7 @@ export default function Education() {
                 {doc.file_type}
               </span>
               {docFolderMap[doc.id] && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5">
+                <span className={cn("text-[9px] px-1.5 py-0.5 rounded flex items-center gap-0.5 border", getFolderColorClass(docFolderMap[doc.id]))}>
                   <Folder className="w-2.5 h-2.5" />
                   {docFolderMap[doc.id]}
                 </span>
@@ -598,12 +652,17 @@ export default function Education() {
     </Card>
   );
 
-  // Video Card Component
+  // Video Card Component with drag support
   const VideoCard = ({ post, showDelete = false, showFolderSelect = false }: { post: PostWithProfile; showDelete?: boolean; showFolderSelect?: boolean }) => {
     const videoUrl = post.media_urls?.[0] || post.file_url || '';
     
     return (
-      <Card className="glass-card overflow-hidden">
+      <Card 
+        className={cn("glass-card overflow-hidden", draggedVideoId === post.id && "opacity-50")}
+        draggable={showFolderSelect}
+        onDragStart={(e) => handleDragStart(e, post.id, 'video')}
+        onDragEnd={handleDragEnd}
+      >
         <div className="relative aspect-video bg-black">
           <video
             src={videoUrl}
@@ -611,6 +670,11 @@ export default function Education() {
             controls
             playsInline
           />
+          {showFolderSelect && (
+            <div className="absolute top-2 left-2 cursor-grab active:cursor-grabbing bg-black/50 rounded p-1">
+              <GripVertical className="w-4 h-4 text-white" />
+            </div>
+          )}
         </div>
         <CardContent className="p-3">
           <h4 className="font-medium text-sm line-clamp-1">{post.title}</h4>
@@ -622,7 +686,7 @@ export default function Education() {
               </Avatar>
               <span className="text-[10px] text-muted-foreground truncate">{post.profiles?.name || 'Unknown'}</span>
               {videoFolderMap[post.id] && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary flex items-center gap-0.5">
+                <span className={cn("text-[9px] px-1.5 py-0.5 rounded flex items-center gap-0.5 border", getFolderColorClass(videoFolderMap[post.id]))}>
                   <Folder className="w-2.5 h-2.5" />
                   {videoFolderMap[post.id]}
                 </span>
@@ -659,6 +723,24 @@ export default function Education() {
     );
   };
 
+  // Folder button with drop support
+  const FolderButton = ({ folder, isSelected }: { folder: string; isSelected: boolean }) => (
+    <Button
+      size="sm"
+      variant={isSelected ? 'secondary' : 'ghost'}
+      onClick={() => setSelectedFolder(folder)}
+      onDragOver={handleDragOver}
+      onDrop={(e) => handleDropOnFolder(e, folder)}
+      className={cn(
+        "text-[9px] h-6 px-2 gap-1 flex-shrink-0 border",
+        isSelected ? getFolderColorClass(folder) : 'border-transparent hover:border-primary/20'
+      )}
+    >
+      <Folder className="w-2.5 h-2.5" />
+      {folder}
+    </Button>
+  );
+
   return (
     <div className="space-y-3 pb-20">
       {/* Main Tabs: To-Do, Notes, Education */}
@@ -680,7 +762,6 @@ export default function Education() {
 
         {/* To-Do Tab */}
         <TabsContent value="todos" className="space-y-3 mt-3">
-          {/* Category Tabs */}
           <div className="flex gap-1 overflow-x-auto pb-1">
             {TODO_CATEGORIES.map(cat => (
               <Button
@@ -702,15 +783,13 @@ export default function Education() {
             ))}
           </div>
 
-          {/* Progress Bar */}
           <div className="w-full bg-muted rounded-full h-1.5">
             <div 
-              className="bg-primary h-1.5 rounded-full transition-all duration-500"
+              className="bg-primary h-1.5 rounded-full"
               style={{ width: `${getCompletionPercentage(todoCategory)}%` }}
             />
           </div>
 
-          {/* Add Todo */}
           <div className="flex gap-2">
             <Input
               value={newTodo}
@@ -732,13 +811,12 @@ export default function Education() {
             </Button>
           </div>
 
-          {/* Todo List */}
           <div className="space-y-1.5">
             {getTodosByCategory(todoCategory).map(todo => (
               <Card 
                 key={todo.id}
                 className={cn(
-                  "glass-card cursor-pointer transition-all",
+                  "glass-card cursor-pointer",
                   todo.completed && "opacity-60"
                 )}
                 onClick={() => toggleTodo(todo.id, todo.completed || false)}
@@ -818,15 +896,22 @@ export default function Education() {
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {notes.map(note => (
-                <Card key={note.id} className="glass-card cursor-pointer hover:border-primary/50 transition-colors" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>
+                <Card key={note.id} className="glass-card cursor-pointer hover:border-primary/50" onClick={() => { setEditingNote(note); setNoteTitle(note.title); setNoteContent(note.content || ''); setNoteVisibility(note.visibility as 'private' | 'public'); setNoteDialogOpen(true); }}>
                   <CardContent className="p-2.5">
                     <div className="flex items-start justify-between gap-1">
                       <h4 className="text-xs font-medium line-clamp-1">{note.title}</h4>
                       {note.visibility === 'private' ? <Lock className="w-2.5 h-2.5 text-muted-foreground flex-shrink-0" /> : <Globe className="w-2.5 h-2.5 text-muted-foreground flex-shrink-0" />}
                     </div>
-                    <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">{note.content || 'No content'}</p>
-                    <div className="flex justify-end mt-1.5">
-                      <Button size="icon" variant="ghost" className="h-5 w-5 text-destructive" onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}>
+                    {note.content && (
+                      <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">{note.content}</p>
+                    )}
+                    <div className="flex justify-end mt-2">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-5 w-5 text-destructive"
+                        onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
+                      >
                         <Trash2 className="w-2.5 h-2.5" />
                       </Button>
                     </div>
@@ -839,62 +924,56 @@ export default function Education() {
 
         {/* Education Tab */}
         <TabsContent value="education" className="space-y-2 mt-3">
-          {/* Education Sub-tabs: Public, Private, Create */}
-          <Tabs value={educationTab} onValueChange={(v) => setEducationTab(v as any)} className="w-full">
+          <Tabs value={educationTab} onValueChange={(v) => setEducationTab(v as 'public' | 'private' | 'create')} className="w-full">
             <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
-              <TabsTrigger value="public" className="text-[10px] py-1.5 gap-1">
+              <TabsTrigger value="public" className="gap-1 text-[10px] py-1.5">
                 <Globe className="w-3 h-3" />
                 Public
               </TabsTrigger>
-              <TabsTrigger value="private" className="text-[10px] py-1.5 gap-1">
+              <TabsTrigger value="private" className="gap-1 text-[10px] py-1.5">
                 <Lock className="w-3 h-3" />
                 Private
               </TabsTrigger>
-              <TabsTrigger value="create" className="text-[10px] py-1.5 gap-1">
+              <TabsTrigger value="create" className="gap-1 text-[10px] py-1.5">
                 <Plus className="w-3 h-3" />
                 Create
               </TabsTrigger>
             </TabsList>
 
-            {/* PUBLIC - Docs and VDOs only */}
+            {/* PUBLIC */}
             <TabsContent value="public" className="space-y-2 mt-2">
-              {/* Sub-tabs: Docs, VDOs only */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex gap-1">
                   <Button
                     size="sm"
                     variant={publicSubTab === 'docs' ? 'default' : 'ghost'}
                     onClick={() => setPublicSubTab('docs')}
-                    className="text-[10px] h-7 px-3"
+                    className="text-[10px] h-7"
                   >
-                    <FileText className="w-3 h-3 mr-1" />
+                    <FileText className="w-3 h-3 mr-0.5" />
                     Docs
                   </Button>
                   <Button
                     size="sm"
                     variant={publicSubTab === 'vdos' ? 'default' : 'ghost'}
                     onClick={() => setPublicSubTab('vdos')}
-                    className="text-[10px] h-7 px-3"
+                    className="text-[10px] h-7"
                   >
-                    <Video className="w-3 h-3 mr-1" />
+                    <Video className="w-3 h-3 mr-0.5" />
                     VDOs
                   </Button>
                 </div>
                 
-                {/* Folder Management Button */}
                 <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1">
-                      <FolderPlus className="w-3 h-3" />
+                    <Button size="sm" variant="outline" className="h-7 text-[10px]">
+                      <FolderPlus className="w-3 h-3 mr-0.5" />
                       Folders
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="glass-card max-w-xs mx-4">
+                  <DialogContent className="glass-card max-w-sm mx-4">
                     <DialogHeader>
-                      <DialogTitle className="text-sm flex items-center gap-2">
-                        <FolderOpen className="w-4 h-4 text-primary" />
-                        Manage Folders
-                      </DialogTitle>
+                      <DialogTitle className="text-sm">Manage Folders</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-3">
                       <div className="flex gap-2">
@@ -905,27 +984,53 @@ export default function Education() {
                           className="h-8 text-xs flex-1"
                           onKeyDown={(e) => e.key === 'Enter' && handleAddFolder()}
                         />
+                        <Select value={newFolderColor} onValueChange={setNewFolderColor}>
+                          <SelectTrigger className="w-16 h-8">
+                            <Palette className="w-3 h-3" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FOLDER_COLORS.map(c => (
+                              <SelectItem key={c.id} value={c.id} className="text-[10px]">
+                                <div className={cn("w-3 h-3 rounded-full", c.color.split(' ')[0])} />
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Button size="sm" onClick={handleAddFolder} className="h-8">
                           <Plus className="w-3 h-3" />
                         </Button>
                       </div>
                       <div className="space-y-1 max-h-48 overflow-y-auto">
                         {folders.map(folder => (
-                          <div key={folder} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                          <div key={folder} className={cn("flex items-center justify-between p-2 rounded-lg border", getFolderColorClass(folder))}>
                             <div className="flex items-center gap-2">
-                              <Folder className="w-3.5 h-3.5 text-primary" />
+                              <Folder className="w-3.5 h-3.5" />
                               <span className="text-xs">{folder}</span>
                             </div>
-                            {!DEFAULT_FOLDERS.includes(folder as any) && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6 text-destructive"
-                                onClick={() => handleDeleteFolder(folder)}
-                              >
-                                <X className="w-3 h-3" />
-                              </Button>
-                            )}
+                            <div className="flex items-center gap-1">
+                              <Select value={folderColors[folder] || 'blue'} onValueChange={(c) => updateFolderColor(folder, c)}>
+                                <SelectTrigger className="w-8 h-6 p-0 border-0 bg-transparent">
+                                  <Palette className="w-3 h-3" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {FOLDER_COLORS.map(c => (
+                                    <SelectItem key={c.id} value={c.id} className="text-[10px]">
+                                      <div className={cn("w-3 h-3 rounded-full", c.color.split(' ')[0])} />
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {!DEFAULT_FOLDERS.includes(folder as any) && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 text-destructive"
+                                  onClick={() => handleDeleteFolder(folder)}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -934,7 +1039,6 @@ export default function Education() {
                 </Dialog>
               </div>
 
-              {/* File Type Filter (for Docs only) */}
               {publicSubTab === 'docs' && (
                 <div className="flex gap-1 overflow-x-auto pb-1">
                   {FILE_TYPE_FILTERS.map(filter => (
@@ -955,7 +1059,6 @@ export default function Education() {
                 </div>
               )}
 
-              {/* Folder Filter */}
               <div className="flex gap-1 overflow-x-auto pb-1">
                 <Button
                   size="sm"
@@ -970,23 +1073,10 @@ export default function Education() {
                   All
                 </Button>
                 {folders.map(folder => (
-                  <Button
-                    key={folder}
-                    size="sm"
-                    variant={selectedFolder === folder ? 'secondary' : 'ghost'}
-                    onClick={() => setSelectedFolder(folder)}
-                    className={cn(
-                      "text-[9px] h-6 px-2 gap-1 flex-shrink-0",
-                      selectedFolder === folder && "bg-primary/20 text-primary"
-                    )}
-                  >
-                    <Folder className="w-2.5 h-2.5" />
-                    {folder}
-                  </Button>
+                  <FolderButton key={folder} folder={folder} isSelected={selectedFolder === folder} />
                 ))}
               </div>
 
-              {/* Search */}
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary" />
                 <Input 
@@ -997,7 +1087,6 @@ export default function Education() {
                 />
               </div>
 
-              {/* Content */}
               {publicSubTab === 'docs' ? (
                 docLoading ? (
                   <p className="text-center py-6 text-muted-foreground text-xs">Loading...</p>
@@ -1041,7 +1130,7 @@ export default function Education() {
               )}
             </TabsContent>
 
-            {/* PRIVATE - Own / Saved */}
+            {/* PRIVATE */}
             <TabsContent value="private" className="space-y-2 mt-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex gap-1">
@@ -1066,7 +1155,6 @@ export default function Education() {
                 </div>
               </div>
 
-              {/* File Type Filter for Private Docs */}
               {privateSubTab === 'own' && (
                 <div className="flex gap-1 overflow-x-auto pb-1">
                   {FILE_TYPE_FILTERS.map(filter => (
@@ -1087,7 +1175,6 @@ export default function Education() {
                 </div>
               )}
 
-              {/* Folder Filter for Private */}
               <div className="flex gap-1 overflow-x-auto pb-1">
                 <Button
                   size="sm"
@@ -1102,19 +1189,7 @@ export default function Education() {
                   All
                 </Button>
                 {folders.map(folder => (
-                  <Button
-                    key={folder}
-                    size="sm"
-                    variant={selectedFolder === folder ? 'secondary' : 'ghost'}
-                    onClick={() => setSelectedFolder(folder)}
-                    className={cn(
-                      "text-[9px] h-6 px-2 gap-1 flex-shrink-0",
-                      selectedFolder === folder && "bg-primary/20 text-primary"
-                    )}
-                  >
-                    <Folder className="w-2.5 h-2.5" />
-                    {folder}
-                  </Button>
+                  <FolderButton key={folder} folder={folder} isSelected={selectedFolder === folder} />
                 ))}
               </div>
 
@@ -1131,6 +1206,9 @@ export default function Education() {
                         <Lock className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
                         <p className="text-xs text-muted-foreground">
                           {selectedFolder ? `No content in "${selectedFolder}"` : 'Your content will appear here'}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground/70 mt-1">
+                          Drag items to folders to organize
                         </p>
                       </CardContent>
                     </Card>
@@ -1208,7 +1286,6 @@ export default function Education() {
                     />
                   </div>
                   
-                  {/* Folder Selection */}
                   <div>
                     <Label className="text-[10px]">Folder</Label>
                     <Select value={uploadFolder} onValueChange={setUploadFolder}>
