@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Eye, EyeOff, LogIn, UserPlus, Globe, Calendar, Search, Check, X, ArrowRight, ArrowLeft, Camera, User } from 'lucide-react';
 import { validateLoginForm, validateSignupForm, getValidationErrors } from '@/lib/authValidation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import zenpeaceLogo from '@/assets/zenpeace-logo.png';
+import lumathaLogo from '@/assets/lumatha-logo.png';
 
 // Complete world countries list - sorted A-Z
 const ALL_COUNTRIES = [
@@ -255,7 +255,7 @@ export default function Auth() {
         password 
       });
       if (error) throw error;
-      toast.success('Welcome back to Zenpeace!');
+      toast.success('Welcome back to Lumatha!');
       navigate('/');
     } catch (error: any) {
       toast.error(error.message || 'Authentication failed');
@@ -334,7 +334,7 @@ export default function Auth() {
         });
       }
 
-      toast.success('Welcome to Zenpeace! Account created.');
+      toast.success('Welcome to Lumatha! Account created.');
       navigate('/');
     } catch (error: any) {
       if (error.message?.includes('already registered')) {
@@ -604,15 +604,15 @@ export default function Auth() {
           {/* Logo */}
           <div className="mx-auto">
             <img 
-              src={zenpeaceLogo} 
-              alt="Zenpeace" 
+              src={lumathaLogo} 
+              alt="Lumatha" 
               className="w-16 h-16 object-contain rounded-xl mx-auto"
               style={{ boxShadow: '0 0 30px rgba(201, 162, 39, 0.2)' }}
             />
           </div>
           
           <CardTitle className="text-2xl font-bold text-white">
-            {isLogin ? 'Welcome Back' : step <= 5 ? 'Create Account' : 'Join Zenpeace'}
+            {isLogin ? 'Welcome Back' : step <= 5 ? 'Create Account' : 'Join Lumatha'}
           </CardTitle>
           <CardDescription className="text-white/50">
             {isLogin ? 'Sign in to continue your journey' : `Step ${step} of 5`}
