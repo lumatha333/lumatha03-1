@@ -57,12 +57,12 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
 
   const handleTabClick = (tab: typeof tabs[0]) => {
     if (tab.id === 'videos') {
-      localStorage.setItem('zenpeace_feed_filter', 'videos');
+      localStorage.setItem('lumatha_feed_filter', 'videos');
       navigate('/');
       window.dispatchEvent(new CustomEvent('feedFilterChange', { detail: 'videos' }));
     } else if (tab.path) {
       if (tab.id === 'feed') {
-        localStorage.setItem('zenpeace_feed_filter', 'all');
+        localStorage.setItem('lumatha_feed_filter', 'all');
         window.dispatchEvent(new CustomEvent('feedFilterChange', { detail: 'all' }));
       }
       navigate(tab.path);
@@ -73,11 +73,11 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
 
   const isActive = (tab: typeof tabs[0]) => {
     if (tab.id === 'videos') {
-      const filter = localStorage.getItem('zenpeace_feed_filter');
+      const filter = localStorage.getItem('lumatha_feed_filter');
       return location.pathname === '/' && filter === 'videos';
     }
     if (tab.id === 'feed') {
-      const filter = localStorage.getItem('zenpeace_feed_filter');
+      const filter = localStorage.getItem('lumatha_feed_filter');
       return location.pathname === '/' && filter !== 'videos';
     }
     if (tab.id === 'search') return location.pathname === '/search';

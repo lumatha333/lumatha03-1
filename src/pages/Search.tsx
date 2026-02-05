@@ -54,7 +54,7 @@ export default function Search() {
 
   // Load recent searches from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('zenpeace_recent_searches');
+    const saved = localStorage.getItem('lumatha_recent_searches');
     if (saved) {
       try {
         setRecentSearches(JSON.parse(saved).slice(0, 10));
@@ -103,19 +103,19 @@ export default function Search() {
     const newSearch: RecentSearch = { type, value, label, timestamp: Date.now() };
     const updated = [newSearch, ...recentSearches.filter(s => !(s.type === type && s.value === value))].slice(0, 10);
     setRecentSearches(updated);
-    localStorage.setItem('zenpeace_recent_searches', JSON.stringify(updated));
+    localStorage.setItem('lumatha_recent_searches', JSON.stringify(updated));
   };
 
   // Remove individual search item
   const removeRecentSearch = (index: number) => {
     const updated = recentSearches.filter((_, i) => i !== index);
     setRecentSearches(updated);
-    localStorage.setItem('zenpeace_recent_searches', JSON.stringify(updated));
+    localStorage.setItem('lumatha_recent_searches', JSON.stringify(updated));
   };
 
   const clearRecentSearches = () => {
     setRecentSearches([]);
-    localStorage.removeItem('zenpeace_recent_searches');
+    localStorage.removeItem('lumatha_recent_searches');
     toast.success('Search history cleared');
   };
 
@@ -333,7 +333,7 @@ export default function Search() {
             }}
           >
             <p className="font-semibold truncate">{profile.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{profile.bio || 'Zenpeace User'}</p>
+            <p className="text-xs text-muted-foreground truncate">{profile.bio || 'Lumatha User'}</p>
             {profile.location && (
               <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-0.5">
                 <MapPin className="w-2.5 h-2.5" /> {profile.location}
@@ -851,9 +851,9 @@ export default function Search() {
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
               <SearchIcon className="w-10 h-10 text-primary/50" />
             </div>
-            <h3 className="font-semibold text-lg mb-2">Search Zenpeace</h3>
+            <h3 className="font-semibold text-lg mb-2">Search Lumatha</h3>
             <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-              Start typing to explore Zenpeace
+              Start typing to explore Lumatha
             </p>
           </CardContent>
         </Card>
