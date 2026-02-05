@@ -52,7 +52,7 @@ function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => b
       </SheetTrigger>
       <SheetContent side="left" className="w-[280px] p-0 glass-card border-r border-primary/20">
         <div className="flex items-center gap-3 p-4 border-b border-border">
-          <img src={lumathaLogo} alt="Lumatha" className="w-8 h-8 rounded-lg object-contain" />
+          <img src={lumathaLogo} alt="Lumatha" className="w-10 h-10 rounded-full object-contain" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />
           <span className="text-2xl font-bold gradient-text tracking-tight">Lumatha</span>
         </div>
         <nav className="p-2 space-y-1">
@@ -207,8 +207,8 @@ function LayoutContent({ children }: LayoutProps) {
                 <img 
                   src={lumathaLogo} 
                   alt="Lumatha" 
-                  className="w-12 h-12 rounded-xl object-contain"
-                  style={{ boxShadow: '0 0 20px rgba(201, 162, 39, 0.3)' }}
+                  className="w-12 h-12 rounded-full object-contain"
+                  style={{ boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)' }}
                 />
               </div>
               <span className="text-xl font-bold gradient-text tracking-tight">Lumatha</span>

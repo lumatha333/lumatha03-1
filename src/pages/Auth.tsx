@@ -354,8 +354,8 @@ export default function Auth() {
         return (
           <div className="space-y-4 animate-fade-in">
             <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-white">What's your name?</h2>
-              <p className="text-sm text-white/50 mt-1">Enter your name as it appears on official documents</p>
+              <h2 className="text-xl font-semibold text-foreground">What's your name?</h2>
+              <p className="text-sm text-muted-foreground mt-1">Enter your name as it appears on official documents</p>
             </div>
             
             <div className="space-y-3">
