@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { LazyImage } from '@/components/LazyImage';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { FriendTick } from '@/components/zenpeace/FriendTick';
-import { SymbolicHeart } from '@/components/zenpeace/SymbolicHeart';
+import { FriendTick } from '@/components/lumatha/FriendTick';
+import { SymbolicHeart } from '@/components/lumatha/SymbolicHeart';
 import { 
   ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
   MapPin, Calendar, Phone, Globe, Briefcase, Star, Trophy, Eye, MessageCircle, UserCheck, Clock, Users
@@ -315,7 +315,7 @@ export default function Profile() {
                 <FriendTick friendsCount={friendsCount} showLabel />
               </div>
               
-              {/* Zenpeace Stats - Friends & Posts only (no follower counts) */}
+              {/* Lumatha Stats - Friends & Posts only (no follower counts) */}
               <div className="flex gap-6 justify-center sm:justify-start text-center">
                 <div className="flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-primary" />

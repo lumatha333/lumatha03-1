@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import DocumentCard from '@/components/DocumentCard';
-import { LearnMediaCard } from '@/components/zenpeace/LearnMediaCard';
+import { LearnMediaCard } from '@/components/lumatha/LearnMediaCard';
 import { TruncatedText } from '@/components/adventure/TruncatedText';
 import { DEFAULT_DAILY_TODOS, DEFAULT_WEEKLY_TODOS, DEFAULT_MONTHLY_TODOS, DEFAULT_YEARLY_TODOS, TODO_CATEGORIES, TodoCategory, getDefaultTodos } from '@/data/defaultTodos';
 import { cn } from '@/lib/utils';
@@ -47,7 +47,7 @@ export default function Learn() {
   
   // Main tab state
   const [mainTab, setMainTab] = useState<MainTab>(() => {
-    const saved = localStorage.getItem('zenpeace_learn_main_tab');
+    const saved = localStorage.getItem('lumatha_learn_main_tab');
     return (saved as MainTab) || 'public';
   });
   
@@ -58,7 +58,7 @@ export default function Learn() {
   
   // Save main tab preference
   useEffect(() => {
-    localStorage.setItem('zenpeace_learn_main_tab', mainTab);
+    localStorage.setItem('lumatha_learn_main_tab', mainTab);
   }, [mainTab]);
   
   // Document state
@@ -123,7 +123,7 @@ export default function Learn() {
         setDocuments(docsWithProfiles);
       }
 
-      const savedDocs = localStorage.getItem('zenpeace_saved_docs');
+      const savedDocs = localStorage.getItem('lumatha_saved_docs');
       if (savedDocs) setSavedDocIds(new Set(JSON.parse(savedDocs)));
     } finally {
       setDocLoading(false);
@@ -188,7 +188,7 @@ export default function Learn() {
       toast.success('Saved!');
     }
     setSavedDocIds(newSaved);
-    localStorage.setItem('zenpeace_saved_docs', JSON.stringify([...newSaved]));
+    localStorage.setItem('lumatha_saved_docs', JSON.stringify([...newSaved]));
   };
 
   const toggleSavePost = async (postId: string) => {

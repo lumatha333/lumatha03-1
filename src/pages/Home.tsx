@@ -27,7 +27,7 @@ const feedCategories = [
 
 export default function Home() {
   const [feedCategory, setFeedCategory] = useState(() => {
-    return localStorage.getItem('zenpeace_feed_category') || 'global';
+    return localStorage.getItem('lumatha_feed_category') || 'global';
   });
   const [categoryExpanded, setCategoryExpanded] = useState(false);
   const [contentFilter, setContentFilter] = useState('all');
@@ -52,7 +52,7 @@ export default function Home() {
     };
     window.addEventListener('feedFilterChange', handleFilterChange as EventListener);
     
-    const savedFilter = localStorage.getItem('zenpeace_feed_filter');
+    const savedFilter = localStorage.getItem('lumatha_feed_filter');
     if (savedFilter) setContentFilter(savedFilter);
     
     return () => {
@@ -62,7 +62,7 @@ export default function Home() {
 
   // Save category preference
   useEffect(() => {
-    localStorage.setItem('zenpeace_feed_category', feedCategory);
+    localStorage.setItem('lumatha_feed_category', feedCategory);
   }, [feedCategory]);
 
   useEffect(() => {

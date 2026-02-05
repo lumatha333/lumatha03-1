@@ -43,7 +43,7 @@ export default function Create() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
-    const draft = localStorage.getItem('zenpeace_draft');
+    const draft = localStorage.getItem('lumatha_draft');
     if (draft) {
       try {
         const parsed = JSON.parse(draft);
@@ -55,7 +55,7 @@ export default function Create() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('zenpeace_draft', JSON.stringify({ content, title, category }));
+    localStorage.setItem('lumatha_draft', JSON.stringify({ content, title, category }));
   }, [content, title, category]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,7 +89,7 @@ export default function Create() {
     previewUrls.forEach(url => URL.revokeObjectURL(url));
     setContent(''); setTitle(''); setCategory('global');
     setMediaFiles([]); setPreviewUrls([]); setCurrentPreviewIndex(0);
-    localStorage.removeItem('zenpeace_draft');
+    localStorage.removeItem('lumatha_draft');
   };
 
   const handleCancel = () => {
