@@ -1,19 +1,30 @@
-// Default To-Dos - Simple, positive, suitable for all ages
+// Lumatha Default To-Dos - Clean, positive, universal for all ages
+
+export type TodoCategory = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'custom';
+
+export const TODO_CATEGORIES = [
+  { id: 'daily' as TodoCategory, label: 'Daily', emoji: '☀️', resetPeriod: '24 hours' },
+  { id: 'weekly' as TodoCategory, label: 'Weekly', emoji: '📅', resetPeriod: '7 days' },
+  { id: 'monthly' as TodoCategory, label: 'Monthly', emoji: '🗓️', resetPeriod: '1 month' },
+  { id: 'yearly' as TodoCategory, label: 'Yearly', emoji: '🎯', resetPeriod: '1 year' },
+  { id: 'lifetime' as TodoCategory, label: 'Lifetime', emoji: '⭐', resetPeriod: 'Never' },
+  { id: 'custom' as TodoCategory, label: 'Custom', emoji: '✨', resetPeriod: 'User defined' },
+];
 
 export const DEFAULT_DAILY_TODOS = [
   "Wake up on time",
   "Drink enough water",
-  "Do 10-15 minutes of physical movement",
+  "Move your body (10–15 minutes)",
   "Eat at least one healthy meal",
-  "Practice gratitude (think of 1 good thing)",
-  "Learn something new (small)",
-  "Complete your main task of the day",
+  "Brush teeth and maintain hygiene",
   "Keep your surroundings clean",
-  "Be kind to someone (online or offline)",
-  "Limit unnecessary screen time",
-  "Check your messages responsibly",
-  "Spend time with family or friends",
+  "Complete your most important task",
+  "Learn something small (5–10 minutes)",
   "Take short breaks to relax your mind",
+  "Limit unnecessary screen time",
+  "Respond to messages responsibly",
+  "Spend time with family or friends",
+  "Be kind to someone (online or offline)",
   "Reflect on your day",
   "Sleep on time"
 ];
@@ -22,35 +33,35 @@ export const DEFAULT_WEEKLY_TODOS = [
   "Plan your week",
   "Review last week's progress",
   "Clean and organize your space",
-  "Learn a new skill or topic",
   "Exercise at least 3 times",
-  "Connect with someone you haven't talked to recently",
-  "Save or manage your expenses",
-  "Reduce digital clutter (files, photos, apps)",
-  "Help someone in need",
-  "Read or watch something educational",
+  "Spend time outdoors",
+  "Learn a useful topic or skill",
+  "Reduce digital clutter (photos, files, apps)",
+  "Manage your expenses or budget",
+  "Cook or eat healthier meals",
   "Practice a hobby",
-  "Spend quality time outdoors",
-  "Set goals for next week",
+  "Connect with someone you miss",
+  "Do one act of help or service",
   "Take care of your mental health",
+  "Set next week's goals",
   "Appreciate your achievements"
 ];
 
 export const DEFAULT_MONTHLY_TODOS = [
   "Review personal goals",
-  "Learn something meaningful",
   "Improve one habit",
-  "Save money or plan finances",
+  "Learn something meaningful",
   "Declutter unnecessary items",
   "Update important documents",
-  "Reflect on emotional well-being",
-  "Try something new",
-  "Help your community or society",
-  "Track your personal growth",
-  "Improve a personal skill",
-  "Reduce stress sources",
   "Review health routines",
-  "Plan for the next month",
+  "Track emotional well-being",
+  "Reduce stress sources",
+  "Try something new",
+  "Save money or plan finances",
+  "Improve one personal skill",
+  "Strengthen relationships",
+  "Review progress and mistakes",
+  "Plan the next month",
   "Celebrate small wins"
 ];
 
@@ -72,13 +83,22 @@ export const DEFAULT_YEARLY_TODOS = [
   "Prepare goals for the next year"
 ];
 
-export type TodoCategory = 'daily' | 'weekly' | 'monthly' | 'yearly';
-
-export const TODO_CATEGORIES = [
-  { id: 'daily' as TodoCategory, label: 'Daily', resetPeriod: '1 day', emoji: '☀️' },
-  { id: 'weekly' as TodoCategory, label: 'Weekly', resetPeriod: '1 week', emoji: '📅' },
-  { id: 'monthly' as TodoCategory, label: 'Monthly', resetPeriod: '1 month', emoji: '🗓️' },
-  { id: 'yearly' as TodoCategory, label: 'Yearly', resetPeriod: '1 year', emoji: '🎯' },
+export const DEFAULT_LIFETIME_TODOS = [
+  "Build strong personal discipline",
+  "Maintain long-term physical fitness",
+  "Maintain long-term mental well-being",
+  "Learn financial literacy",
+  "Develop a stable career or business path",
+  "Build strong communication skills",
+  "Improve time management",
+  "Become consistent with learning",
+  "Maintain good hygiene and self-care",
+  "Build meaningful friendships",
+  "Build healthy relationships",
+  "Support family and community",
+  "Travel and explore the world",
+  "Create a personal legacy (skills, work, values)",
+  "Live with purpose and gratitude"
 ];
 
 export const getDefaultTodos = (category: TodoCategory): string[] => {
@@ -87,6 +107,8 @@ export const getDefaultTodos = (category: TodoCategory): string[] => {
     case 'weekly': return DEFAULT_WEEKLY_TODOS;
     case 'monthly': return DEFAULT_MONTHLY_TODOS;
     case 'yearly': return DEFAULT_YEARLY_TODOS;
+    case 'lifetime': return DEFAULT_LIFETIME_TODOS;
+    case 'custom': return [];
     default: return DEFAULT_DAILY_TODOS;
   }
 };
