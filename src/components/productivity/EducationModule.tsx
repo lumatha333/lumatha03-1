@@ -15,6 +15,7 @@ import { Globe, Lock, FileText, Video, Upload, Search, Bookmark, BookmarkCheck, 
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { Database } from '@/integrations/supabase/types';
+import { EducationComments } from './EducationComments';
 
 type Document = Database['public']['Tables']['documents']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
@@ -46,6 +47,15 @@ export function EducationModule() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [uploadVisibility, setUploadVisibility] = useState<'public' | 'private'>('private');
   const [uploading, setUploading] = useState(false);
+  
+  // Comments dialog state
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<{ id: string; title: string; type: 'document' | 'post' } | null>(null);
+
+  const openComments = (id: string, title: string, type: 'document' | 'post') => {
+    setSelectedItem({ id, title, type });
+    setCommentsOpen(true);
+  };
 
   useEffect(() => {
     loadData();
@@ -640,6 +650,15 @@ export function EducationModule() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Comments Dialog */}
+      <EducationComments
+        open={commentsOpen}
+        onOpenChange={setCommentsOpen}
+        documentId={selectedItem?.type === 'document' ? selectedItem.id : undefined}
+        postId={selectedItem?.type === 'post' ? selectedItem.id : undefined}
+        title={selectedItem?.title || ''}
+      />
     </div>
   );
 }
