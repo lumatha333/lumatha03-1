@@ -11,7 +11,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { Globe, Lock, FileText, Video, Upload, Search, Bookmark, BookmarkCheck, Heart, MessageCircle, ExternalLink, Trash2, Play, File, Download } from 'lucide-react';
+import { Globe, Lock, FileText, Video, Upload, Search, Bookmark, BookmarkCheck, Heart, MessageCircle, ExternalLink, Trash2, Play, File, Download, Loader2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { Database } from '@/integrations/supabase/types';
 
@@ -71,10 +72,11 @@ export function EducationModule() {
         setPrivateDocs(docsWithProfiles.filter(d => d.user_id === user.id));
       }
 
-      // Load video posts
+      // Load video posts - ONLY education videos (not from Home feed)
       const { data: posts } = await supabase
         .from('posts')
         .select('*, profiles(*)')
+        .eq('category', 'education')
         .order('created_at', { ascending: false });
 
       if (posts) {
@@ -140,6 +142,9 @@ export function EducationModule() {
     }
   };
 
+  // Upload progress state
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const handleUpload = async () => {
     if (!uploadFile || !uploadTitle.trim()) {
       toast.error('File and title required');
@@ -151,13 +156,21 @@ export function EducationModule() {
     }
 
     setUploading(true);
+    setUploadProgress(0);
+    
     try {
       const fileExt = uploadFile.name.split('.').pop()?.toLowerCase() || '';
       const fileName = `${user.id}/${Date.now()}_${uploadFile.name}`;
       const isVideo = ['mp4', 'mov', 'webm', 'avi'].includes(fileExt);
 
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
+
       if (isVideo) {
-        await supabase.storage.from('posts-media').upload(fileName, uploadFile);
+        const { error } = await supabase.storage.from('posts-media').upload(fileName, uploadFile);
+        if (error) throw error;
         const { data: { publicUrl } } = supabase.storage.from('posts-media').getPublicUrl(fileName);
         
         await supabase.from('posts').insert({
@@ -166,11 +179,13 @@ export function EducationModule() {
           content: uploadDescription || null,
           media_urls: [publicUrl],
           media_types: [uploadFile.type || 'video/mp4'],
-          category: 'knowledge',
+          category: 'education',
+          subcategory: 'education_video',
           visibility: uploadVisibility
         });
       } else {
-        await supabase.storage.from('documents').upload(fileName, uploadFile);
+        const { error } = await supabase.storage.from('documents').upload(fileName, uploadFile);
+        if (error) throw error;
         const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(fileName);
         
         await supabase.from('documents').insert({
@@ -184,14 +199,21 @@ export function EducationModule() {
         });
       }
 
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
       toast.success('Uploaded successfully!');
-      setUploadFile(null);
-      setUploadTitle('');
-      setUploadDescription('');
-      setUploadVisibility('private');
-      loadData();
-    } catch (error) {
-      toast.error('Upload failed');
+      setTimeout(() => {
+        setUploadFile(null);
+        setUploadTitle('');
+        setUploadDescription('');
+        setUploadVisibility('private');
+        setUploadProgress(0);
+        loadData();
+      }, 500);
+    } catch (error: any) {
+      toast.error(error?.message || 'Upload failed');
+      setUploadProgress(0);
     } finally {
       setUploading(false);
     }
@@ -589,12 +611,31 @@ export function EducationModule() {
               </RadioGroup>
             </div>
 
+            {uploading && uploadProgress > 0 && (
+              <div className="space-y-2">
+                <Progress value={uploadProgress} className="h-2" />
+                <p className="text-xs text-center text-muted-foreground">
+                  {uploadProgress < 100 ? `Uploading... ${uploadProgress}%` : 'Complete!'}
+                </p>
+              </div>
+            )}
+
             <Button 
-              className="w-full" 
+              className="w-full gap-2" 
               onClick={handleUpload}
               disabled={uploading || !uploadFile || !uploadTitle.trim()}
             >
-              {uploading ? 'Uploading...' : 'Upload'}
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Upload
+                </>
+              )}
             </Button>
           </div>
         </TabsContent>
