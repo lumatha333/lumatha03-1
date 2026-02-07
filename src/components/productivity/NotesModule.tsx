@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,11 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Search, Folder, FolderPlus, StickyNote, Trash2, Edit2, Bookmark, BookmarkCheck, Pin, PinOff, ArrowLeft, Image as ImageIcon, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Plus, Search, Folder, FolderPlus, StickyNote, Trash2, Edit2, Bookmark, BookmarkCheck, ArrowLeft } from 'lucide-react';
+import { RichTextEditor } from './RichTextEditor';
 
-interface Note { id: string; title: string; content: string; images?: string[]; folder?: string; pinned?: boolean; saved?: boolean; created_at: string; updated_at: string; }
-interface NoteFolder { id: string; name: string; pinned?: boolean; }
+interface Note { id: string; title: string; content: string; folder?: string; pinned?: boolean; saved?: boolean; created_at: string; updated_at: string; }
+interface NoteFolder { id: string; name: string; }
 
 const NOTES_KEY = 'lumatha_notes_v2';
 const FOLDERS_KEY = 'lumatha_note_folders_v2';
@@ -86,6 +85,13 @@ export function NotesModule() {
     return matchesSearch;
   });
 
+  // Strip HTML tags for preview text
+  const getPreviewText = (html: string) => {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  };
+
   if (viewingNote) {
     return (
       <Card className="animate-fade-in">
@@ -104,7 +110,10 @@ export function NotesModule() {
         </CardHeader>
         <CardContent className="space-y-4">
           {viewingNote.folder && <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">{viewingNote.folder}</span>}
-          <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">{viewingNote.content || 'No content'}</div>
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none [&_h1]:text-xl [&_h1]:font-bold [&_h2]:text-lg [&_h2]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:border-primary/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs"
+            dangerouslySetInnerHTML={{ __html: viewingNote.content || '<p class="text-muted-foreground">No content</p>' }}
+          />
         </CardContent>
       </Card>
     );
@@ -133,7 +142,7 @@ export function NotesModule() {
               {filteredNotes.map(note => (
                 <Card key={note.id} className="cursor-pointer hover:border-primary/50" onClick={() => setViewingNote(note)}>
                   <CardHeader className="p-3 pb-2"><CardTitle className="text-sm line-clamp-1">{note.title}</CardTitle></CardHeader>
-                  <CardContent className="p-3 pt-0"><p className="text-xs text-muted-foreground line-clamp-3">{note.content || 'No content'}</p></CardContent>
+                  <CardContent className="p-3 pt-0"><p className="text-xs text-muted-foreground line-clamp-3">{getPreviewText(note.content) || 'No content'}</p></CardContent>
                 </Card>
               ))}
             </div>
@@ -179,11 +188,16 @@ export function NotesModule() {
         </TabsContent>
       </Tabs>
 
+      {/* Note Editor Dialog */}
       <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
-        <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>{editingNote ? 'Edit Note' : 'New Note'}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>{editingNote ? 'Edit Note' : 'New Note'}</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
             <Input placeholder="Note title" value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} />
-            <textarea placeholder="Write your note..." value={noteContent} onChange={(e) => setNoteContent(e.target.value)} className="w-full min-h-[200px] p-3 rounded-lg border bg-background resize-none focus:outline-none focus:ring-2 focus:ring-primary" />
+            <RichTextEditor
+              value={noteContent}
+              onChange={setNoteContent}
+              placeholder="Write your note..."
+            />
             {folders.length > 0 && (<select value={noteFolder} onChange={(e) => setNoteFolder(e.target.value)} className="h-9 px-3 rounded-md border bg-background text-sm w-full"><option value="">No folder</option>{folders.map(f => (<option key={f.id} value={f.name}>{f.name}</option>))}</select>)}
             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => setNoteDialogOpen(false)}>Cancel</Button><Button className="flex-1" onClick={saveNote}>{editingNote ? 'Update' : 'Create'}</Button></div>
           </div>

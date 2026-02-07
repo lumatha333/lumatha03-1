@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Check, Plus, RotateCcw, Flame, Trash2, Edit2, History } from 'lucide-react';
+import { Check, Plus, RotateCcw, Flame, Trash2, History, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TODO_CATEGORIES, TodoCategory, getDefaultTodos } from '@/data/defaultTodos';
 import { TodoFolderView } from './todo/TodoFolderView';
 import { TodoProgressView } from './todo/TodoProgressView';
+import { TodoReminderDialog, getReminders } from './TodoReminderDialog';
 
 interface Todo {
   id: string;
@@ -29,7 +28,6 @@ interface CustomFolder {
 const STORAGE_KEY = 'lumatha_todos_v2';
 const CUSTOM_FOLDERS_KEY = 'lumatha_custom_folders_v2';
 const STREAK_KEY = 'lumatha_streak';
-const HISTORY_KEY = 'lumatha_todo_history';
 
 export function TodoModule() {
   const { user } = useAuth();
@@ -39,16 +37,17 @@ export function TodoModule() {
     daily: [], weekly: [], monthly: [], yearly: [], lifetime: [], custom: []
   });
   const [newTodo, setNewTodo] = useState('');
-  const [editingTask, setEditingTask] = useState<{ category: TodoCategory; id: string } | null>(null);
-  const [editText, setEditText] = useState('');
-  
   const [customFolders, setCustomFolders] = useState<CustomFolder[]>([]);
   const [newFolderName, setNewFolderName] = useState('');
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [selectedList, setSelectedList] = useState<string | null>(null);
-  
   const [streak, setStreak] = useState(0);
+
+  // Reminder state
+  const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
+  const [reminderTask, setReminderTask] = useState<{ id: string; text: string } | null>(null);
+  const reminders = getReminders();
 
   useEffect(() => {
     loadTodos();
@@ -58,11 +57,7 @@ export function TodoModule() {
 
   const loadTodos = () => {
     const cached = localStorage.getItem(STORAGE_KEY);
-    if (cached) {
-      setTodos(JSON.parse(cached));
-    } else {
-      initializeDefaults();
-    }
+    if (cached) { setTodos(JSON.parse(cached)); } else { initializeDefaults(); }
   };
 
   const initializeDefaults = () => {
@@ -143,6 +138,11 @@ export function TodoModule() {
     toast.success('Folder deleted');
   };
 
+  const openReminder = (taskId: string, taskText: string) => {
+    setReminderTask({ id: taskId, text: taskText });
+    setReminderDialogOpen(true);
+  };
+
   const getCompletedCount = (category: TodoCategory) => todos[category].filter(t => t.completed).length;
   const getTotalCount = (category: TodoCategory) => todos[category].length;
   const categoryCards = TODO_CATEGORIES.filter(c => c.id !== 'custom');
@@ -152,19 +152,11 @@ export function TodoModule() {
   if (view === 'custom') {
     return (
       <TodoFolderView
-        folders={customFolders}
-        selectedFolder={selectedFolder}
-        selectedList={selectedList}
-        onSelectFolder={setSelectedFolder}
-        onSelectList={setSelectedList}
-        onCreateFolder={createFolder}
-        onDeleteFolder={deleteFolder}
-        onUpdateFolders={saveCustomFolders}
-        folderDialogOpen={folderDialogOpen}
-        setFolderDialogOpen={setFolderDialogOpen}
-        newFolderName={newFolderName}
-        setNewFolderName={setNewFolderName}
-        onBack={() => setView('main')}
+        folders={customFolders} selectedFolder={selectedFolder} selectedList={selectedList}
+        onSelectFolder={setSelectedFolder} onSelectList={setSelectedList}
+        onCreateFolder={createFolder} onDeleteFolder={deleteFolder} onUpdateFolders={saveCustomFolders}
+        folderDialogOpen={folderDialogOpen} setFolderDialogOpen={setFolderDialogOpen}
+        newFolderName={newFolderName} setNewFolderName={setNewFolderName} onBack={() => setView('main')}
       />
     );
   }
@@ -199,13 +191,8 @@ export function TodoModule() {
           const total = getTotalCount(cat.id);
           const progress = total > 0 ? (completed / total) * 100 : 0;
           const isActive = activeCategory === cat.id;
-          
           return (
-            <Card 
-              key={cat.id}
-              className={cn("cursor-pointer transition-all hover:shadow-lg", isActive && "ring-2 ring-primary shadow-lg")}
-              onClick={() => setActiveCategory(cat.id)}
-            >
+            <Card key={cat.id} className={cn("cursor-pointer transition-all hover:shadow-lg", isActive && "ring-2 ring-primary shadow-lg")} onClick={() => setActiveCategory(cat.id)}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-2xl">{cat.emoji}</span>
@@ -219,7 +206,6 @@ export function TodoModule() {
             </Card>
           );
         })}
-        
         <Card className="cursor-pointer transition-all hover:shadow-lg border-dashed" onClick={() => setView('custom')}>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -251,9 +237,14 @@ export function TodoModule() {
                 {todo.completed && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
               </button>
               <span className={cn("flex-1 text-sm", todo.completed && "line-through text-muted-foreground")}>{todo.text}</span>
-              <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => deleteTodo(activeCategory, todo.id)}>
-                <Trash2 className="w-3 h-3" />
-              </Button>
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openReminder(todo.id, todo.text)}>
+                  <Bell className={cn("w-3 h-3", reminders[todo.id] ? "text-primary" : "text-muted-foreground")} />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteTodo(activeCategory, todo.id)}>
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
             </div>
           ))}
           <div className="flex gap-2 pt-2">
@@ -262,6 +253,16 @@ export function TodoModule() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Reminder Dialog */}
+      {reminderTask && (
+        <TodoReminderDialog
+          open={reminderDialogOpen}
+          onOpenChange={setReminderDialogOpen}
+          taskId={reminderTask.id}
+          taskText={reminderTask.text}
+        />
+      )}
     </div>
   );
 }
