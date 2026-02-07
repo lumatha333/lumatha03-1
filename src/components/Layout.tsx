@@ -3,8 +3,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Menu, ArrowLeft, Home, BookOpen, MessageSquare, Gamepad2, 
-  Mountain, Heart, ShoppingCart, Settings 
+  Mountain, Heart, ShoppingCart, Settings, RefreshCw
 } from 'lucide-react';
+import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
@@ -234,7 +235,8 @@ function LayoutContent({ children }: LayoutProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
-        <header className={`sticky z-40 glass-card border-b border-border ${headerVisible ? 'top-0 opacity-100' : '-top-16 opacity-0'}`}>
+        <OfflineIndicator />
+        <header className={`sticky z-40 glass-card border-b border-border transition-all duration-300 ${headerVisible ? 'top-0 opacity-100' : '-top-16 opacity-0'}`}>
           <div className="flex items-center justify-between gap-2 px-3 py-2">
             <div className="flex items-center gap-1.5">
               {isMobile && isSubSection ? (
@@ -245,9 +247,17 @@ function LayoutContent({ children }: LayoutProps) {
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
             </div>
-            <Link to="/" className="flex items-center" onClick={handleLogoClick}>
-              <span className="font-bold text-xl gradient-text whitespace-nowrap tracking-tight">Lumatha</span>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => window.location.reload()}
+                title="Refresh"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           {showSubNav && <SubNavigation visible={headerVisible} />}
         </header>

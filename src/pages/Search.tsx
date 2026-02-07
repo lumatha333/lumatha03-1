@@ -160,16 +160,16 @@ export default function Search() {
           .from('posts')
           .select('*, profiles(*)')
           .eq('visibility', 'public')
+          .neq('category', 'ghost')
           .order('created_at', { ascending: false })
           .limit(50);
 
         if (activeTab === 'posts') {
-          // Text posts only
           query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`)
             .is('file_url', null);
         } else if (activeTab === 'media') {
-          // Media posts only
-          query = query.not('file_url', 'is', null);
+          query = query.not('file_url', 'is', null)
+            .or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
         } else {
           query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
         }
@@ -213,6 +213,7 @@ export default function Search() {
         .from('posts')
         .select('*, profiles(*)')
         .eq('visibility', 'public')
+        .neq('category', 'ghost')
         .gte('created_at', startOfDay.toISOString())
         .lte('created_at', endOfDay.toISOString())
         .order('created_at', { ascending: false })
@@ -661,43 +662,100 @@ export default function Search() {
         </TabsContent>
 
         {/* ============= MEDIA TAB ============= */}
-        <TabsContent value="media" className="mt-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <TabsContent value="media" className="mt-3 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {loading ? (
-            <div className="grid grid-cols-2 gap-2">
-              {[1,2,3,4].map(i => <Skeleton key={i} className="aspect-square rounded-lg" />)}
+            <div className="space-y-3">
+              {[1,2,3].map(i => <Skeleton key={i} className="h-72 w-full rounded-xl" />)}
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-2">
-                {mediaPosts.map((post, i) => (
+              {mediaPosts.map((post, i) => {
+                const mediaUrl = post.file_url || post.media_urls?.[0];
+                const isVideo = post.file_type?.includes('video');
+                const isLiked = likedPosts.has(post.id);
+
+                return (
                   <Card 
                     key={post.id} 
-                    className="glass-card overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform animate-in fade-in zoom-in"
+                    className="glass-card overflow-hidden animate-in fade-in slide-in-from-bottom-2"
                     style={{ animationDelay: `${i * 40}ms` }}
-                    onClick={() => openMedia(post.file_url || post.media_urls?.[0], post.file_type)}
                   >
-                    <div className="aspect-square relative">
-                      {post.file_type?.includes('video') ? (
-                        <>
-                          <video src={post.file_url} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                            <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
-                              <Play className="w-5 h-5 text-black ml-0.5" />
-                            </div>
-                          </div>
-                          <Badge className="absolute top-2 right-2 text-[8px] bg-black/60">Video</Badge>
-                        </>
-                      ) : (
-                        <img src={post.file_url || post.media_urls?.[0]} alt="" className="w-full h-full object-cover" />
+                    <CardContent className="p-3">
+                      {/* Author */}
+                      <div 
+                        className="flex items-center gap-2 mb-2 cursor-pointer"
+                        onClick={() => navigate(`/profile/${post.user_id}`)}
+                      >
+                        <Avatar className="w-8 h-8">
+                          <AvatarImage src={post.profiles?.avatar_url} />
+                          <AvatarFallback className="text-[10px]">{post.profiles?.name?.[0]}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{post.profiles?.name}</p>
+                          <p className="text-[9px] text-muted-foreground">
+                            {format(new Date(post.created_at), 'MMM d, yyyy')}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-[8px]">{post.category}</Badge>
+                      </div>
+
+                      {/* Title */}
+                      <p className="text-sm font-medium mb-2">{post.title}</p>
+                      {post.content && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{post.content}</p>}
+
+                      {/* Full-size Media */}
+                      {mediaUrl && (
+                        <div className="rounded-lg overflow-hidden">
+                          {isVideo ? (
+                            <video 
+                              src={mediaUrl} 
+                              controls 
+                              playsInline
+                              preload="metadata"
+                              className="w-full rounded-lg max-h-[70vh] bg-black"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <img 
+                              src={mediaUrl} 
+                              alt={post.title} 
+                              className="w-full rounded-lg cursor-pointer hover:opacity-95 transition-opacity"
+                              onClick={() => openMedia(mediaUrl, post.file_type)}
+                            />
+                          )}
+                        </div>
                       )}
-                    </div>
-                    <CardContent className="p-2">
-                      <p className="text-xs font-medium truncate">{post.title}</p>
-                      <p className="text-[10px] text-muted-foreground">{post.profiles?.name}</p>
+
+                      {/* Social Actions */}
+                      <div className="flex items-center gap-4 mt-3 pt-2 border-t border-border/50">
+                        <button 
+                          onClick={() => toggleLike(post.id)} 
+                          className={cn(
+                            "flex items-center gap-1.5 text-xs transition-colors",
+                            isLiked ? "text-red-500" : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          <Heart className={cn("w-4 h-4", isLiked && "fill-current")} />
+                          <span>{post.likes_count || 0}</span>
+                        </button>
+                        <button 
+                          onClick={() => openComments(post.id, post.title)} 
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          Comment
+                        </button>
+                        <button 
+                          onClick={() => openShare(post)} 
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </CardContent>
                   </Card>
-                ))}
-              </div>
+                );
+              })}
               {mediaPosts.length === 0 && searchQuery.length >= 2 && (
                 <Card className="glass-card">
                   <CardContent className="py-12 text-center">

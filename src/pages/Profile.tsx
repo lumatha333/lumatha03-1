@@ -50,123 +50,66 @@ export default function Profile() {
 
   const fetchProfileData = async () => {
     try {
-      // Fetch profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // Parallel fetch core data for speed
+      const [profileResult, postsResult, docsResult, userPointsResult, friendsCountResult] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('posts').select('*, profiles(*)').eq('user_id', userId).eq('visibility', 'public').neq('category', 'ghost').order('created_at', { ascending: false }),
+        supabase.from('documents').select('*').eq('user_id', userId).eq('visibility', 'public').order('created_at', { ascending: false }),
+        supabase.from('user_points').select('total_points').eq('user_id', userId).maybeSingle(),
+        supabase.from('friend_requests').select('*', { count: 'exact', head: true }).or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).eq('status', 'accepted'),
+      ]);
 
-      setProfile(profileData);
+      setProfile(profileResult.data);
+      const postsData = postsResult.data || [];
+      setPosts(postsData);
+      setDocuments(docsResult.data || []);
+      setFriendsCount(friendsCountResult.count || 0);
 
-      // Fetch user's posts with profile info
-      const { data: postsData } = await supabase
-        .from('posts')
-        .select('*, profiles(*)')
-        .eq('user_id', userId)
-        .eq('visibility', 'public')
-        .order('created_at', { ascending: false });
-
-      setPosts(postsData || []);
-
-      // Fetch user's documents
-      const { data: docsData } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('visibility', 'public')
-        .order('created_at', { ascending: false });
-
-      setDocuments(docsData || []);
-
-      // Fetch adventure points
-      const { data: userPoints } = await supabase
-        .from('user_points')
-        .select('total_points')
-        .eq('user_id', userId)
-        .single();
-
-      if (userPoints) {
+      if (userPointsResult.data) {
+        const pts = userPointsResult.data.total_points;
         setAdventurePoints({
-          challenges: Math.floor(userPoints.total_points * 0.4),
-          discovery: Math.floor(userPoints.total_points * 0.35),
-          explore: Math.floor(userPoints.total_points * 0.25),
-          total: userPoints.total_points
+          challenges: Math.floor(pts * 0.4),
+          discovery: Math.floor(pts * 0.35),
+          explore: Math.floor(pts * 0.25),
+          total: pts
         });
       }
 
-      // Fetch likes count for each post
-      if (postsData) {
+      // Batch fetch likes counts
+      if (postsData.length > 0) {
+        const postIds = postsData.map(p => p.id);
+        const { data: allLikes } = await supabase.from('likes').select('post_id').in('post_id', postIds);
         const counts: Record<string, number> = {};
-        for (const post of postsData) {
-          const { count } = await supabase
-            .from('likes')
-            .select('*', { count: 'exact', head: true })
-            .eq('post_id', post.id);
-          counts[post.id] = count || 0;
-        }
+        postIds.forEach(id => { counts[id] = 0; });
+        allLikes?.forEach(like => { counts[like.post_id] = (counts[like.post_id] || 0) + 1; });
         setLikesCount(counts);
       }
 
       if (currentUser) {
-        // Check if following
-        const { data: followData } = await supabase
-          .from('follows')
-          .select('*')
-          .eq('follower_id', currentUser.id)
-          .eq('following_id', userId)
-          .single();
+        const [followResult, savedResult, likesResult, friendResult] = await Promise.all([
+          supabase.from('follows').select('id').eq('follower_id', currentUser.id).eq('following_id', userId).maybeSingle(),
+          supabase.from('saved').select('post_id').eq('user_id', currentUser.id),
+          supabase.from('likes').select('post_id').eq('user_id', currentUser.id),
+          supabase.from('friend_requests').select('*').or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`).maybeSingle(),
+        ]);
 
-        setIsFollowing(!!followData);
+        setIsFollowing(!!followResult.data);
+        setSaved(savedResult.data?.map(s => s.post_id) || []);
+        setLikes(likesResult.data || []);
 
-        // Fetch saved posts
-        const { data: savedData } = await supabase
-          .from('saved')
-          .select('post_id')
-          .eq('user_id', currentUser.id);
-
-        setSaved(savedData?.map(s => s.post_id) || []);
-
-        // Fetch user's likes
-        const { data: likesData } = await supabase
-          .from('likes')
-          .select('post_id')
-          .eq('user_id', currentUser.id);
-
-        setLikes(likesData || []);
-
-        // Check friend status
-        const { data: friendData } = await supabase
-          .from('friend_requests')
-          .select('*')
-          .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`)
-          .single();
-
+        const friendData = friendResult.data;
         if (friendData) {
           if (friendData.status === 'accepted') {
             setIsFriend(true);
             setFriendRequestStatus('accepted');
           } else if (friendData.status === 'pending') {
-            if (friendData.sender_id === currentUser.id) {
-              setFriendRequestStatus('pending_sent');
-            } else {
-              setFriendRequestStatus('pending_received');
-            }
+            setFriendRequestStatus(friendData.sender_id === currentUser.id ? 'pending_sent' : 'pending_received');
           }
         } else {
           setIsFriend(false);
           setFriendRequestStatus('none');
         }
       }
-
-      // Get friends count (accepted friend requests)
-      const { count: friendsCountData } = await supabase
-        .from('friend_requests')
-        .select('*', { count: 'exact', head: true })
-        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-        .eq('status', 'accepted');
-
-      setFriendsCount(friendsCountData || 0);
     } catch (error) {
       console.error('Error fetching profile:', error);
       toast.error('Failed to load profile');
