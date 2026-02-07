@@ -1,14 +1,17 @@
+import { Sun, CalendarDays, CalendarRange, Target, Star, Sparkles } from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
+
 // Lumatha Default To-Dos - Clean, positive, universal for all ages
 
 export type TodoCategory = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'lifetime' | 'custom';
 
-export const TODO_CATEGORIES = [
-  { id: 'daily' as TodoCategory, label: 'Daily', emoji: '☀️', resetPeriod: '24 hours' },
-  { id: 'weekly' as TodoCategory, label: 'Weekly', emoji: '📅', resetPeriod: '7 days' },
-  { id: 'monthly' as TodoCategory, label: 'Monthly', emoji: '🗓️', resetPeriod: '1 month' },
-  { id: 'yearly' as TodoCategory, label: 'Yearly', emoji: '🎯', resetPeriod: '1 year' },
-  { id: 'lifetime' as TodoCategory, label: 'Lifetime', emoji: '⭐', resetPeriod: 'Never' },
-  { id: 'custom' as TodoCategory, label: 'Custom', emoji: '✨', resetPeriod: 'User defined' },
+export const TODO_CATEGORIES: { id: TodoCategory; label: string; icon: LucideIcon; resetPeriod: string }[] = [
+  { id: 'daily', label: 'Daily', icon: Sun, resetPeriod: '24 hours' },
+  { id: 'weekly', label: 'Weekly', icon: CalendarDays, resetPeriod: '7 days' },
+  { id: 'monthly', label: 'Monthly', icon: CalendarRange, resetPeriod: '1 month' },
+  { id: 'yearly', label: 'Yearly', icon: Target, resetPeriod: '1 year' },
+  { id: 'lifetime', label: 'Lifetime', icon: Star, resetPeriod: 'Never' },
+  { id: 'custom', label: 'Custom', icon: Sparkles, resetPeriod: 'User defined' },
 ];
 
 export const DEFAULT_DAILY_TODOS = [

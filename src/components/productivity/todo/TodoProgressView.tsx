@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Calendar, TrendingUp, Award, Target } from 'lucide-react';
+import { ArrowLeft, Calendar, TrendingUp, Award, Target, Flame, Trophy, Gem, Medal, Sprout } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TodoProgressViewProps {
@@ -109,13 +109,13 @@ export function TodoProgressView({ onBack }: TodoProgressViewProps) {
     return 'bg-primary';
   };
 
-  const getMilestone = () => {
-    if (streak >= 365) return { icon: '🏆', label: 'Legendary', color: 'text-yellow-400' };
-    if (streak >= 100) return { icon: '💎', label: 'Diamond', color: 'text-cyan-400' };
-    if (streak >= 30) return { icon: '🥇', label: 'Gold', color: 'text-yellow-500' };
-    if (streak >= 7) return { icon: '🥈', label: 'Silver', color: 'text-gray-300' };
-    if (streak >= 3) return { icon: '🥉', label: 'Bronze', color: 'text-orange-400' };
-    return { icon: '🌱', label: 'Starting', color: 'text-green-400' };
+  const getMilestone = (): { icon: React.ReactNode; label: string; color: string } => {
+    if (streak >= 365) return { icon: <Trophy className="w-6 h-6" />, label: 'Legendary', color: 'text-yellow-400' };
+    if (streak >= 100) return { icon: <Gem className="w-6 h-6" />, label: 'Diamond', color: 'text-cyan-400' };
+    if (streak >= 30) return { icon: <Medal className="w-6 h-6" />, label: 'Gold', color: 'text-yellow-500' };
+    if (streak >= 7) return { icon: <Medal className="w-6 h-6" />, label: 'Silver', color: 'text-gray-300' };
+    if (streak >= 3) return { icon: <Award className="w-6 h-6" />, label: 'Bronze', color: 'text-orange-400' };
+    return { icon: <Sprout className="w-6 h-6" />, label: 'Starting', color: 'text-green-400' };
   };
 
   const milestone = getMilestone();
@@ -135,8 +135,8 @@ export function TodoProgressView({ onBack }: TodoProgressViewProps) {
           {/* Streak & Milestone */}
           <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-primary/10 to-secondary/10">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-2xl">
-                🔥
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                <Flame className="w-7 h-7 text-white" />
               </div>
               <div>
                 <p className="text-3xl font-bold">{streak}</p>
@@ -145,7 +145,7 @@ export function TodoProgressView({ onBack }: TodoProgressViewProps) {
             </div>
             <div className="text-right">
               <div className="flex items-center gap-2">
-                <span className="text-2xl">{milestone.icon}</span>
+                <span className={milestone.color}>{milestone.icon}</span>
                 <span className={cn("font-semibold", milestone.color)}>{milestone.label}</span>
               </div>
               <p className="text-xs text-muted-foreground">Current Level</p>

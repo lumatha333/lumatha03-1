@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { Database } from '@/integrations/supabase/types';
 import { EducationComments } from './EducationComments';
 import { EducationDocCard, EducationVideoCard } from './EducationContentCard';
+import { EmptyDocuments, EmptyVideos, EmptySaved } from '@/components/EmptyStates';
 
 type Document = Database['public']['Tables']['documents']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
@@ -238,7 +239,7 @@ export function EducationModule() {
           {publicSubTab === 'docs' ? (
             <div className="space-y-3">
               {filteredPublicDocs.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground"><FileText className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>No public documents</p></div>
+                <EmptyDocuments />
               ) : filteredPublicDocs.map(doc => (
                 <EducationDocCard
                   key={doc.id} doc={doc}
@@ -255,7 +256,7 @@ export function EducationModule() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {filteredPublicVideos.length === 0 ? (
-                <div className="col-span-full text-center py-12 text-muted-foreground"><Video className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>No public videos</p></div>
+                <EmptyVideos />
               ) : filteredPublicVideos.map(video => (
                 <EducationVideoCard
                   key={video.id} video={video}
