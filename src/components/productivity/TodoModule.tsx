@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Check, Plus, RotateCcw, Flame, Trash2, History, Bell } from 'lucide-react';
+import { Check, Plus, RotateCcw, Flame, Trash2, History, Bell, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TODO_CATEGORIES, TodoCategory, getDefaultTodos } from '@/data/defaultTodos';
 import { TodoFolderView } from './todo/TodoFolderView';
@@ -191,11 +191,12 @@ export function TodoModule() {
           const total = getTotalCount(cat.id);
           const progress = total > 0 ? (completed / total) * 100 : 0;
           const isActive = activeCategory === cat.id;
+          const CatIcon = cat.icon;
           return (
             <Card key={cat.id} className={cn("cursor-pointer transition-all hover:shadow-lg", isActive && "ring-2 ring-primary shadow-lg")} onClick={() => setActiveCategory(cat.id)}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">{cat.emoji}</span>
+                  <CatIcon className={cn("w-5 h-5", isActive ? "text-primary" : "text-muted-foreground")} />
                   <span className="font-medium text-sm">{cat.label}</span>
                 </div>
                 <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-2">
@@ -209,7 +210,7 @@ export function TodoModule() {
         <Card className="cursor-pointer transition-all hover:shadow-lg border-dashed" onClick={() => setView('custom')}>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">📁</span>
+              <Folder className="w-5 h-5 text-muted-foreground" />
               <span className="font-medium text-sm">Custom</span>
             </div>
             <p className="text-xs text-muted-foreground">{customFolders.length} folders</p>
@@ -222,7 +223,7 @@ export function TodoModule() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
-              <span>{TODO_CATEGORIES.find(c => c.id === activeCategory)?.emoji}</span>
+              {(() => { const ActiveIcon = TODO_CATEGORIES.find(c => c.id === activeCategory)?.icon; return ActiveIcon ? <ActiveIcon className="w-5 h-5 text-primary" /> : null; })()}
               {TODO_CATEGORIES.find(c => c.id === activeCategory)?.label}
             </CardTitle>
             <Button variant="ghost" size="sm" onClick={() => resetCategory(activeCategory)}>

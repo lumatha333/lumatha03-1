@@ -1,7 +1,10 @@
 import { ReactNode, useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Menu, ArrowLeft } from 'lucide-react';
+import { 
+  Menu, ArrowLeft, Home, BookOpen, MessageSquare, Gamepad2, 
+  Mountain, Heart, ShoppingCart, Settings 
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
@@ -11,21 +14,21 @@ import { DesktopMessagesPanel } from './DesktopMessagesPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import lumathaLogo from '@/assets/lumatha-logo.png';
+import { type LucideIcon } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-// Colorful icons for sidebar
-const menuItems = [
-  { title: 'Home', url: '/', emoji: '🏠', color: 'text-blue-500', desc: 'Social + Explore' },
-  { title: 'Learn', url: '/education', emoji: '📚', color: 'text-purple-500', desc: 'Docs, Images, Videos' },
-  { title: 'Messages', url: '/chat', emoji: '💬', color: 'text-green-500', desc: 'Chat + VC + Groups' },
-  { title: 'FunPun', url: '/funpun', emoji: '🎮', color: 'text-orange-500', desc: 'Games for Fresh Mind' },
-  { title: 'Adventure', url: '/music-adventure', emoji: '🏔️', color: 'text-teal-500', desc: 'Challenges + Discover + Travel' },
-  { title: 'Random Connect', url: '/random-connect', emoji: '💙', color: 'text-blue-400', desc: 'Share a moment, not a profile' },
-  { title: 'Marketplace', url: '/marketplace', emoji: '🛒', color: 'text-pink-500', desc: 'Buy/Sell/Local Business' },
-  { title: 'Settings', url: '/settings', emoji: '⚙️', color: 'text-gray-500', desc: 'Controls + Privacy' },
+const menuItems: { title: string; url: string; icon: LucideIcon; desc: string }[] = [
+  { title: 'Home', url: '/', icon: Home, desc: 'Social + Explore' },
+  { title: 'Learn', url: '/education', icon: BookOpen, desc: 'Docs, Images, Videos' },
+  { title: 'Messages', url: '/chat', icon: MessageSquare, desc: 'Chat + VC + Groups' },
+  { title: 'FunPun', url: '/funpun', icon: Gamepad2, desc: 'Games for Fresh Mind' },
+  { title: 'Adventure', url: '/music-adventure', icon: Mountain, desc: 'Challenges + Discover' },
+  { title: 'Random Connect', url: '/random-connect', icon: Heart, desc: 'Share a moment' },
+  { title: 'Marketplace', url: '/marketplace', icon: ShoppingCart, desc: 'Buy/Sell/Local' },
+  { title: 'Settings', url: '/settings', icon: Settings, desc: 'Controls + Privacy' },
 ];
 
 function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => boolean; onNavigate: (url: string) => void }) {
@@ -56,23 +59,30 @@ function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => b
           <span className="text-2xl font-bold gradient-text tracking-tight">Lumatha</span>
         </div>
         <nav className="p-2 space-y-1">
-          {menuItems.map((item) => (
-            <button
-              key={item.title}
-              onClick={() => handleItemClick(item.url)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${
-                isActive(item.url) 
-                  ? 'bg-primary/20 text-primary' 
-                  : 'hover:bg-muted/50 text-foreground'
-              }`}
-            >
-              <span className={`text-2xl ${item.color}`}>{item.emoji}</span>
-              <div className="flex-1 text-left">
-                <span className="font-medium block text-sm">{item.title}</span>
-                <span className="text-[10px] text-muted-foreground">{item.desc}</span>
-              </div>
-            </button>
-          ))}
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.title}
+                onClick={() => handleItemClick(item.url)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${
+                  isActive(item.url) 
+                    ? 'bg-primary/20 text-primary' 
+                    : 'hover:bg-muted/50 text-foreground'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  isActive(item.url) ? 'bg-primary/20' : 'bg-muted/30'
+                }`}>
+                  <Icon className={`w-[18px] h-[18px] ${isActive(item.url) ? 'text-primary' : 'text-muted-foreground'}`} />
+                </div>
+                <div className="flex-1 text-left">
+                  <span className="font-medium block text-sm">{item.title}</span>
+                  <span className="text-[10px] text-muted-foreground">{item.desc}</span>
+                </div>
+              </button>
+            );
+          })}
         </nav>
       </SheetContent>
     </Sheet>
@@ -87,7 +97,6 @@ function LayoutContent({ children }: LayoutProps) {
   const isMobile = useIsMobile();
   const [isAuthPage, setIsAuthPage] = useState(false);
   
-  // Scroll hide/show state
   const [headerVisible, setHeaderVisible] = useState(true);
   const lastScrollY = useRef(0);
   const ticking = useRef(false);
@@ -103,50 +112,32 @@ function LayoutContent({ children }: LayoutProps) {
   const handleScroll = useCallback(() => {
     const currentScrollY = window.scrollY;
     const scrollDiff = currentScrollY - lastScrollY.current;
-    
     if (Math.abs(scrollDiff) < 5) return;
-    
-    if (currentScrollY < 50) {
-      setHeaderVisible(true);
-    } else if (scrollDiff > 0 && currentScrollY > 50) {
-      setHeaderVisible(false);
-    } else if (scrollDiff < 0) {
-      setHeaderVisible(true);
-    }
-    
+    if (currentScrollY < 50) setHeaderVisible(true);
+    else if (scrollDiff > 0 && currentScrollY > 50) setHeaderVisible(false);
+    else if (scrollDiff < 0) setHeaderVisible(true);
     lastScrollY.current = currentScrollY;
   }, []);
 
   useEffect(() => {
     const onScroll = () => {
       if (!ticking.current) {
-        window.requestAnimationFrame(() => {
-          handleScroll();
-          ticking.current = false;
-        });
+        window.requestAnimationFrame(() => { handleScroll(); ticking.current = false; });
         ticking.current = true;
       }
     };
-
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, [handleScroll]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session && !isAuthPage) {
-        navigate('/auth');
-      } else if (session && isAuthPage) {
-        navigate('/');
-      }
+      if (!session && !isAuthPage) navigate('/auth');
+      else if (session && isAuthPage) navigate('/');
     });
-
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session && !isAuthPage) {
-        navigate('/auth');
-      }
+      if (!session && !isAuthPage) navigate('/auth');
     });
-
     return () => subscription.unsubscribe();
   }, [navigate, isAuthPage]);
 
@@ -155,30 +146,16 @@ function LayoutContent({ children }: LayoutProps) {
     return location.pathname.startsWith(path);
   };
 
-  const handleLogoClick = () => {
-    navigate('/');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleMenuClick = (url: string) => {
-    navigate(url);
-    setOpen(false);
-  };
-
-  const handleBack = () => {
-    navigate(-1);
-  };
+  const handleLogoClick = () => { navigate('/'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const handleMenuClick = (url: string) => { navigate(url); setOpen(false); };
+  const handleBack = () => { navigate(-1); };
 
   const isFullScreenPage = location.pathname.startsWith('/chat/') && location.pathname !== '/chat';
-  const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || 
-                        location.pathname.startsWith('/profile/');
+  const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || location.pathname.startsWith('/profile/');
   const showSubNav = isHomeSection;
-  const isSubSection = ['/create', '/private', '/notifications', '/search'].includes(location.pathname) || 
-                       location.pathname.startsWith('/profile/');
+  const isSubSection = ['/create', '/private', '/notifications', '/search'].includes(location.pathname) || location.pathname.startsWith('/profile/');
 
-  if (isAuthPage) {
-    return <>{children}</>;
-  }
+  if (isAuthPage) return <>{children}</>;
 
   if (isFullScreenPage) {
     return (
@@ -204,12 +181,7 @@ function LayoutContent({ children }: LayoutProps) {
             
             <div className="relative flex items-center gap-3 p-4 border-b border-border/30">
               <div className="relative">
-                <img 
-                  src={lumathaLogo} 
-                  alt="Lumatha" 
-                  className="w-12 h-12 rounded-full object-contain"
-                  style={{ boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)' }}
-                />
+                <img src={lumathaLogo} alt="Lumatha" className="w-12 h-12 rounded-full object-contain" style={{ boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)' }} />
               </div>
               <span className="text-xl font-bold gradient-text tracking-tight">Lumatha</span>
             </div>
@@ -218,36 +190,39 @@ function LayoutContent({ children }: LayoutProps) {
               <SidebarGroupLabel className="text-[10px] text-muted-foreground/70 px-4">Main Menu</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="px-2">
-                  {menuItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
-                        isActive={isActive(item.url)}
-                        onClick={() => handleMenuClick(item.url)}
-                        className={`cursor-pointer py-2.5 rounded-xl ${
-                          isActive(item.url) 
-                            ? 'bg-gradient-to-r from-primary/20 to-secondary/10 shadow-lg shadow-primary/10' 
-                            : 'hover:bg-gradient-to-r hover:from-primary/10 hover:to-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 w-full">
-                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                  {menuItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton 
+                          isActive={isActive(item.url)}
+                          onClick={() => handleMenuClick(item.url)}
+                          className={`cursor-pointer py-2.5 rounded-xl ${
                             isActive(item.url) 
-                              ? 'bg-gradient-to-br from-primary/30 to-secondary/20' 
-                              : 'bg-muted/30'
-                          }`}>
-                            <span className={`text-lg ${item.color}`}>{item.emoji}</span>
+                              ? 'bg-gradient-to-r from-primary/20 to-secondary/10 shadow-lg shadow-primary/10' 
+                              : 'hover:bg-gradient-to-r hover:from-primary/10 hover:to-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 w-full">
+                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                              isActive(item.url) 
+                                ? 'bg-gradient-to-br from-primary/30 to-secondary/20' 
+                                : 'bg-muted/30'
+                            }`}>
+                              <Icon className={`w-[18px] h-[18px] ${isActive(item.url) ? 'text-primary' : 'text-muted-foreground'}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className={`font-medium block text-sm ${isActive(item.url) ? 'text-primary' : ''}`}>{item.title}</span>
+                              <span className="text-[9px] text-muted-foreground block truncate">{item.desc}</span>
+                            </div>
+                            {isActive(item.url) && (
+                              <div className="w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary" />
+                            )}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <span className={`font-medium block text-sm ${isActive(item.url) ? 'text-primary' : ''}`}>{item.title}</span>
-                            <span className="text-[9px] text-muted-foreground block truncate">{item.desc}</span>
-                          </div>
-                          {isActive(item.url) && (
-                            <div className="w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary" />
-                          )}
-                        </div>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -259,12 +234,7 @@ function LayoutContent({ children }: LayoutProps) {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
-        {/* Header */}
-        <header 
-          className={`sticky z-40 glass-card border-b border-border ${
-            headerVisible ? 'top-0 opacity-100' : '-top-16 opacity-0'
-          }`}
-        >
+        <header className={`sticky z-40 glass-card border-b border-border ${headerVisible ? 'top-0 opacity-100' : '-top-16 opacity-0'}`}>
           <div className="flex items-center justify-between gap-2 px-3 py-2">
             <div className="flex items-center gap-1.5">
               {isMobile && isSubSection ? (
@@ -275,27 +245,19 @@ function LayoutContent({ children }: LayoutProps) {
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
             </div>
-
-            <Link 
-              to="/" 
-              className="flex items-center" 
-              onClick={handleLogoClick}
-            >
+            <Link to="/" className="flex items-center" onClick={handleLogoClick}>
               <span className="font-bold text-xl gradient-text whitespace-nowrap tracking-tight">Lumatha</span>
             </Link>
           </div>
-          
           {showSubNav && <SubNavigation visible={headerVisible} />}
         </header>
 
-        {/* Content Area */}
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 overflow-y-auto p-2 md:p-3 min-w-0">
             <div className="max-w-lg xl:max-w-xl mx-auto">
               {children}
             </div>
           </div>
-
           {!isMobile && location.pathname === '/' && (
             <aside className="hidden lg:flex w-[400px] xl:w-[440px] border-l border-border flex-col overflow-hidden shrink-0">
               <DesktopMessagesPanel />

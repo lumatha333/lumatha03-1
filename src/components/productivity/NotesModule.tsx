@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Plus, Search, Folder, FolderPlus, StickyNote, Trash2, Edit2, Bookmark, BookmarkCheck, ArrowLeft } from 'lucide-react';
 import { RichTextEditor } from './RichTextEditor';
+import { EmptyNotes, EmptySaved, EmptyFolders } from '@/components/EmptyStates';
 
 interface Note { id: string; title: string; content: string; folder?: string; pinned?: boolean; saved?: boolean; created_at: string; updated_at: string; }
 interface NoteFolder { id: string; name: string; }
@@ -136,7 +137,7 @@ export function NotesModule() {
         <TabsContent value="all" className="mt-4 space-y-4">
           <div className="flex justify-end"><Button onClick={() => openNoteDialog()}><Plus className="w-4 h-4 mr-1" />New Note</Button></div>
           {filteredNotes.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground"><StickyNote className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>No notes yet</p></div>
+            <EmptyNotes />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {filteredNotes.map(note => (
@@ -161,7 +162,7 @@ export function NotesModule() {
                 </Dialog>
               </div>
               {folders.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground"><Folder className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>No folders yet</p></div>
+                <EmptyFolders />
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {folders.map(folder => (
@@ -184,7 +185,7 @@ export function NotesModule() {
         </TabsContent>
 
         <TabsContent value="saved" className="mt-4">
-          {filteredNotes.length === 0 ? (<div className="text-center py-12 text-muted-foreground"><Bookmark className="w-12 h-12 mx-auto mb-3 opacity-50" /><p>No saved notes</p></div>) : (<div className="grid gap-3 sm:grid-cols-2">{filteredNotes.map(note => (<Card key={note.id} className="cursor-pointer hover:border-primary/50" onClick={() => setViewingNote(note)}><CardHeader className="p-3"><CardTitle className="text-sm">{note.title}</CardTitle></CardHeader></Card>))}</div>)}
+          {filteredNotes.length === 0 ? (<EmptySaved />) : (<div className="grid gap-3 sm:grid-cols-2">{filteredNotes.map(note => (<Card key={note.id} className="cursor-pointer hover:border-primary/50" onClick={() => setViewingNote(note)}><CardHeader className="p-3"><CardTitle className="text-sm">{note.title}</CardTitle></CardHeader></Card>))}</div>)}
         </TabsContent>
       </Tabs>
 
