@@ -88,13 +88,22 @@ export function TodoModule() {
     if (saved) setStreak(JSON.parse(saved).count || 0);
   };
 
+  const [celebratingId, setCelebratingId] = useState<string | null>(null);
+
   const toggleTodo = (category: TodoCategory, todoId: string) => {
     const updated = { ...todos };
     const idx = updated[category].findIndex(t => t.id === todoId);
     if (idx === -1) return;
-    updated[category][idx].completed = !updated[category][idx].completed;
+    const wasCompleted = updated[category][idx].completed;
+    updated[category][idx].completed = !wasCompleted;
     setTodos(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    
+    // Trigger celebration when completing (not uncompleting)
+    if (!wasCompleted) {
+      setCelebratingId(todoId);
+      setTimeout(() => setCelebratingId(null), 900);
+    }
   };
 
   const addTodo = () => {
@@ -232,12 +241,50 @@ export function TodoModule() {
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
-          {todos[activeCategory].map(todo => (
-            <div key={todo.id} className={cn("group flex items-center gap-3 p-3 rounded-xl border transition-all", todo.completed ? "bg-primary/5 border-primary/20" : "border-border")}>
-              <button onClick={() => toggleTodo(activeCategory, todo.id)} className={cn("w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0", todo.completed ? "bg-primary border-primary" : "border-muted-foreground")}>
-                {todo.completed && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
+          {todos[activeCategory].map(todo => {
+            const isCelebrating = celebratingId === todo.id;
+            return (
+            <div key={todo.id} className={cn(
+              "group flex items-center gap-3 p-3 rounded-xl border transition-all duration-300",
+              todo.completed ? "bg-primary/5 border-primary/20" : "border-border",
+              isCelebrating && "animate-task-complete"
+            )}>
+              <button 
+                onClick={() => toggleTodo(activeCategory, todo.id)} 
+                className={cn(
+                  "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300",
+                  todo.completed ? "bg-primary border-primary scale-110" : "border-muted-foreground hover:border-primary/60",
+                  isCelebrating && "animate-checkbox-fill"
+                )}
+              >
+                {todo.completed && (
+                  <svg className="w-3.5 h-3.5 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 13l4 4L19 7" className={isCelebrating ? "animate-checkmark-draw" : ""} style={isCelebrating ? { strokeDasharray: 24, strokeDashoffset: 0 } : {}} />
+                  </svg>
+                )}
               </button>
-              <span className={cn("flex-1 text-sm", todo.completed && "line-through text-muted-foreground")}>{todo.text}</span>
+              <span className={cn("flex-1 text-sm transition-all duration-300", todo.completed && "line-through text-muted-foreground")}>{todo.text}</span>
+              
+              {/* Confetti burst */}
+              {isCelebrating && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+                  {[...Array(8)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="absolute w-1.5 h-1.5 rounded-full animate-confetti-burst"
+                      style={{
+                        left: '12px',
+                        top: '50%',
+                        backgroundColor: ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(45, 100%, 60%)', 'hsl(330, 80%, 60%)', 'hsl(150, 70%, 50%)', 'hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(45, 100%, 60%)'][i],
+                        animationDelay: `${i * 40}ms`,
+                        '--confetti-x': `${Math.cos((i / 8) * Math.PI * 2) * 40}px`,
+                        '--confetti-y': `${Math.sin((i / 8) * Math.PI * 2) * 25}px`,
+                      } as React.CSSProperties}
+                    />
+                  ))}
+                </div>
+              )}
+              
               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openReminder(todo.id, todo.text)}>
                   <Bell className={cn("w-3 h-3", reminders[todo.id] ? "text-primary" : "text-muted-foreground")} />
@@ -247,7 +294,8 @@ export function TodoModule() {
                 </Button>
               </div>
             </div>
-          ))}
+            );
+          })}
           <div className="flex gap-2 pt-2">
             <Input placeholder="Add a new task..." value={newTodo} onChange={(e) => setNewTodo(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTodo()} />
             <Button onClick={addTodo} size="icon"><Plus className="w-4 h-4" /></Button>

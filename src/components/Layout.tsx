@@ -90,6 +90,60 @@ function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => b
   );
 }
 
+function DesktopSidebar({ isActive, onNavigate }: { isActive: (path: string) => boolean; onNavigate: (url: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div 
+      className={`sticky top-0 h-screen shrink-0 border-r border-border/30 transition-all duration-300 ease-in-out ${expanded ? 'w-[280px]' : 'w-[72px]'}`}
+      style={{ background: 'linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(220 50% 8%) 100%)' }}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
+      <div className="relative h-full overflow-hidden flex flex-col">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none" />
+        
+        <div className="relative flex items-center gap-3 p-3 border-b border-border/30 h-14">
+          <img src={lumathaLogo} alt="Lumatha" className="w-10 h-10 rounded-full object-contain shrink-0" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />
+          {expanded && <span className="text-lg font-bold gradient-text tracking-tight whitespace-nowrap">Lumatha</span>}
+        </div>
+
+        <nav className="relative flex-1 p-2 space-y-1 overflow-y-auto">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.url);
+            return (
+              <button
+                key={item.title}
+                onClick={() => onNavigate(item.url)}
+                className={`w-full flex items-center gap-3 rounded-xl transition-all duration-200 ${expanded ? 'px-3 py-2.5' : 'px-0 py-2.5 justify-center'} ${
+                  active 
+                    ? 'bg-gradient-to-r from-primary/20 to-secondary/10 shadow-lg shadow-primary/10' 
+                    : 'hover:bg-primary/10'
+                }`}
+                title={!expanded ? item.title : undefined}
+              >
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-gradient-to-br from-primary/30 to-secondary/20' : 'bg-muted/30'}`}>
+                  <Icon className={`w-[18px] h-[18px] ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+                </div>
+                {expanded && (
+                  <div className="flex-1 min-w-0 text-left">
+                    <span className={`font-medium block text-sm ${active ? 'text-primary' : ''}`}>{item.title}</span>
+                    <span className="text-[9px] text-muted-foreground block truncate">{item.desc}</span>
+                  </div>
+                )}
+                {expanded && active && (
+                  <div className="w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary shrink-0" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    </div>
+  );
+}
+
 function LayoutContent({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -171,93 +225,34 @@ function LayoutContent({ children }: LayoutProps) {
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
       
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar - Mini by default */}
       {!isMobile && (
-        <Sidebar className="border-r border-border/50 sticky top-0 h-screen w-72 xl:w-80 shrink-0">
-          <SidebarContent className="relative overflow-hidden" style={{
-            background: 'linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(220 50% 8%) 100%)'
-          }}>
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none" />
-            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary/20 to-transparent pointer-events-none" />
-            
-            <div className="relative flex items-center gap-3 p-4 border-b border-border/30">
-              <div className="relative">
-                <img src={lumathaLogo} alt="Lumatha" className="w-12 h-12 rounded-full object-contain" style={{ boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)' }} />
-              </div>
-              <span className="text-xl font-bold gradient-text tracking-tight">Lumatha</span>
-            </div>
-
-            <SidebarGroup className="relative">
-              <SidebarGroupLabel className="text-[10px] text-muted-foreground/70 px-4">Main Menu</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu className="px-2">
-                  {menuItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton 
-                          isActive={isActive(item.url)}
-                          onClick={() => handleMenuClick(item.url)}
-                          className={`cursor-pointer py-2.5 rounded-xl ${
-                            isActive(item.url) 
-                              ? 'bg-gradient-to-r from-primary/20 to-secondary/10 shadow-lg shadow-primary/10' 
-                              : 'hover:bg-gradient-to-r hover:from-primary/10 hover:to-transparent'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 w-full">
-                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                              isActive(item.url) 
-                                ? 'bg-gradient-to-br from-primary/30 to-secondary/20' 
-                                : 'bg-muted/30'
-                            }`}>
-                              <Icon className={`w-[18px] h-[18px] ${isActive(item.url) ? 'text-primary' : 'text-muted-foreground'}`} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <span className={`font-medium block text-sm ${isActive(item.url) ? 'text-primary' : ''}`}>{item.title}</span>
-                              <span className="text-[9px] text-muted-foreground block truncate">{item.desc}</span>
-                            </div>
-                            {isActive(item.url) && (
-                              <div className="w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary" />
-                            )}
-                          </div>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-            
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-primary/5 to-transparent pointer-events-none" />
-          </SidebarContent>
-        </Sidebar>
+        <DesktopSidebar isActive={isActive} onNavigate={handleMenuClick} />
       )}
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
         <OfflineIndicator />
-        <header className={`sticky z-40 glass-card border-b border-border transition-all duration-300 ${headerVisible ? 'top-0 opacity-100' : '-top-16 opacity-0'}`}>
-          <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <div className="flex items-center gap-1.5">
+        <header className={`sticky z-40 glass-card border-b border-border/40 transition-all duration-300 ${headerVisible ? 'top-0 opacity-100' : '-top-14 opacity-0'}`}>
+          <div className="flex items-center justify-between h-12 px-2">
+            <div className="flex items-center">
               {isMobile && isSubSection ? (
                 <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8">
-                  <ArrowLeft className="h-5 w-5" />
+                  <ArrowLeft className="h-4.5 w-4.5" />
                 </Button>
               ) : isMobile ? (
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => window.location.reload()}
-                title="Refresh"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => window.location.reload()}
+              title="Refresh"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
           </div>
           {showSubNav && <SubNavigation visible={headerVisible} />}
         </header>
