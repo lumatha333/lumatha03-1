@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState, useRef, useCallback } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Menu, ArrowLeft, Home, BookOpen, MessageSquare, Gamepad2, 
@@ -8,7 +8,7 @@ import {
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { Button } from '@/components/ui/button';
 import { BackgroundOrnaments } from '@/components/BackgroundOrnaments';
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
+import { SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { SubNavigation } from '@/components/SubNavigation';
 import { DesktopMessagesPanel } from './DesktopMessagesPanel';
@@ -46,10 +46,7 @@ function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => b
         <Button 
           variant="ghost" 
           size="icon" 
-          className="h-9 w-9 relative"
-          style={{
-            boxShadow: '0 0 15px 3px hsl(var(--primary) / 0.4), 0 0 30px 5px hsl(var(--primary) / 0.2)'
-          }}
+          className="h-8 w-8"
         >
           <Menu className="h-5 w-5 text-primary" />
         </Button>
@@ -103,8 +100,8 @@ function DesktopSidebar({ isActive, onNavigate }: { isActive: (path: string) => 
       <div className="relative h-full overflow-hidden flex flex-col">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none" />
         
-        <div className="relative flex items-center gap-3 p-3 border-b border-border/30 h-14">
-          <img src={lumathaLogo} alt="Lumatha" className="w-10 h-10 rounded-full object-contain shrink-0" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />
+        <div className="relative flex items-center gap-3 p-3 border-b border-border/30 h-[52px]">
+          <img src={lumathaLogo} alt="Lumatha" className="w-9 h-9 rounded-full object-contain shrink-0" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />
           {expanded && <span className="text-lg font-bold gradient-text tracking-tight whitespace-nowrap">Lumatha</span>}
         </div>
 
@@ -201,7 +198,6 @@ function LayoutContent({ children }: LayoutProps) {
     return location.pathname.startsWith(path);
   };
 
-  const handleLogoClick = () => { navigate('/'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const handleMenuClick = (url: string) => { navigate(url); setOpen(false); };
   const handleBack = () => { navigate(-1); };
 
@@ -225,7 +221,7 @@ function LayoutContent({ children }: LayoutProps) {
     <div className="min-h-screen w-full relative flex">
       <BackgroundOrnaments />
       
-      {/* Desktop Sidebar - Mini by default */}
+      {/* Desktop Sidebar */}
       {!isMobile && (
         <DesktopSidebar isActive={isActive} onNavigate={handleMenuClick} />
       )}
@@ -233,19 +229,20 @@ function LayoutContent({ children }: LayoutProps) {
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col min-w-0">
         <OfflineIndicator />
+        {/* Single slim TopBar: 52px */}
         <header className={`sticky z-40 glass-card border-b border-border/40 transition-all duration-300 ${headerVisible ? 'top-0 opacity-100' : '-top-14 opacity-0'}`}>
-          <div className="flex items-center h-12 px-2 gap-1">
+          <div className="flex items-center h-[52px] px-3 gap-2">
             {/* Left: Hamburger or Back */}
             <div className="shrink-0">
               {isMobile && isSubSection ? (
                 <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8">
-                  <ArrowLeft className="h-4.5 w-4.5" />
+                  <ArrowLeft className="h-4 w-4" />
                 </Button>
               ) : isMobile ? (
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
             </div>
-            {/* Right: Inline SubNavigation icons */}
+            {/* Right: Navigation icons in same row */}
             {showSubNav && (
               <div className="flex-1 min-w-0">
                 <SubNavigation visible={headerVisible} />

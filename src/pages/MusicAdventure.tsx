@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { DailyDoseCard } from '@/components/feed/DailyDoseCard';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -1277,6 +1278,7 @@ export default function MusicAdventure() {
           openShare(mediaViewerData.id, mediaViewerData.title, `Check out ${mediaViewerData.title}`);
         }}
       />
+      <DailyDoseCard />
     </div>
   );
 }

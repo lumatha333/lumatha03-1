@@ -72,7 +72,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
   if (!visible) return null;
 
   return (
-    <div className="flex items-center justify-around flex-1">
+    <div className="flex items-center justify-end gap-4">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const active = isActive(tab);
@@ -83,22 +83,22 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
             key={tab.id}
             onClick={() => handleTabClick(tab)}
             className={cn(
-              "flex flex-col items-center justify-center px-2 py-1 rounded-lg transition-all relative gap-0.5",
+              "flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all relative",
               active
-                ? "text-primary bg-primary/10"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
             )}
             title={tab.label}
           >
             <div className="relative">
-              <Icon className={cn("w-[18px] h-[18px] transition-all", active ? "text-primary" : tab.color)} />
+              <Icon className={cn("w-[18px] h-[18px]", active ? "text-primary" : "")} />
               {showBadge && (
-                <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 animate-pulse">
+                <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </div>
-            <span className={cn("text-[8px] font-medium leading-none", active ? "text-primary" : "text-muted-foreground")}>
+            <span className={cn("text-[10px] font-medium hidden sm:inline", active ? "text-primary" : "text-muted-foreground")}>
               {tab.label}
             </span>
           </button>
