@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { DailyDoseCard } from '@/components/feed/DailyDoseCard';
 import { 
   Gamepad2, Shuffle, Mic, Brain, Target, Paintbrush, Users, Calendar,
   Play, Pause, Check, X, Volume2, VolumeX, RefreshCw, Trophy, Star,
@@ -1067,6 +1068,7 @@ export default function FunPun() {
           </CardContent>
         </Card>
       )}
+      <DailyDoseCard />
     </div>
   );
 }

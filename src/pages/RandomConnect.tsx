@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useEffect, useState } from 'react';
+import { DailyDoseCard } from '@/components/feed/DailyDoseCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRandomConnect } from '@/hooks/useRandomConnect';
 import { useRandomConnectMemories } from '@/hooks/useRandomConnectMemories';
@@ -194,6 +195,7 @@ const RandomConnect: React.FC = () => {
           />
         </TabsContent>
       </Tabs>
+      <DailyDoseCard />
     </div>
   );
 };

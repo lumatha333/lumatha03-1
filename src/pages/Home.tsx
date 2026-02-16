@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Globe, Users, MapPin, Ghost, ChevronDown, ChevronUp, Plus, Flag, Search } from 'lucide-react';
+import { Globe, Users, Ghost, ChevronDown, ChevronUp, Plus, Flag, Search } from 'lucide-react';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { ShortsViewer } from '@/components/ShortsViewer';
 import { CommentsDialog } from '@/components/CommentsDialog';
 import { ShareDialog } from '@/components/ShareDialog';
+import { FeedInterleaver } from '@/components/feed/FeedInterleaver';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
@@ -18,7 +19,6 @@ type Post = Database['public']['Tables']['posts']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type PostWithProfile = Post & { profiles?: Profile };
 
-// Feed category options - Global, Regional, Following, Ghost
 const feedCategories = [
   { id: 'global', icon: Globe, label: 'Global', desc: 'Worldwide posts', color: 'text-blue-500' },
   { id: 'regional', icon: Flag, label: 'Regional', desc: 'Your country', color: 'text-green-500' },
@@ -27,9 +27,7 @@ const feedCategories = [
 ];
 
 export default function Home() {
-  const [feedCategory, setFeedCategory] = useState(() => {
-    return localStorage.getItem('lumatha_feed_category') || 'global';
-  });
+  const [feedCategory, setFeedCategory] = useState(() => localStorage.getItem('lumatha_feed_category') || 'global');
   const [categoryExpanded, setCategoryExpanded] = useState(false);
   const [contentFilter, setContentFilter] = useState('all');
   const [videoType, setVideoType] = useState<'all' | 'short' | 'long'>('all');
@@ -46,136 +44,81 @@ export default function Home() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
-  // Listen for filter changes from SubNavigation (VDOs tab)
+  // Listen for filter changes from SubNavigation
   useEffect(() => {
-    const handleFilterChange = (e: CustomEvent) => {
-      setContentFilter(e.detail);
-    };
+    const handleFilterChange = (e: CustomEvent) => { setContentFilter(e.detail); };
     window.addEventListener('feedFilterChange', handleFilterChange as EventListener);
-    
     const savedFilter = localStorage.getItem('lumatha_feed_filter');
     if (savedFilter) setContentFilter(savedFilter);
-    
-    return () => {
-      window.removeEventListener('feedFilterChange', handleFilterChange as EventListener);
-    };
+    return () => { window.removeEventListener('feedFilterChange', handleFilterChange as EventListener); };
   }, []);
 
-  // Save category preference
-  useEffect(() => {
-    localStorage.setItem('lumatha_feed_category', feedCategory);
-  }, [feedCategory]);
-
-  useEffect(() => {
-    if (user) fetchPosts();
-  }, [feedCategory, contentFilter, videoType, user, profile]);
+  useEffect(() => { localStorage.setItem('lumatha_feed_category', feedCategory); }, [feedCategory]);
+  useEffect(() => { if (user) fetchPosts(); }, [feedCategory, contentFilter, videoType, user, profile]);
 
   const fetchPosts = async () => {
     if (!user) return;
     setLoading(true);
-
     try {
       let query = supabase.from('posts').select('*, profiles(*)');
       const userCountry = profile?.country || '';
 
-      // Apply feed category filter
       switch (feedCategory) {
         case 'global':
-          // Exclude ghost posts from global feed
           query = query.eq('visibility', 'public').neq('category', 'ghost');
           break;
         case 'regional':
-          // Filter by user's country if set, exclude ghost posts
           query = query.eq('visibility', 'public').neq('category', 'ghost');
           break;
         case 'following':
-          const { data: following } = await supabase
-            .from('follows')
-            .select('following_id')
-            .eq('follower_id', user.id);
-          const { data: friendReqs } = await supabase
-            .from('friend_requests')
-            .select('sender_id, receiver_id')
-            .eq('status', 'accepted')
-            .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+          const { data: following } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
+          const { data: friendReqs } = await supabase.from('friend_requests').select('sender_id, receiver_id').eq('status', 'accepted').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
           const followingIds = following?.map(f => f.following_id) || [];
           const friendIds = friendReqs?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || [];
           const allIds = [...new Set([...followingIds, ...friendIds])];
           if (allIds.length > 0) {
-            // Exclude ghost posts from following feed
             query = query.eq('visibility', 'public').neq('category', 'ghost').in('user_id', allIds);
           } else {
-            setPosts([]);
-            setLoading(false);
-            return;
+            setPosts([]); setLoading(false); return;
           }
           break;
         case 'ghost':
-          // Show ONLY ghost posts from last 24 hours
           const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
           query = query.eq('visibility', 'public').eq('category', 'ghost').gte('created_at', yesterday);
           break;
       }
 
-      // Apply content filter from SubNavigation (VDOs tab)
-      // Also exclude ghost posts from video feeds
       if (contentFilter === 'videos') {
         query = query.or('file_type.ilike.%video%,media_types.cs.{video}');
-        if (feedCategory !== 'ghost') {
-          query = query.neq('category', 'ghost');
-        }
+        if (feedCategory !== 'ghost') query = query.neq('category', 'ghost');
       }
 
       query = query.order('created_at', { ascending: false }).limit(50);
       let { data: postsData } = await query;
-      
-      // Filter videos by duration - Short < 180s, Long > 180s
+
       if (contentFilter === 'videos' && postsData) {
-        // For now, we filter based on file_type containing video
-        // In real implementation, duration would be stored in DB
-        // Using a simple heuristic: shorter file names = shorter videos
         if (videoType === 'short') {
-          // Short videos are typically under 180 seconds (3 minutes)
-          // Filter posts that are marked as short or have short indicator
           postsData = postsData.filter(p => {
-            // Check if post has short indicator in tags or subcategory
-            const isShort = p.subcategory?.toLowerCase().includes('short') || 
-                           p.tags?.some(t => t.toLowerCase().includes('short')) ||
-                           p.title?.toLowerCase().includes('short');
-            return isShort !== false; // Include if explicitly short or unknown (for now show all in short mode)
+            const isShort = p.subcategory?.toLowerCase().includes('short') || p.tags?.some(t => t.toLowerCase().includes('short')) || p.title?.toLowerCase().includes('short');
+            return isShort !== false;
           });
         } else if (videoType === 'long') {
-          // Long videos are 180+ seconds
           postsData = postsData.filter(p => {
-            const isLong = p.subcategory?.toLowerCase().includes('long') || 
-                          p.tags?.some(t => t.toLowerCase().includes('long')) ||
-                          p.title?.toLowerCase().includes('full') ||
-                          p.title?.toLowerCase().includes('long');
+            const isLong = p.subcategory?.toLowerCase().includes('long') || p.tags?.some(t => t.toLowerCase().includes('long')) || p.title?.toLowerCase().includes('full') || p.title?.toLowerCase().includes('long');
             return isLong !== false;
           });
         }
       }
-      
+
       let processedPosts = postsData || [];
-      
-      // For regional, filter by country from profile
-      if (feedCategory === 'regional' && userCountry) {
-        processedPosts = processedPosts.filter(p => p.profiles?.country === userCountry);
-      }
-      
-      // For global, shuffle posts to mix content
-      if (feedCategory === 'global') {
-        processedPosts = processedPosts.sort(() => Math.random() - 0.5);
-      }
-      
+      if (feedCategory === 'regional' && userCountry) processedPosts = processedPosts.filter(p => p.profiles?.country === userCountry);
+      if (feedCategory === 'global') processedPosts = processedPosts.sort(() => Math.random() - 0.5);
       setPosts(processedPosts);
 
-      // Fetch saved and liked posts
       const [savedResult, likedResult] = await Promise.all([
         supabase.from('saved').select('post_id').eq('user_id', user.id),
         supabase.from('likes').select('post_id').eq('user_id', user.id)
       ]);
-
       setSavedPosts(new Set(savedResult.data?.map(s => s.post_id) || []));
       setLikedPosts(new Set(likedResult.data?.map(l => l.post_id) || []));
 
@@ -239,66 +182,58 @@ export default function Home() {
     );
   }
 
+  const renderPost = (post: PostWithProfile) => (
+    <EnhancedPostCard
+      key={post.id}
+      post={post}
+      isSaved={savedPosts.has(post.id)}
+      isLiked={likedPosts.has(post.id)}
+      likesCount={likeCounts[post.id] || 0}
+      currentUserId={user.id}
+      onToggleSave={() => toggleSave(post.id)}
+      onToggleLike={() => toggleLike(post.id)}
+      onDelete={() => deletePost(post.id)}
+      onUpdate={fetchPosts}
+    />
+  );
+
   return (
-    <div className="space-y-3 pb-20">
-      {/* Top Bar: Create Post (Left) + Category Selector (Right) */}
-      <div className="flex items-center gap-2">
-        {/* Create Post Button */}
-        <Button 
-          onClick={() => navigate('/create')}
-          className="flex-1 gap-2 h-10"
-          variant="outline"
-        >
+    <div className="space-y-2 pb-20">
+      {/* Row A: Create Post + Category Dropdown */}
+      <div className="flex items-center gap-3">
+        <Button onClick={() => navigate('/create')} className="flex-1 gap-2 h-[52px] rounded-[14px]" variant="outline">
           <Plus className="w-4 h-4" />
           Create Post
         </Button>
-
-        {/* Category Selector - Global / Regional / Following / Ghost */}
         <div className="relative">
           <button
             onClick={() => setCategoryExpanded(!categoryExpanded)}
-            className="glass-card rounded-xl px-3 py-2 flex items-center gap-2 hover:bg-primary/5 transition-all"
+            className="glass-card rounded-[14px] px-3 py-2 flex items-center gap-2 hover:bg-primary/5 transition-all min-w-[120px]"
           >
-            <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center`}>
-              <CurrentCategoryIcon className={`w-4 h-4 ${currentCategory.color}`} />
-            </div>
+            <CurrentCategoryIcon className={`w-4 h-4 ${currentCategory.color}`} />
             <span className="text-sm font-medium">{currentCategory.label}</span>
-            {categoryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {categoryExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
-
-          {/* Expanded Category Options */}
           {categoryExpanded && (
-            <div className="absolute top-full right-0 mt-1 glass-card rounded-xl p-2 z-20 shadow-lg border border-border animate-in fade-in slide-in-from-top-2 duration-200 min-w-[180px]">
+            <div className="absolute top-full right-0 mt-1 glass-card rounded-2xl p-2 z-20 shadow-lg border border-border animate-in fade-in slide-in-from-top-2 duration-200 min-w-[180px]">
               {feedCategories.map((cat) => {
                 const Icon = cat.icon;
                 const isActive = feedCategory === cat.id;
                 return (
                   <button
                     key={cat.id}
-                    onClick={() => {
-                      setFeedCategory(cat.id);
-                      setCategoryExpanded(false);
-                    }}
+                    onClick={() => { setFeedCategory(cat.id); setCategoryExpanded(false); }}
                     className={cn(
-                      "w-full flex items-center gap-2 p-2 rounded-lg transition-all",
-                      isActive 
-                        ? "bg-primary/15 text-primary" 
-                        : "hover:bg-muted/50 text-foreground"
+                      "w-full flex items-center gap-2 p-2 rounded-xl transition-all",
+                      isActive ? "bg-primary/15 text-primary" : "hover:bg-muted/50 text-foreground"
                     )}
                   >
-                    <div className={cn(
-                      "w-7 h-7 rounded-full flex items-center justify-center",
-                      isActive ? "bg-primary/20" : "bg-muted/50"
-                    )}>
-                      <Icon className={cn("w-3.5 h-3.5", cat.color)} />
-                    </div>
+                    <Icon className={cn("w-4 h-4", cat.color)} />
                     <div className="flex-1 text-left">
                       <p className="font-medium text-xs">{cat.label}</p>
                       <p className="text-[9px] text-muted-foreground">{cat.desc}</p>
                     </div>
-                    {isActive && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    )}
+                    {isActive && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
                   </button>
                 );
               })}
@@ -307,59 +242,45 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Row 3: Full-width Search Bar */}
+      {/* Row B: Search Bar */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           placeholder="Search posts, users, media..."
-          className="pl-10 h-10 bg-muted/30 border-border/40 focus:border-primary/50"
+          className="pl-10 h-10 rounded-[14px] bg-muted/30 border-border/40 focus:border-primary/50"
           onFocus={() => navigate('/search')}
           readOnly
         />
       </div>
 
-      {/* Video Mode - Short/Long Toggle */}
+      {/* Video Mode Toggle */}
       {contentFilter === 'videos' && (
-        <Card className="glass-card border-primary/30 bg-primary/5">
+        <Card className="glass-card border-primary/30 bg-primary/5 rounded-2xl">
           <CardContent className="p-3">
             <div className="flex items-center justify-center gap-2">
-              <span className="text-xs text-muted-foreground mr-2">📹</span>
-              {['all', 'short', 'long'].map((type) => (
+              {(['all', 'short', 'long'] as const).map((type) => (
                 <Button
                   key={type}
                   size="sm"
                   variant={videoType === type ? 'default' : 'outline'}
-                  className="h-7 text-xs capitalize px-3"
+                  className="h-7 text-xs capitalize px-3 rounded-xl"
                   onClick={() => {
-                    setVideoType(type as 'all' | 'short' | 'long');
-                    // Open ShortsViewer when clicking Short
+                    setVideoType(type);
                     if (type === 'short') {
-                      const videoPosts = posts.filter(p => 
-                        p.file_type?.includes('video') || 
-                        p.media_types?.some(t => t.includes('video'))
-                      );
+                      const videoPosts = posts.filter(p => p.file_type?.includes('video') || p.media_types?.some(t => t.includes('video')));
                       const shortVideos = videoPosts.map(p => ({
-                        id: p.id,
-                        url: p.file_url || (p.media_urls && p.media_urls[0]) || '',
-                        title: p.title,
-                        username: p.profiles?.name || 'User',
-                        userAvatar: p.profiles?.avatar_url || undefined,
-                        userId: p.user_id,
-                        likesCount: likeCounts[p.id] || 0,
-                        isLiked: likedPosts.has(p.id),
-                        isSaved: savedPosts.has(p.id),
-                        isOwner: p.user_id === user.id
+                        id: p.id, url: p.file_url || (p.media_urls && p.media_urls[0]) || '',
+                        title: p.title, username: p.profiles?.name || 'User', userAvatar: p.profiles?.avatar_url || undefined,
+                        userId: p.user_id, likesCount: likeCounts[p.id] || 0, isLiked: likedPosts.has(p.id),
+                        isSaved: savedPosts.has(p.id), isOwner: p.user_id === user.id
                       })).filter(v => v.url);
-                      if (shortVideos.length > 0) {
-                        setShortsData(shortVideos);
-                        setShowShortsViewer(true);
-                      }
+                      if (shortVideos.length > 0) { setShortsData(shortVideos); setShowShortsViewer(true); }
                     }
                   }}
                 >
                   {type === 'all' && 'All'}
-                  {type === 'short' && '⚡ Short'}
-                  {type === 'long' && '🎬 Long'}
+                  {type === 'short' && 'Short'}
+                  {type === 'long' && 'Long'}
                 </Button>
               ))}
             </div>
@@ -369,103 +290,56 @@ export default function Home() {
 
       {/* Ghost Mode Notice */}
       {feedCategory === 'ghost' && (
-        <Card className="glass-card border-orange-500/30 bg-orange-500/5">
+        <Card className="glass-card border-orange-500/30 bg-orange-500/5 rounded-2xl">
           <CardContent className="p-3 text-center">
-            <p className="text-xs text-orange-500 flex items-center justify-center gap-1">
+            <p className="text-xs text-orange-400 flex items-center justify-center gap-1">
               <Ghost className="w-3 h-3" /> Ghost Mode: Only 24-hour posts
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Posts Feed */}
+      {/* Posts Feed with Interleaving */}
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-80 w-full rounded-xl" />)}
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-80 w-full rounded-2xl" />)}
         </div>
       ) : posts.length === 0 ? (
-        <Card className="glass-card">
+        <Card className="glass-card rounded-2xl">
           <CardContent className="py-12 text-center">
             <CurrentCategoryIcon className={`h-12 w-12 mx-auto mb-3 ${currentCategory.color}`} />
-            <p className="text-muted-foreground">
-              {feedCategory === 'following' 
-                ? 'Follow some users to see their posts here!' 
-                : feedCategory === 'regional'
-                ? 'No posts from your region yet'
-                : feedCategory === 'ghost'
-                ? 'No ghost posts in the last 24 hours'
-                : contentFilter === 'videos'
-                ? 'No videos found'
+            <p className="text-muted-foreground text-sm">
+              {feedCategory === 'following' ? 'Follow some users to see their posts here!'
+                : feedCategory === 'regional' ? 'No posts from your region yet'
+                : feedCategory === 'ghost' ? 'No ghost posts in the last 24 hours'
+                : contentFilter === 'videos' ? 'No videos found'
                 : 'No posts found'}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {posts.map((post) => (
-            <EnhancedPostCard
-              key={post.id}
-              post={post}
-              isSaved={savedPosts.has(post.id)}
-              isLiked={likedPosts.has(post.id)}
-              likesCount={likeCounts[post.id] || 0}
-              currentUserId={user.id}
-              onToggleSave={() => toggleSave(post.id)}
-              onToggleLike={() => toggleLike(post.id)}
-              onDelete={() => deletePost(post.id)}
-              onUpdate={fetchPosts}
-            />
-          ))}
-        </div>
+        <FeedInterleaver posts={posts} renderPost={(post) => renderPost(post)} />
       )}
 
-      {/* Shorts Viewer Modal */}
+      {/* Shorts Viewer */}
       {showShortsViewer && shortsData.length > 0 && (
         <ShortsViewer
-          videos={shortsData}
-          initialIndex={0}
-          onClose={() => setShowShortsViewer(false)}
-          onLike={(videoId) => toggleLike(videoId)}
-          onSave={(videoId) => toggleSave(videoId)}
+          videos={shortsData} initialIndex={0} onClose={() => setShowShortsViewer(false)}
+          onLike={(videoId) => toggleLike(videoId)} onSave={(videoId) => toggleSave(videoId)}
           onDelete={(videoId) => {
             deletePost(videoId);
-            // Remove from shortsData
             const newData = shortsData.filter((v: any) => v.id !== videoId);
-            if (newData.length === 0) {
-              setShowShortsViewer(false);
-            } else {
-              setShortsData(newData);
-            }
+            if (newData.length === 0) setShowShortsViewer(false);
+            else setShortsData(newData);
           }}
-          onComment={(videoId) => {
-            setSelectedPostId(videoId);
-            setCommentDialogOpen(true);
-          }}
-          onShare={(videoId) => {
-            setSelectedPostId(videoId);
-            setShareDialogOpen(true);
-          }}
-          onProfileClick={(userId) => {
-            setShowShortsViewer(false);
-            navigate(`/profile/${userId}`);
-          }}
+          onComment={(videoId) => { setSelectedPostId(videoId); setCommentDialogOpen(true); }}
+          onShare={(videoId) => { setSelectedPostId(videoId); setShareDialogOpen(true); }}
+          onProfileClick={(userId) => { setShowShortsViewer(false); navigate(`/profile/${userId}`); }}
         />
       )}
 
-      {/* Comment Dialog */}
-      <CommentsDialog
-        postId={selectedPostId}
-        open={commentDialogOpen}
-        onOpenChange={setCommentDialogOpen}
-        postTitle=""
-      />
-
-      {/* Share Dialog */}
-      <ShareDialog
-        postId={selectedPostId}
-        open={shareDialogOpen}
-        onOpenChange={setShareDialogOpen}
-      />
+      <CommentsDialog postId={selectedPostId} open={commentDialogOpen} onOpenChange={setCommentDialogOpen} postTitle="" />
+      <ShareDialog postId={selectedPostId} open={shareDialogOpen} onOpenChange={setShareDialogOpen} />
     </div>
   );
 }
