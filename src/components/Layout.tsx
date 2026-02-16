@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Menu, ArrowLeft, Home, BookOpen, MessageSquare, Gamepad2, 
-  Mountain, Heart, ShoppingCart, Settings, RefreshCw
+  Mountain, Heart, ShoppingCart, Settings
 } from 'lucide-react';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { Button } from '@/components/ui/button';
@@ -234,8 +234,9 @@ function LayoutContent({ children }: LayoutProps) {
       <main className="flex-1 relative flex flex-col min-w-0">
         <OfflineIndicator />
         <header className={`sticky z-40 glass-card border-b border-border/40 transition-all duration-300 ${headerVisible ? 'top-0 opacity-100' : '-top-14 opacity-0'}`}>
-          <div className="flex items-center justify-between h-12 px-2">
-            <div className="flex items-center">
+          <div className="flex items-center h-12 px-2 gap-1">
+            {/* Left: Hamburger or Back */}
+            <div className="shrink-0">
               {isMobile && isSubSection ? (
                 <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8">
                   <ArrowLeft className="h-4.5 w-4.5" />
@@ -244,17 +245,13 @@ function LayoutContent({ children }: LayoutProps) {
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => window.location.reload()}
-              title="Refresh"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-            </Button>
+            {/* Right: Inline SubNavigation icons */}
+            {showSubNav && (
+              <div className="flex-1 min-w-0">
+                <SubNavigation visible={headerVisible} />
+              </div>
+            )}
           </div>
-          {showSubNav && <SubNavigation visible={headerVisible} />}
         </header>
 
         <div className="flex-1 flex overflow-hidden">

@@ -9,7 +9,6 @@ interface SubNavigationProps {
   visible?: boolean;
 }
 
-// 5 icons: Feed, VDOs, Private, Notifications, Profile (Search moved to feed area)
 const tabs = [
   { id: 'feed', icon: Home, path: '/', label: 'Feed', color: 'text-blue-500' },
   { id: 'videos', icon: Video, path: '/?filter=videos', label: 'VDOs', color: 'text-red-500' },
@@ -24,10 +23,8 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Fetch unread notification count
   useEffect(() => {
     if (!user) return;
-    
     const fetchUnreadCount = async () => {
       const { count } = await supabase
         .from('notifications')
@@ -36,21 +33,11 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
         .eq('is_read', false);
       setUnreadCount(count || 0);
     };
-
     fetchUnreadCount();
-
     const channel = supabase
       .channel('sub-nav-notifications')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`
-      }, () => {
-        fetchUnreadCount();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => fetchUnreadCount())
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [user]);
 
@@ -72,63 +59,51 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
 
   const isActive = (tab: typeof tabs[0]) => {
     if (tab.id === 'videos') {
-      const filter = localStorage.getItem('lumatha_feed_filter');
-      return location.pathname === '/' && filter === 'videos';
+      return location.pathname === '/' && localStorage.getItem('lumatha_feed_filter') === 'videos';
     }
     if (tab.id === 'feed') {
-      const filter = localStorage.getItem('lumatha_feed_filter');
-      return location.pathname === '/' && filter !== 'videos';
+      return location.pathname === '/' && localStorage.getItem('lumatha_feed_filter') !== 'videos';
     }
-    
     if (tab.path) return location.pathname === tab.path;
     if (tab.id === 'profile') return location.pathname.startsWith('/profile');
     return false;
   };
 
+  if (!visible) return null;
+
   return (
-    <nav 
-      className={cn(
-        "w-full glass-card border-b border-border/50 transition-all duration-300",
-        visible ? "opacity-100 max-h-14" : "opacity-0 max-h-0 overflow-hidden"
-      )}
-    >
-      <div className="flex justify-around items-center h-11 max-w-lg mx-auto px-2">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const active = isActive(tab);
-          const showBadge = tab.id === 'notifications' && unreadCount > 0;
-          
-          return (
-            <button
-              key={tab.id}
-              onClick={() => handleTabClick(tab)}
-              className={cn(
-                "flex flex-col items-center justify-center p-1.5 rounded-lg transition-all relative gap-0.5",
-                active 
-                  ? "text-primary bg-primary/15" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+    <div className="flex items-center justify-around flex-1">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        const active = isActive(tab);
+        const showBadge = tab.id === 'notifications' && unreadCount > 0;
+
+        return (
+          <button
+            key={tab.id}
+            onClick={() => handleTabClick(tab)}
+            className={cn(
+              "flex flex-col items-center justify-center px-2 py-1 rounded-lg transition-all relative gap-0.5",
+              active
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/20"
+            )}
+            title={tab.label}
+          >
+            <div className="relative">
+              <Icon className={cn("w-[18px] h-[18px] transition-all", active ? "text-primary" : tab.color)} />
+              {showBadge && (
+                <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 animate-pulse">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
               )}
-              title={tab.label}
-            >
-              <div className="relative">
-                <Icon className={cn(
-                  "w-5 h-5 transition-all",
-                  active ? "scale-110 text-primary" : tab.color
-                )} />
-                {showBadge && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[8px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1 animate-pulse">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </div>
-              <span className={cn(
-                "text-[8px] font-medium",
-                active ? "text-primary" : "text-muted-foreground"
-              )}>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </nav>
+            </div>
+            <span className={cn("text-[8px] font-medium leading-none", active ? "text-primary" : "text-muted-foreground")}>
+              {tab.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
