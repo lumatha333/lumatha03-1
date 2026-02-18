@@ -40,20 +40,20 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
   ];
 
   return (
-    <div className={cn("border rounded-lg overflow-hidden bg-background", className)}>
+    <div className={cn("border rounded-xl overflow-hidden bg-background shadow-sm", className)}>
       {/* Toolbar */}
-      <div className="flex flex-wrap gap-0.5 p-1.5 border-b bg-muted/30">
+      <div className="flex flex-wrap gap-0.5 p-2 border-b bg-muted/20 backdrop-blur">
         {tools.map((tool) => (
           <Button
             key={tool.label}
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="h-8 w-8 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
             onClick={() => execCommand(tool.command, tool.value)}
             title={tool.label}
           >
-            <tool.icon className="w-3.5 h-3.5" />
+            <tool.icon className="w-4 h-4" />
           </Button>
         ))}
       </div>
@@ -64,12 +64,12 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
         contentEditable
         suppressContentEditableWarning
         className={cn(
-          "min-h-[200px] max-h-[400px] overflow-y-auto p-3 text-sm focus:outline-none",
+          "min-h-[240px] max-h-[450px] overflow-y-auto p-4 text-sm focus:outline-none",
           "prose prose-sm dark:prose-invert max-w-none",
           "[&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-2",
           "[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-2",
-          "[&_blockquote]:border-l-2 [&_blockquote]:border-primary/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-muted-foreground",
-          "[&_pre]:bg-muted [&_pre]:rounded-md [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs",
+          "[&_blockquote]:border-l-3 [&_blockquote]:border-primary/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground [&_blockquote]:bg-primary/5 [&_blockquote]:py-2 [&_blockquote]:rounded-r-lg",
+          "[&_pre]:bg-muted/50 [&_pre]:rounded-xl [&_pre]:p-3 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:border [&_pre]:border-border/30",
           "[&_ul]:list-disc [&_ul]:pl-5",
           "[&_ol]:list-decimal [&_ol]:pl-5"
         )}
@@ -82,8 +82,9 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
         [contenteditable]:empty:before {
           content: attr(data-placeholder);
           color: hsl(var(--muted-foreground));
-          opacity: 0.5;
+          opacity: 0.4;
           pointer-events: none;
+          font-style: italic;
         }
       `}</style>
     </div>

@@ -3,6 +3,7 @@ import { AdventureTeasersInsert } from './AdventureTeasersInsert';
 import { QuickConnectInsert } from './QuickConnectInsert';
 import { GameHighScoresInsert } from './GameHighScoresInsert';
 import { DailyStreakInsert } from './DailyStreakInsert';
+import { QuickNavInsert } from './QuickNavWidgets';
 import { StopPointCard } from './StopPointCard';
 
 interface FeedInterleaverProps {
@@ -18,12 +19,13 @@ const INSERT_CYCLE = [
   { Component: DailyStreakInsert, key: 'streak' },
 ];
 
-const STOP_POINT_INTERVAL = 16; // after ~16 items (posts + inserts)
+const STOP_POINT_INTERVAL = 16;
 
 export function FeedInterleaver({ posts, renderPost }: FeedInterleaverProps) {
   const elements: ReactNode[] = [];
   let insertIndex = 0;
   let totalItems = 0;
+  let quickNavCount = 0;
 
   for (let i = 0; i < posts.length; i++) {
     elements.push(renderPost(posts[i], i));
@@ -35,6 +37,13 @@ export function FeedInterleaver({ posts, renderPost }: FeedInterleaverProps) {
       elements.push(<Component key={`insert-${key}-${i}`} />);
       insertIndex++;
       totalItems++;
+
+      // After every 2 inserts, also add QuickNav widgets
+      if (insertIndex % 2 === 0) {
+        elements.push(<QuickNavInsert key={`quicknav-${i}`} insertIndex={quickNavCount} />);
+        quickNavCount++;
+        totalItems++;
+      }
     }
 
     // Show stop point after STOP_POINT_INTERVAL items
@@ -44,5 +53,5 @@ export function FeedInterleaver({ posts, renderPost }: FeedInterleaverProps) {
     }
   }
 
-  return <div className="space-y-3">{elements}</div>;
+  return <div className="space-y-3 animate-stagger">{elements}</div>;
 }
