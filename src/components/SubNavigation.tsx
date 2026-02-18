@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Home, Lock, Bell, User, Video } from 'lucide-react';
+import { Home, Lock, Bell, User, Video, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,6 +12,7 @@ interface SubNavigationProps {
 const tabs = [
   { id: 'feed', icon: Home, path: '/', label: 'Feed', color: 'text-blue-500' },
   { id: 'videos', icon: Video, path: '/?filter=videos', label: 'VDOs', color: 'text-red-500' },
+  { id: 'search', icon: Search, path: '/search', label: 'Search', color: 'text-cyan-500' },
   { id: 'private', icon: Lock, path: '/private', label: 'Private', color: 'text-green-500' },
   { id: 'notifications', icon: Bell, path: '/notifications', label: 'Alerts', color: 'text-orange-500' },
   { id: 'profile', icon: User, path: null, label: 'Profile', color: 'text-teal-500' },
@@ -46,6 +47,8 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
       localStorage.setItem('lumatha_feed_filter', 'videos');
       navigate('/');
       window.dispatchEvent(new CustomEvent('feedFilterChange', { detail: 'videos' }));
+    } else if (tab.id === 'search') {
+      navigate('/search');
     } else if (tab.path) {
       if (tab.id === 'feed') {
         localStorage.setItem('lumatha_feed_filter', 'all');
@@ -64,6 +67,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
     if (tab.id === 'feed') {
       return location.pathname === '/' && localStorage.getItem('lumatha_feed_filter') !== 'videos';
     }
+    if (tab.id === 'search') return location.pathname === '/search';
     if (tab.path) return location.pathname === tab.path;
     if (tab.id === 'profile') return location.pathname.startsWith('/profile');
     return false;
