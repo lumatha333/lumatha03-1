@@ -238,9 +238,8 @@ export function ShortsViewer({
             <video
               ref={(el) => { if (el) videoRefs.current.set(index, el); }}
               src={video.url}
-              className="w-full h-full object-contain bg-black"
+              className="absolute inset-0 w-full h-full object-cover bg-black"
               loop playsInline muted={isMuted}
-              style={{ maxHeight: '100vh', maxWidth: '100vw' }}
             />
             {!isPlaying && index === currentIndex && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-20"
