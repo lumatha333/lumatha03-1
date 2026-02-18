@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Globe, Users, Ghost, ChevronDown, ChevronUp, Plus, Flag, Search } from 'lucide-react';
+import { Globe, Users, Ghost, ChevronDown, ChevronUp, Plus, Flag } from 'lucide-react';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { ShortsViewer } from '@/components/ShortsViewer';
 import { CommentsDialog } from '@/components/CommentsDialog';
@@ -11,7 +11,6 @@ import { Database } from '@/integrations/supabase/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 
@@ -240,17 +239,6 @@ export default function Home() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Row B: Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          placeholder="Search posts, users, media..."
-          className="pl-10 h-10 rounded-[14px] bg-muted/30 border-border/40 focus:border-primary/50"
-          onFocus={() => navigate('/search')}
-          readOnly
-        />
       </div>
 
       {/* Video Mode Toggle */}
