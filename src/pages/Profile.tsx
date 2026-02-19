@@ -14,7 +14,7 @@ import { FriendTick } from '@/components/lumatha/FriendTick';
 import { 
   ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
   MapPin, Calendar, Globe, Star, Trophy, Eye, MessageCircle, UserCheck, Clock, Users,
-  UserCircle2, X
+  UserCircle2, X, Heart
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
@@ -418,34 +418,48 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons — unique Lumatha style, different from any social platform */}
           {!isOwnProfile && currentUser && (
             <div className="flex flex-wrap gap-2 mt-4">
-              <Button size="sm" onClick={handleFollow} variant={isFollowing ? 'outline' : 'default'} className="gap-1.5">
+              {/* Lumatha Follow Button — aurora gradient, teal-to-emerald, unlike any other platform */}
+              <Button
+                size="sm"
+                onClick={handleFollow}
+                className={cn(
+                  "gap-1.5 font-semibold transition-all duration-300",
+                  isFollowing
+                    ? "bg-muted/60 text-muted-foreground border border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                    : "text-white border-0 shadow-lg shadow-teal-500/20"
+                )}
+                style={!isFollowing ? {
+                  background: 'linear-gradient(135deg, hsl(175 70% 45%), hsl(160 60% 50%), hsl(200 70% 55%))',
+                  boxShadow: '0 4px 20px hsl(175 70% 45% / 0.4)'
+                } : undefined}
+              >
                 {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                {isFollowing ? 'Unfollow' : 'Follow'}
+                {isFollowing ? 'Unfollow' : '+ Follow'}
               </Button>
 
               {friendRequestStatus === 'none' && (
-                <Button size="sm" variant="outline" onClick={() => { sendFriendRequest(userId!); setFriendRequestStatus('pending_sent'); }} className="gap-1.5">
+                <Button size="sm" variant="outline" onClick={() => { sendFriendRequest(userId!); setFriendRequestStatus('pending_sent'); }} className="gap-1.5 border-primary/30 hover:bg-primary/10">
                   <UserPlus className="w-4 h-4" /> Add Friend
                 </Button>
               )}
               {friendRequestStatus === 'pending_sent' && (
-                <Button size="sm" variant="outline" disabled className="gap-1.5">
+                <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-60">
                   <Clock className="w-4 h-4" /> Request Sent
                 </Button>
               )}
               {friendRequestStatus === 'pending_received' && (
-                <Button size="sm" variant="default" onClick={async () => {
+                <Button size="sm" onClick={async () => {
                   const { data } = await supabase.from('friend_requests').select('id').eq('sender_id', userId).eq('receiver_id', currentUser.id).single();
                   if (data) { acceptFriendRequest(data.id, userId!); setFriendRequestStatus('accepted'); setIsFriend(true); }
-                }} className="gap-1.5">
+                }} className="gap-1.5" style={{ background: 'linear-gradient(135deg, hsl(270 70% 60%), hsl(340 75% 58%))' }}>
                   <UserCheck className="w-4 h-4" /> Accept Request
                 </Button>
               )}
               {friendRequestStatus === 'accepted' && (
-                <Button size="sm" variant="outline" disabled className="gap-1.5 bg-green-500/10 text-green-600 border-green-500/30">
+                <Button size="sm" variant="outline" disabled className="gap-1.5 border-green-500/40 text-green-500">
                   <UserCheck className="w-4 h-4" /> Friends
                 </Button>
               )}
@@ -455,7 +469,7 @@ export default function Profile() {
                   <MessageCircle className="w-4 h-4" /> Message
                 </Button>
               ) : (
-                <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-50" title="Only friends can message">
+                <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-40" title="Only friends can message">
                   <MessageCircle className="w-4 h-4" /> Message
                 </Button>
               )}
@@ -471,14 +485,17 @@ export default function Profile() {
         </DialogContent>
       </Dialog>
 
-      {/* Profile Tabs */}
-      <Tabs defaultValue="info" className="w-full">
-        <TabsList className="glass-card w-full grid grid-cols-5 h-auto p-0.5">
+      {/* Profile Tabs — now 6 tabs including liked posts */}
+      <Tabs defaultValue="posts" className="w-full">
+        <TabsList className="glass-card w-full grid grid-cols-6 h-auto p-0.5">
+          <TabsTrigger value="posts" className="flex flex-col gap-0.5 py-2 text-[10px]">
+            <Image className="w-4 h-4" /> Posts
+          </TabsTrigger>
+          <TabsTrigger value="liked" className="flex flex-col gap-0.5 py-2 text-[10px]">
+            <Heart className="w-4 h-4" /> Liked
+          </TabsTrigger>
           <TabsTrigger value="info" className="flex flex-col gap-0.5 py-2 text-[10px]">
             <User className="w-4 h-4" /> Info
-          </TabsTrigger>
-          <TabsTrigger value="media" className="flex flex-col gap-0.5 py-2 text-[10px]">
-            <Image className="w-4 h-4" /> Media
           </TabsTrigger>
           <TabsTrigger value="docs" className="flex flex-col gap-0.5 py-2 text-[10px]">
             <FileText className="w-4 h-4" /> Docs
@@ -490,6 +507,49 @@ export default function Profile() {
             <ShoppingBag className="w-4 h-4" /> Market
           </TabsTrigger>
         </TabsList>
+
+        {/* POSTS TAB — own posts */}
+        <TabsContent value="posts" className="space-y-4 mt-4">
+          {posts.length === 0 ? (
+            <Card className="glass-card border-border">
+              <CardContent className="py-12 text-center">
+                <Image className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">No posts yet</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {posts.map((post) => (
+                <EnhancedPostCard key={post.id} post={post} isSaved={saved.includes(post.id)} isLiked={likes.some(l => l.post_id === post.id)} likesCount={likesCount[post.id] || 0} currentUserId={currentUser?.id || ''} onToggleSave={toggleSave} onToggleLike={toggleLike} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* LIKED POSTS TAB — only visible to profile owner */}
+        <TabsContent value="liked" className="space-y-4 mt-4">
+          {!isOwnProfile ? (
+            <Card className="glass-card border-border">
+              <CardContent className="py-12 text-center">
+                <Heart className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground text-sm">Liked posts are private</p>
+              </CardContent>
+            </Card>
+          ) : likes.length === 0 ? (
+            <Card className="glass-card border-border">
+              <CardContent className="py-12 text-center">
+                <Heart className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">No liked posts yet</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {posts.filter(p => likes.some(l => l.post_id === p.id)).map((post) => (
+                <EnhancedPostCard key={post.id} post={post} isSaved={saved.includes(post.id)} isLiked={true} likesCount={likesCount[post.id] || 0} currentUserId={currentUser?.id || ''} onToggleSave={toggleSave} onToggleLike={toggleLike} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
         {/* INFO TAB */}
         <TabsContent value="info" className="space-y-3 mt-4">
