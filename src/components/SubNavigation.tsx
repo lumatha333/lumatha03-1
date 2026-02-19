@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface SubNavigationProps {
   visible?: boolean;
@@ -21,7 +22,7 @@ const tabs = [
 export function SubNavigation({ visible = true }: SubNavigationProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -43,6 +44,9 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
   }, [user]);
 
   const handleTabClick = (tab: typeof tabs[0]) => {
+    // Always scroll to top on navigation
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
     if (tab.id === 'videos') {
       localStorage.setItem('lumatha_feed_filter', 'videos');
       navigate('/');
@@ -76,11 +80,12 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
   if (!visible) return null;
 
   return (
-    <div className="flex items-center justify-end gap-4">
+    <div className="flex items-center justify-end gap-1 sm:gap-2">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const active = isActive(tab);
         const showBadge = tab.id === 'notifications' && unreadCount > 0;
+        const isProfileTab = tab.id === 'profile';
 
         return (
           <button
@@ -88,14 +93,25 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
             onClick={() => handleTabClick(tab)}
             className={cn(
               "flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all relative",
-              active
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
+              active ? "text-primary" : "text-muted-foreground hover:text-foreground"
             )}
             title={tab.label}
           >
             <div className="relative">
-              <Icon className={cn("w-[18px] h-[18px]", active ? "text-primary" : "")} />
+              {isProfileTab ? (
+                // Real user avatar for profile tab — same as Facebook
+                <Avatar className={cn(
+                  "w-[22px] h-[22px] transition-all",
+                  active ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
+                )}>
+                  <AvatarImage src={profile?.avatar_url || undefined} />
+                  <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground text-[8px] font-bold">
+                    {profile?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <Icon className={cn("w-[18px] h-[18px]", active ? "text-primary" : "")} />
+              )}
               {showBadge && (
                 <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5">
                   {unreadCount > 99 ? '99+' : unreadCount}

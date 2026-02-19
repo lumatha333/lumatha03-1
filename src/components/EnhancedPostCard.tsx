@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LazyImage } from '@/components/LazyImage';
 import { CommentsDialog } from '@/components/CommentsDialog';
 import { ShareDialog } from '@/components/ShareDialog';
+import { SymbolicHeart } from '@/components/lumatha/SymbolicHeart';
 import { 
   Star, MoreVertical, Copy, Edit, Trash2, Heart, X, ChevronLeft, ChevronRight, 
   Play, MessageCircle, Share2, Download, UserPlus, UserMinus, VolumeX, Volume2,
@@ -429,10 +430,7 @@ export function EnhancedPostCard({
                     </div>
                   </div>
                 )}
-                {/* Video badge */}
-                <div className="absolute top-2 right-2 bg-black/60 text-white px-1.5 py-0.5 rounded-full text-[9px] flex items-center gap-0.5">
-                  <Play className="w-2 h-2" /> Video
-                </div>
+                {/* No video badge text — cleaner experience */}
               </div>
             ) : (
               <div className="relative bg-black/5">
@@ -495,17 +493,13 @@ export function EnhancedPostCard({
 
         {/* Action buttons - Strict owner controls applied */}
         <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/50 mt-auto relative">
-          <Button
-            variant="ghost"
-            size="sm"
+          {/* Symbolic Heart — NO number counts shown, ever */}
+          <button
             onClick={() => onToggleLike(post.id)}
-            className={`flex-1 gap-1 h-8 ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}
+            className={`flex flex-1 items-center justify-center gap-1.5 h-8 rounded-lg hover:bg-muted/40 transition-colors`}
           >
-            <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
-            <span className="text-xs">
-              {postSettings.hideLikes && !isOwner ? 'Like' : (likesCount > 0 ? likesCount : 'Like')}
-            </span>
-          </Button>
+            <SymbolicHeart likesCount={likesCount} isLiked={isLiked} />
+          </button>
           
           {/* Comments - hidden if owner turned off */}
           {!postSettings.commentsOff && (

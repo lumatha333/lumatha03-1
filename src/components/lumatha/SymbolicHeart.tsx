@@ -10,9 +10,8 @@ interface SymbolicHeartProps {
   showGlow?: boolean;
 }
 
-// Lumatha Symbolic Heart System
-// Feeling over counting - users never see numbers
-// Only different heart styles based on engagement level
+// Lumatha Symbolic Heart System — NO NUMBERS EVER shown to user
+// 1–100 = green heart, 100–1K = red, 1K–100K = purple, 100K–1M = blue, 1M–10M = pink, 10M+ = golden
 export function SymbolicHeart({ 
   likesCount, 
   isLiked, 
@@ -21,34 +20,47 @@ export function SymbolicHeart({
   size = 'md',
   showGlow = true
 }: SymbolicHeartProps) {
-  // Internal logic for heart stages (user never sees numbers)
   const getHeartStyle = (count: number, liked: boolean) => {
-    if (count >= 100000) {
+    if (count >= 10_000_000) {
       return { 
-        color: liked ? 'text-blue-500 fill-blue-500' : 'text-blue-400',
-        glow: 'shadow-blue-500/50',
-        label: 'Special'
+        color: liked ? 'text-yellow-400 fill-yellow-400' : 'text-yellow-500/70',
+        glow: liked ? 'drop-shadow-[0_0_8px_rgba(234,179,8,0.8)]' : '',
+        label: 'Golden'
       };
     }
-    if (count >= 1000) {
+    if (count >= 1_000_000) {
       return { 
-        color: liked ? 'text-white fill-white' : 'text-gray-300',
-        glow: 'shadow-white/30',
+        color: liked ? 'text-pink-400 fill-pink-400' : 'text-pink-500/70',
+        glow: liked ? 'drop-shadow-[0_0_8px_rgba(236,72,153,0.7)]' : '',
+        label: 'Iconic'
+      };
+    }
+    if (count >= 100_000) {
+      return { 
+        color: liked ? 'text-blue-400 fill-blue-400' : 'text-blue-500/70',
+        glow: liked ? 'drop-shadow-[0_0_8px_rgba(59,130,246,0.7)]' : '',
+        label: 'Legendary'
+      };
+    }
+    if (count >= 1_000) {
+      return { 
+        color: liked ? 'text-purple-400 fill-purple-400' : 'text-purple-500/70',
+        glow: liked ? 'drop-shadow-[0_0_8px_rgba(168,85,247,0.7)]' : '',
         label: 'Beloved'
       };
     }
     if (count >= 100) {
       return { 
-        color: liked ? 'text-gray-800 fill-gray-800 dark:text-gray-200 dark:fill-gray-200' : 'text-gray-600 dark:text-gray-400',
-        glow: 'shadow-gray-500/30',
-        label: 'Appreciated'
+        color: liked ? 'text-red-500 fill-red-500' : 'text-red-400/70',
+        glow: liked ? 'drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]' : '',
+        label: 'Loved'
       };
     }
-    // Default red heart (1-100)
+    // 1–100: green heart
     return { 
-      color: liked ? 'text-red-500 fill-red-500' : 'text-muted-foreground',
-      glow: 'shadow-red-500/40',
-      label: 'Loved'
+      color: liked ? 'text-green-400 fill-green-400' : 'text-muted-foreground',
+      glow: liked ? 'drop-shadow-[0_0_6px_rgba(74,222,128,0.6)]' : '',
+      label: 'Fresh'
     };
   };
 
@@ -64,8 +76,7 @@ export function SymbolicHeart({
     <button
       onClick={onToggle}
       className={cn(
-        "transition-all duration-300 active:scale-125",
-        isLiked && showGlow && `drop-shadow-lg ${heartStyle.glow}`,
+        "transition-all duration-200 active:scale-125 flex items-center",
         className
       )}
       title={isLiked ? 'Unlike' : 'Like'}
@@ -75,7 +86,7 @@ export function SymbolicHeart({
           sizeClasses[size],
           "transition-all duration-200",
           heartStyle.color,
-          isLiked && "animate-pulse"
+          showGlow && isLiked && heartStyle.glow
         )} 
       />
     </button>
@@ -84,8 +95,10 @@ export function SymbolicHeart({
 
 // Export utility for other components to check heart style
 export function getHeartEmoji(likesCount: number): string {
-  if (likesCount >= 100000) return '💙';
-  if (likesCount >= 1000) return '🤍';
-  if (likesCount >= 100) return '🖤';
-  return '❤️';
+  if (likesCount >= 10_000_000) return '💛';
+  if (likesCount >= 1_000_000) return '🩷';
+  if (likesCount >= 100_000) return '💙';
+  if (likesCount >= 1_000) return '💜';
+  if (likesCount >= 100) return '❤️';
+  return '💚';
 }
