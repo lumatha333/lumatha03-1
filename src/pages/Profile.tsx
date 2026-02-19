@@ -14,7 +14,7 @@ import { FriendTick } from '@/components/lumatha/FriendTick';
 import { 
   ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
   MapPin, Calendar, Globe, Star, Trophy, Eye, MessageCircle, UserCheck, Clock, Users,
-  UserCircle2, X, Heart
+  UserCircle2, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
@@ -485,14 +485,11 @@ export default function Profile() {
         </DialogContent>
       </Dialog>
 
-      {/* Profile Tabs — now 6 tabs including liked posts */}
+      {/* Profile Tabs — 5 tabs (liked moved to Private) */}
       <Tabs defaultValue="posts" className="w-full">
-        <TabsList className="glass-card w-full grid grid-cols-6 h-auto p-0.5">
+        <TabsList className="glass-card w-full grid grid-cols-5 h-auto p-0.5">
           <TabsTrigger value="posts" className="flex flex-col gap-0.5 py-2 text-[10px]">
             <Image className="w-4 h-4" /> Posts
-          </TabsTrigger>
-          <TabsTrigger value="liked" className="flex flex-col gap-0.5 py-2 text-[10px]">
-            <Heart className="w-4 h-4" /> Liked
           </TabsTrigger>
           <TabsTrigger value="info" className="flex flex-col gap-0.5 py-2 text-[10px]">
             <User className="w-4 h-4" /> Info
@@ -521,31 +518,6 @@ export default function Profile() {
             <div className="space-y-4">
               {posts.map((post) => (
                 <EnhancedPostCard key={post.id} post={post} isSaved={saved.includes(post.id)} isLiked={likes.some(l => l.post_id === post.id)} likesCount={likesCount[post.id] || 0} currentUserId={currentUser?.id || ''} onToggleSave={toggleSave} onToggleLike={toggleLike} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* LIKED POSTS TAB — only visible to profile owner */}
-        <TabsContent value="liked" className="space-y-4 mt-4">
-          {!isOwnProfile ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-12 text-center">
-                <Heart className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground text-sm">Liked posts are private</p>
-              </CardContent>
-            </Card>
-          ) : likes.length === 0 ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-12 text-center">
-                <Heart className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">No liked posts yet</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {posts.filter(p => likes.some(l => l.post_id === p.id)).map((post) => (
-                <EnhancedPostCard key={post.id} post={post} isSaved={saved.includes(post.id)} isLiked={true} likesCount={likesCount[post.id] || 0} currentUserId={currentUser?.id || ''} onToggleSave={toggleSave} onToggleLike={toggleLike} />
               ))}
             </div>
           )}

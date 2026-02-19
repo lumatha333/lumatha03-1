@@ -80,7 +80,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
   if (!visible) return null;
 
   return (
-    <div className="flex items-center justify-end gap-1 sm:gap-2">
+    <div className="flex items-center justify-between w-full gap-0">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const active = isActive(tab);
@@ -92,25 +92,24 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
             key={tab.id}
             onClick={() => handleTabClick(tab)}
             className={cn(
-              "flex items-center gap-1 px-2 py-1.5 rounded-lg transition-all relative",
+              "flex flex-col items-center justify-center flex-1 py-1.5 rounded-xl transition-all relative",
               active ? "text-primary" : "text-muted-foreground hover:text-foreground"
             )}
             title={tab.label}
           >
             <div className="relative">
               {isProfileTab ? (
-                // Real user avatar for profile tab — same as Facebook
                 <Avatar className={cn(
-                  "w-[22px] h-[22px] transition-all",
+                  "w-7 h-7 transition-all",
                   active ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
                 )}>
                   <AvatarImage src={profile?.avatar_url || undefined} />
-                  <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground text-[8px] font-bold">
+                  <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground text-[10px] font-bold">
                     {profile?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                   </AvatarFallback>
                 </Avatar>
               ) : (
-                <Icon className={cn("w-[18px] h-[18px]", active ? "text-primary" : "")} />
+                <Icon className={cn("w-6 h-6", active ? "text-primary" : "")} />
               )}
               {showBadge && (
                 <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5">
@@ -118,7 +117,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
                 </span>
               )}
             </div>
-            <span className={cn("text-[10px] font-medium hidden sm:inline", active ? "text-primary" : "text-muted-foreground")}>
+            <span className={cn("text-[9px] font-medium mt-0.5", active ? "text-primary" : "text-muted-foreground")}>
               {tab.label}
             </span>
           </button>

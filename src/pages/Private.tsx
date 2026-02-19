@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Lock, Bookmark } from 'lucide-react';
+import { Lock, Bookmark, Heart } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,7 +34,6 @@ export default function Private() {
       let postsData: PostWithProfile[] = [];
 
       if (activeTab === 'own') {
-        // Fetch user's own private posts
         const { data } = await supabase
           .from('posts')
           .select('*, profiles(*)')
@@ -42,13 +41,26 @@ export default function Private() {
           .eq('visibility', 'private')
           .order('created_at', { ascending: false });
         postsData = data || [];
+      } else if (activeTab === 'liked') {
+        // Fetch liked posts
+        const { data: likedData } = await supabase
+          .from('likes')
+          .select('post_id')
+          .eq('user_id', user.id);
+        const likedPostIds = likedData?.map(l => l.post_id) || [];
+        if (likedPostIds.length > 0) {
+          const { data } = await supabase
+            .from('posts')
+            .select('*, profiles(*)')
+            .in('id', likedPostIds)
+            .order('created_at', { ascending: false });
+          postsData = data || [];
+        }
       } else if (activeTab === 'saved') {
-        // Fetch saved posts
         const { data: savedData } = await supabase
           .from('saved')
           .select('post_id')
           .eq('user_id', user.id);
-        
         const savedPostIds = savedData?.map(s => s.post_id) || [];
         if (savedPostIds.length > 0) {
           const { data } = await supabase
@@ -140,10 +152,14 @@ export default function Private() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="glass-card w-full grid grid-cols-2 h-auto p-0.5">
+        <TabsList className="glass-card w-full grid grid-cols-3 h-auto p-0.5">
           <TabsTrigger value="own" className="gap-1.5 text-xs py-2">
             <Lock className="w-3.5 h-3.5" />
             Own Posts
+          </TabsTrigger>
+          <TabsTrigger value="liked" className="gap-1.5 text-xs py-2">
+            <Heart className="w-3.5 h-3.5" />
+            Liked
           </TabsTrigger>
           <TabsTrigger value="saved" className="gap-1.5 text-xs py-2">
             <Bookmark className="w-3.5 h-3.5" />
@@ -162,6 +178,39 @@ export default function Private() {
                 <Lock className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
                 <p className="text-sm text-muted-foreground">No private posts yet</p>
                 <p className="text-xs text-muted-foreground mt-1">Create a post with visibility set to "Private"</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {posts.map((post) => (
+                <EnhancedPostCard
+                  key={post.id}
+                  post={post}
+                  isSaved={savedPosts.has(post.id)}
+                  isLiked={likedPosts.has(post.id)}
+                  likesCount={likeCounts[post.id] || 0}
+                  currentUserId={user.id}
+                  onToggleSave={() => toggleSave(post.id)}
+                  onToggleLike={() => toggleLike(post.id)}
+                  onDelete={() => deletePost(post.id)}
+                  onUpdate={fetchPosts}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="liked" className="space-y-3 mt-3">
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-64 w-full rounded-xl" />)}
+            </div>
+          ) : posts.length === 0 ? (
+            <Card className="glass-card">
+              <CardContent className="py-12 text-center">
+                <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground">No liked posts yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Like posts to see them here</p>
               </CardContent>
             </Card>
           ) : (
