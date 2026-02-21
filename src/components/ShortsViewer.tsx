@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, Heart, MessageCircle, Share2, Play, Bookmark, BookmarkCheck, MoreVertical, Download, Calendar, Eye, ThumbsDown, Ban, X, Volume2, VolumeX } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -70,6 +71,12 @@ export function ShortsViewer({
   const isSwiping = useRef(false);
 
   const currentVideo = videos[currentIndex];
+
+  // Lock body scroll
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
 
   // Play current video
   useEffect(() => {
@@ -194,8 +201,8 @@ export function ShortsViewer({
 
   if (!currentVideo) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] bg-black flex flex-col select-none">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] bg-black flex flex-col select-none" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
       {/* Progress Bar */}
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 z-[110]">
         <div className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-100" style={{ width: `${progress}%` }} />
@@ -399,6 +406,7 @@ export function ShortsViewer({
         }
         .animate-heart-pop { animation: heart-pop 0.8s ease-out forwards; }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 }
