@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ArrowLeft, Heart, MessageCircle, Share2, Play, Bookmark, BookmarkCheck, MoreVertical, Download, Calendar, Eye, ThumbsDown, Ban, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowLeft, Heart, MessageCircle, Share2, Play, Bookmark, BookmarkCheck, MoreVertical, Download, Calendar, Eye, ThumbsDown, Ban, X, Volume2, VolumeX } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import {
@@ -41,18 +40,14 @@ interface ShortsViewerProps {
   onNotInterested?: (videoId: string) => void;
 }
 
+const formatCount = (n: number): string => {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(n);
+};
+
 export function ShortsViewer({
-  videos,
-  initialIndex = 0,
-  onClose,
-  onLike,
-  onSave,
-  onComment,
-  onShare,
-  onDelete,
-  onProfileClick,
-  onBlock,
-  onNotInterested,
+  videos, initialIndex = 0, onClose, onLike, onSave, onComment, onShare, onDelete, onProfileClick, onBlock, onNotInterested,
 }: ShortsViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isMuted, setIsMuted] = useState(false);
@@ -61,9 +56,9 @@ export function ShortsViewer({
   const [likedVideos, setLikedVideos] = useState<Set<string>>(new Set(videos.filter(v => v.isLiked).map(v => v.id)));
   const [savedVideos, setSavedVideos] = useState<Set<string>>(new Set(videos.filter(v => v.isSaved).map(v => v.id)));
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>(() => {
-    const counts: Record<string, number> = {};
-    videos.forEach(v => { counts[v.id] = v.likesCount; });
-    return counts;
+    const c: Record<string, number> = {};
+    videos.forEach(v => { c[v.id] = v.likesCount; });
+    return c;
   });
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [heartPosition, setHeartPosition] = useState({ x: 0, y: 0 });
@@ -72,18 +67,17 @@ export function ShortsViewer({
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
   const lastTapTime = useRef(0);
-  const lastTapPosition = useRef({ x: 0, y: 0 });
   const isSwiping = useRef(false);
 
   const currentVideo = videos[currentIndex];
 
+  // Play current video
   useEffect(() => {
     const video = videoRefs.current.get(currentIndex);
     if (video) {
       video.currentTime = 0;
       video.muted = isMuted;
       if (isPlaying) video.play().catch(() => {});
-
       const updateProgress = () => {
         if (video.duration) setProgress((video.currentTime / video.duration) * 100);
       };
@@ -92,45 +86,42 @@ export function ShortsViewer({
     }
   }, [currentIndex, isPlaying, isMuted]);
 
+  // Pause non-current videos
   useEffect(() => {
     videoRefs.current.forEach((v, idx) => {
       if (idx !== currentIndex) { v.pause(); v.currentTime = 0; }
     });
   }, [currentIndex]);
 
+  // Keyboard
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowUp' && currentIndex > 0) { setCurrentIndex(prev => prev - 1); setProgress(0); }
-      else if (e.key === 'ArrowDown' && currentIndex < videos.length - 1) { setCurrentIndex(prev => prev + 1); setProgress(0); }
+      if (e.key === 'ArrowUp' && currentIndex > 0) { setCurrentIndex(p => p - 1); setProgress(0); }
+      else if (e.key === 'ArrowDown' && currentIndex < videos.length - 1) { setCurrentIndex(p => p + 1); setProgress(0); }
       else if (e.key === 'Escape') onClose();
       else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
-      else if (e.key === 'm') setIsMuted(prev => !prev);
+      else if (e.key === 'm') setIsMuted(p => !p);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, videos.length, onClose]);
 
+  // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
     touchStartTime.current = Date.now();
     isSwiping.current = false;
   };
-
   const handleTouchMove = (e: React.TouchEvent) => {
-    const diff = Math.abs(touchStartY.current - e.touches[0].clientY);
-    if (diff > 10) isSwiping.current = true;
+    if (Math.abs(touchStartY.current - e.touches[0].clientY) > 10) isSwiping.current = true;
   };
-
   const handleTouchEnd = (e: React.TouchEvent) => {
-    const touchEndY = e.changedTouches[0].clientY;
-    const diff = touchStartY.current - touchEndY;
-    const timeDiff = Date.now() - touchStartTime.current;
-    const velocity = Math.abs(diff) / timeDiff;
+    const diff = touchStartY.current - e.changedTouches[0].clientY;
+    const velocity = Math.abs(diff) / (Date.now() - touchStartTime.current);
     const threshold = velocity > 0.5 ? 30 : 80;
-
     if (Math.abs(diff) > threshold) {
-      if (diff > 0 && currentIndex < videos.length - 1) { setCurrentIndex(prev => prev + 1); setProgress(0); }
-      else if (diff < 0 && currentIndex > 0) { setCurrentIndex(prev => prev - 1); setProgress(0); }
+      if (diff > 0 && currentIndex < videos.length - 1) { setCurrentIndex(p => p + 1); setProgress(0); }
+      else if (diff < 0 && currentIndex > 0) { setCurrentIndex(p => p - 1); setProgress(0); }
     }
   };
 
@@ -142,12 +133,10 @@ export function ShortsViewer({
     }
   }, [currentIndex]);
 
-  // Only toggle play/mute on the video area itself (not UI buttons)
   const handleVideoAreaTap = useCallback((e: React.MouseEvent) => {
     if (isSwiping.current) return;
     const now = Date.now();
     const position = { x: e.clientX, y: e.clientY };
-
     if (now - lastTapTime.current < 300) {
       // Double tap — like
       const videoId = currentVideo?.id;
@@ -160,18 +149,16 @@ export function ShortsViewer({
       setShowHeartAnimation(true);
       setTimeout(() => setShowHeartAnimation(false), 800);
     } else {
-      // Single tap — toggle mute
-      setIsMuted(prev => !prev);
+      togglePlay();
     }
     lastTapTime.current = now;
-    lastTapPosition.current = position;
-  }, [currentVideo?.id, likedVideos, onLike]);
+  }, [currentVideo?.id, likedVideos, onLike, togglePlay]);
 
   const handleLike = (e: React.MouseEvent, videoId: string) => {
     e.stopPropagation();
     const isLiked = likedVideos.has(videoId);
     if (isLiked) {
-      setLikedVideos(prev => { const next = new Set(prev); next.delete(videoId); return next; });
+      setLikedVideos(prev => { const n = new Set(prev); n.delete(videoId); return n; });
       setLikeCounts(prev => ({ ...prev, [videoId]: Math.max(0, (prev[videoId] || 1) - 1) }));
     } else {
       setLikedVideos(prev => new Set(prev).add(videoId));
@@ -182,8 +169,7 @@ export function ShortsViewer({
 
   const handleSave = (e: React.MouseEvent, videoId: string) => {
     e.stopPropagation();
-    const isSaved = savedVideos.has(videoId);
-    if (isSaved) setSavedVideos(prev => { const next = new Set(prev); next.delete(videoId); return next; });
+    if (savedVideos.has(videoId)) setSavedVideos(prev => { const n = new Set(prev); n.delete(videoId); return n; });
     else setSavedVideos(prev => new Set(prev).add(videoId));
     onSave?.(videoId);
   };
@@ -196,9 +182,7 @@ export function ShortsViewer({
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentVideo.title || 'video'}.mp4`;
-      a.click();
+      a.href = url; a.download = `${currentVideo.title || 'video'}.mp4`; a.click();
       URL.revokeObjectURL(url);
     } catch (err) { console.error('Download failed', err); }
   };
@@ -217,7 +201,7 @@ export function ShortsViewer({
         <div className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-100" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* Video Swipe Container — touch events only here */}
+      {/* Video Swipe Container */}
       <div
         className="absolute inset-0 overflow-hidden"
         onTouchStart={handleTouchStart}
@@ -232,7 +216,6 @@ export function ShortsViewer({
               index === currentIndex ? "translate-y-0 opacity-100 z-10" :
               index < currentIndex ? "-translate-y-full opacity-0 z-0" : "translate-y-full opacity-0 z-0"
             )}
-            // Only the video itself gets the tap handler
             onClick={handleVideoAreaTap}
           >
             <video
@@ -253,160 +236,155 @@ export function ShortsViewer({
         ))}
       </div>
 
-      {/* Double Tap Heart — above video, below UI */}
+      {/* Double Tap Heart */}
       {showHeartAnimation && (
-        <div
-          className="fixed z-[120] pointer-events-none animate-heart-pop"
-          style={{ left: heartPosition.x - 40, top: heartPosition.y - 40 }}
-        >
+        <div className="fixed z-[120] pointer-events-none animate-heart-pop"
+          style={{ left: heartPosition.x - 40, top: heartPosition.y - 40 }}>
           <Heart className="w-20 h-20 text-red-500 fill-red-500 drop-shadow-2xl" />
         </div>
       )}
 
-      {/* ═══ TOP BAR — z-[130] so it's always clickable ═══ */}
+      {/* ═══ TOP BAR ═══ */}
       <div className="absolute top-0 left-0 right-0 z-[130] pointer-events-none">
         <div className="flex items-center justify-between px-3 pt-3 pb-1 pointer-events-auto">
-          {/* Back + Profile */}
-          <div className="flex items-center gap-2">
-            <button
-              className="h-9 w-9 rounded-full bg-black/30 backdrop-blur flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <button
-              className="flex items-center gap-2 cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); onProfileClick(currentVideo.userId); }}
-            >
-              <Avatar className="w-9 h-9 ring-2 ring-white/50">
-                <AvatarImage src={currentVideo.userAvatar} />
-                <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-white text-xs font-bold">
-                  {currentVideo.username[0]?.toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-white text-sm font-semibold drop-shadow-lg">@{currentVideo.username}</span>
-            </button>
-          </div>
+          <button
+            className="h-9 w-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
 
-          {/* Triple-dot Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="h-9 w-9 rounded-full bg-black/30 backdrop-blur flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+          <div className="flex items-center gap-2">
+            {/* Mute toggle */}
+            <button
+              className="h-9 w-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+              onClick={(e) => { e.stopPropagation(); setIsMuted(p => !p); }}
+            >
+              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+
+            {/* Triple-dot Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="h-9 w-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="bg-black/90 backdrop-blur-xl border-white/15 text-white min-w-[200px] rounded-2xl p-1"
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreVertical className="w-5 h-5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="bg-black/90 backdrop-blur-xl border-white/15 text-white min-w-[200px] rounded-2xl p-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <DropdownMenuItem onClick={() => handleDownload()} className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10 cursor-pointer">
-                <Download className="w-4 h-4 text-blue-400" />
-                <span>Download</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10" disabled>
-                <Calendar className="w-4 h-4 text-purple-400" />
-                <span>Posted {formatDate(currentVideo.createdAt)}</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-white/10" />
-              <DropdownMenuItem className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10" disabled>
-                <Eye className="w-4 h-4 text-cyan-400" />
-                <span>{currentVideo.viewsCount ?? 0} views</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10" disabled>
-                <Heart className="w-4 h-4 text-red-400" />
-                <span>{likeCounts[currentVideo.id] || 0} likes</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10" disabled>
-                <MessageCircle className="w-4 h-4 text-green-400" />
-                <span>{currentVideo.commentsCount ?? 0} comments</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-white/10" />
-              <DropdownMenuItem
-                onClick={(e) => { e.stopPropagation(); onNotInterested?.(currentVideo.id); }}
-                className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10 cursor-pointer"
-              >
-                <ThumbsDown className="w-4 h-4 text-yellow-400" />
-                <span>Not interested</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => { e.stopPropagation(); onBlock?.(currentVideo.userId); }}
-                className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10 text-red-400 focus:text-red-400 cursor-pointer"
-              >
-                <Ban className="w-4 h-4" />
-                <span>Block</span>
-              </DropdownMenuItem>
-              {currentVideo.isOwner && (
-                <>
-                  <DropdownMenuSeparator className="bg-white/10" />
-                  <DropdownMenuItem
-                    onClick={(e) => { e.stopPropagation(); onDelete?.(currentVideo.id); }}
-                    className="gap-3 rounded-xl px-3 py-2.5 focus:bg-red-500/20 text-red-400 focus:text-red-400 cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                    <span>Delete</span>
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={() => handleDownload()} className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10 cursor-pointer">
+                  <Download className="w-4 h-4 text-blue-400" /><span>Download</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10" disabled>
+                  <Calendar className="w-4 h-4 text-purple-400" /><span>Posted {formatDate(currentVideo.createdAt)}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuItem className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10" disabled>
+                  <Eye className="w-4 h-4 text-cyan-400" /><span>{currentVideo.viewsCount ?? 0} views</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); onNotInterested?.(currentVideo.id); }}
+                  className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10 cursor-pointer"
+                >
+                  <ThumbsDown className="w-4 h-4 text-yellow-400" /><span>Not interested</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); onBlock?.(currentVideo.userId); }}
+                  className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10 text-red-400 cursor-pointer"
+                >
+                  <Ban className="w-4 h-4" /><span>Block</span>
+                </DropdownMenuItem>
+                {currentVideo.isOwner && (
+                  <>
+                    <DropdownMenuSeparator className="bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); onDelete?.(currentVideo.id); }}
+                      className="gap-3 rounded-xl px-3 py-2.5 focus:bg-red-500/20 text-red-400 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" /><span>Delete</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
-      {/* ═══ BOTTOM BAR — z-[130] so always clickable ═══ */}
+      {/* ═══ RIGHT-SIDE ACTION BAR (Instagram-style) ═══ */}
+      <div className="absolute right-3 bottom-32 z-[130] flex flex-col items-center gap-5 pointer-events-auto">
+        {/* Like */}
+        <button
+          onClick={(e) => handleLike(e, currentVideo.id)}
+          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+        >
+          <Heart className={cn(
+            "w-7 h-7 transition-all duration-200",
+            likedVideos.has(currentVideo.id) ? "text-red-500 fill-red-500 scale-110" : "text-white"
+          )} />
+          <span className="text-white text-[11px] font-semibold">{formatCount(likeCounts[currentVideo.id] || 0)}</span>
+        </button>
+
+        {/* Comment */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onComment(currentVideo.id); }}
+          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+        >
+          <MessageCircle className="w-7 h-7 text-white" />
+          <span className="text-white text-[11px] font-semibold">{formatCount(currentVideo.commentsCount ?? 0)}</span>
+        </button>
+
+        {/* Share */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onShare(currentVideo.id); }}
+          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+        >
+          <Share2 className="w-7 h-7 text-white" />
+        </button>
+
+        {/* Save */}
+        <button
+          onClick={(e) => handleSave(e, currentVideo.id)}
+          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+        >
+          {savedVideos.has(currentVideo.id)
+            ? <BookmarkCheck className="w-7 h-7 text-yellow-400 fill-yellow-400" />
+            : <Bookmark className="w-7 h-7 text-white" />
+          }
+        </button>
+      </div>
+
+      {/* ═══ BOTTOM-LEFT USER INFO + DESCRIPTION ═══ */}
       <div className="absolute bottom-0 left-0 right-0 z-[130] pointer-events-none">
-        {/* Gradient overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />
-        
-        <div className="relative pointer-events-auto px-4 pb-8 pt-4">
-          {/* Title/Description */}
-          <p className="text-white/90 text-sm line-clamp-2 leading-snug drop-shadow-lg mb-4 max-w-[78%]">
-            {currentVideo.title}
-          </p>
-
-          {/* Action Row */}
-          <div className="flex items-center justify-between">
-            {/* Like */}
+        <div className="relative pointer-events-auto px-4 pb-8 pt-10 pr-16">
+          {/* User row */}
+          <div className="flex items-center gap-2 mb-2">
             <button
-              onClick={(e) => handleLike(e, currentVideo.id)}
-              className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+              onClick={(e) => { e.stopPropagation(); onProfileClick(currentVideo.userId); }}
+              className="flex items-center gap-2"
             >
-              <Heart className={cn(
-                "w-7 h-7 transition-all duration-200",
-                likedVideos.has(currentVideo.id) ? "text-red-500 fill-red-500 scale-110" : "text-white"
-              )} />
-            </button>
-
-            {/* Comment */}
-            <button
-              onClick={(e) => { e.stopPropagation(); onComment(currentVideo.id); }}
-              className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
-            >
-              <MessageCircle className="w-7 h-7 text-white" />
-            </button>
-
-            {/* Save */}
-            <button
-              onClick={(e) => handleSave(e, currentVideo.id)}
-              className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
-            >
-              {savedVideos.has(currentVideo.id)
-                ? <BookmarkCheck className="w-7 h-7 text-yellow-400 fill-yellow-400" />
-                : <Bookmark className="w-7 h-7 text-white" />
-              }
-            </button>
-
-            {/* Share */}
-            <button
-              onClick={(e) => { e.stopPropagation(); onShare(currentVideo.id); }}
-              className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
-            >
-              <Share2 className="w-7 h-7 text-white" />
+              <Avatar className="w-9 h-9 ring-2 ring-white/50">
+                <AvatarImage src={currentVideo.userAvatar} />
+                <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-xs font-bold">
+                  {currentVideo.username[0]?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-white text-sm font-bold drop-shadow-lg">@{currentVideo.username}</span>
             </button>
           </div>
+
+          {/* Description */}
+          <p className="text-white/90 text-sm line-clamp-2 leading-snug drop-shadow-lg">
+            {currentVideo.title}
+          </p>
         </div>
       </div>
 
