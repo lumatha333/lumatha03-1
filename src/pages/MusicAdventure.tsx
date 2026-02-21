@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
 import { DailyDoseCard } from '@/components/feed/DailyDoseCard';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,8 @@ import {
   MapPin, Star, Heart, Target, Compass, Globe, 
   Plus, Check, Share2, MessageCircle, Footprints, 
   Award, Plane, Sparkles, Filter, Clock, Search,
-  RefreshCw, Users, ExternalLink, Image, Video, Map, Flag, List
+  RefreshCw, Users, ExternalLink, Image, Video, Map, Flag, List, 
+  Shuffle, Leaf, Coffee, Eye
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AdventureCommentsDialog } from '@/components/AdventureCommentsDialog';
@@ -46,7 +47,7 @@ const RANKING_CATEGORIES = [
 
 // Import from data files
 import { SYSTEM_CHALLENGES } from '@/data/adventureChallenges';
-import { ADVENTURE_PLACES } from '@/data/adventurePlaces';
+import { ADVENTURE_PLACES, getAllCountries } from '@/data/adventurePlaces';
 
 // ============= COMPONENT =============
 export default function MusicAdventure() {
@@ -60,6 +61,13 @@ export default function MusicAdventure() {
   // Search states
   const [discoverSearch, setDiscoverSearch] = useState('');
   const [travelSearch, setTravelSearch] = useState('');
+  
+  // Discover explore mode
+  const [exploreMode, setExploreMode] = useState<'all' | 'my_country' | 'random_country' | 'hidden_gems'>('all');
+  const [randomCountry, setRandomCountry] = useState<string | null>(null);
+  const [exploreCount, setExploreCount] = useState(0);
+  const [showSoftStop, setShowSoftStop] = useState(false);
+  const [discoverTypeFilter, setDiscoverTypeFilter] = useState<'all' | 'unesco' | 'hidden'>('all');
   
   // Challenge states
   const [customChallenges, setCustomChallenges] = useState<any[]>([]);
@@ -214,15 +222,46 @@ export default function MusicAdventure() {
     return challenges.slice(0, 50);
   }, [sourceFilter, timeFilter, customChallenges]);
 
-  // Filter places
+  // Pick random country
+  const pickRandomCountry = useCallback(() => {
+    const countries = getAllCountries();
+    const rand = countries[Math.floor(Math.random() * countries.length)];
+    setRandomCountry(rand.name);
+    setExploreCount(prev => {
+      const next = prev + 1;
+      if (next >= 10 && next % 10 === 0) setShowSoftStop(true);
+      return next;
+    });
+  }, []);
+
+  // Filter places with explore modes
   const filteredPlaces = useMemo(() => {
-    if (!discoverSearch.trim()) return ADVENTURE_PLACES.slice(0, 100);
-    const search = discoverSearch.toLowerCase();
-    return ADVENTURE_PLACES.filter(p => 
-      p.name.toLowerCase().includes(search) || 
-      p.country.toLowerCase().includes(search)
-    ).slice(0, 100);
-  }, [discoverSearch]);
+    let places = [...ADVENTURE_PLACES];
+    
+    // Type filter
+    if (discoverTypeFilter === 'unesco') places = places.filter(p => p.type === 'unesco');
+    else if (discoverTypeFilter === 'hidden') places = places.filter(p => p.type === 'hidden');
+    
+    // Mode filter
+    if (exploreMode === 'my_country' && profile?.country) {
+      places = places.filter(p => p.country.toLowerCase() === profile.country.toLowerCase());
+    } else if (exploreMode === 'random_country' && randomCountry) {
+      places = places.filter(p => p.country === randomCountry);
+    } else if (exploreMode === 'hidden_gems') {
+      places = places.filter(p => p.type === 'hidden');
+    }
+    
+    // Search filter
+    if (discoverSearch.trim()) {
+      const search = discoverSearch.toLowerCase();
+      places = places.filter(p => 
+        p.name.toLowerCase().includes(search) || 
+        p.country.toLowerCase().includes(search)
+      );
+    }
+    
+    return places.slice(0, 100);
+  }, [discoverSearch, exploreMode, randomCountry, profile?.country, discoverTypeFilter]);
 
   // Filter travel stories with Global/Regional
   const filteredTravelStories = useMemo(() => {
@@ -608,7 +647,71 @@ export default function MusicAdventure() {
 
         {/* DISCOVER TAB */}
         <TabsContent value="discover" className="mt-4 space-y-4">
-          {/* View Toggle: List / Map */}
+          {/* Soft Stop Dialog */}
+          {showSoftStop && (
+            <Card className="glass-card border-primary/30 overflow-hidden animate-fade-in">
+              <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+              <CardContent className="p-4 text-center space-y-3">
+                <Leaf className="w-8 h-8 text-emerald-400 mx-auto" />
+                <div>
+                  <p className="text-sm font-semibold">You've explored {exploreCount} places 🌿</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Take a mindful pause. Save favorites for later.</p>
+                </div>
+                <div className="flex gap-2 justify-center">
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => setShowSoftStop(false)}>
+                    <Coffee className="w-3.5 h-3.5" /> Pause
+                  </Button>
+                  <Button size="sm" className="gap-1" onClick={() => setShowSoftStop(false)}>
+                    <Eye className="w-3.5 h-3.5" /> Continue
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Explore Mode Selector */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+            {[
+              { id: 'all' as const, icon: Globe, label: 'All Places' },
+              { id: 'my_country' as const, icon: Flag, label: 'My Country' },
+              { id: 'random_country' as const, icon: Shuffle, label: 'Random' },
+              { id: 'hidden_gems' as const, icon: Sparkles, label: 'Hidden Gems' },
+            ].map(mode => (
+              <Button
+                key={mode.id}
+                size="sm"
+                variant={exploreMode === mode.id ? 'default' : 'outline'}
+                className="h-8 text-xs gap-1 shrink-0"
+                onClick={() => {
+                  setExploreMode(mode.id);
+                  if (mode.id === 'random_country') pickRandomCountry();
+                }}
+              >
+                <mode.icon className="w-3.5 h-3.5" />
+                {mode.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Random Country Banner */}
+          {exploreMode === 'random_country' && randomCountry && (
+            <Card className="glass-card border-primary/20 overflow-hidden">
+              <CardContent className="p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="text-sm font-semibold">Exploring: {randomCountry}</p>
+                    <p className="text-[10px] text-muted-foreground">{filteredPlaces.length} places found</p>
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={pickRandomCountry}>
+                  <Shuffle className="w-3 h-3" /> New Country
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Search + View Toggle + Type Filter */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -620,37 +723,38 @@ export default function MusicAdventure() {
               />
             </div>
             <div className="flex gap-1 bg-muted rounded-lg p-1">
-              <Button
-                size="sm"
-                variant={discoverViewMode === 'list' ? 'default' : 'ghost'}
-                className="h-8 w-8 p-0"
-                onClick={() => setDiscoverViewMode('list')}
-              >
+              <Button size="sm" variant={discoverViewMode === 'list' ? 'default' : 'ghost'} className="h-8 w-8 p-0" onClick={() => setDiscoverViewMode('list')}>
                 <List className="w-4 h-4" />
               </Button>
-              <Button
-                size="sm"
-                variant={discoverViewMode === 'map' ? 'default' : 'ghost'}
-                className="h-8 w-8 p-0"
-                onClick={() => setDiscoverViewMode('map')}
-              >
+              <Button size="sm" variant={discoverViewMode === 'map' ? 'default' : 'ghost'} className="h-8 w-8 p-0" onClick={() => setDiscoverViewMode('map')}>
                 <Map className="w-4 h-4" />
               </Button>
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground text-center">
-            {ADVENTURE_PLACES.length}+ places from 220+ countries • {visitedPlaces.size} visited
-          </p>
+          {/* Type filter pills */}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1 flex-1">
+              {[
+                { id: 'all' as const, label: 'All' },
+                { id: 'unesco' as const, label: '🏛️ UNESCO' },
+                { id: 'hidden' as const, label: '💎 Hidden' },
+              ].map(t => (
+                <Button key={t.id} size="sm" variant={discoverTypeFilter === t.id ? 'default' : 'ghost'} className="h-7 text-[10px] px-2.5" onClick={() => setDiscoverTypeFilter(t.id)}>
+                  {t.label}
+                </Button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {filteredPlaces.length} places • {visitedPlaces.size} visited
+            </p>
+          </div>
 
           {/* Map View */}
           {discoverViewMode === 'map' && (
             <Suspense fallback={
               <div className="h-[400px] rounded-xl bg-muted/50 flex items-center justify-center">
-                <div className="text-center">
-                  <Map className="w-12 h-12 mx-auto text-muted-foreground/30 mb-2 animate-pulse" />
-                  <p className="text-sm text-muted-foreground">Loading map...</p>
-                </div>
+                <Map className="w-12 h-12 mx-auto text-muted-foreground/30 animate-pulse" />
               </div>
             }>
               <DiscoverMapView
@@ -672,7 +776,9 @@ export default function MusicAdventure() {
                   <CardContent className="py-12 text-center">
                     <MapPin className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
                     <p className="font-medium">No places found</p>
-                    <p className="text-xs text-muted-foreground mt-1">Try a different search term</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {exploreMode === 'my_country' ? 'No places for your country yet' : 'Try a different search or mode'}
+                    </p>
                   </CardContent>
                 </Card>
               ) : (
@@ -692,11 +798,22 @@ export default function MusicAdventure() {
                           alt={place.name}
                           className="w-full h-full"
                         />
-                        {isVisited && (
-                          <div className="absolute top-2 right-2 bg-primary text-primary-foreground px-2 py-0.5 rounded-full text-[10px] font-medium">
-                            ✓ Visited
-                          </div>
-                        )}
+                        <div className="absolute top-2 left-2 flex gap-1">
+                          {isVisited && (
+                            <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded-full text-[10px] font-medium">
+                              ✓ Visited
+                            </span>
+                          )}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${place.type === 'unesco' ? 'bg-amber-500/80 text-white' : 'bg-violet-500/80 text-white'}`}>
+                            {place.type === 'unesco' ? '🏛️ UNESCO' : '💎 Hidden Gem'}
+                          </span>
+                        </div>
+                        {/* Attribution */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-1.5">
+                          <p className="text-[8px] text-white/70">
+                            📷 via Wikimedia Commons
+                          </p>
+                        </div>
                       </div>
                       
                       <CardContent className="p-4">
