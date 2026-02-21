@@ -95,19 +95,8 @@ export default function Home() {
       query = query.order('created_at', { ascending: false }).limit(50);
       let { data: postsData } = await query;
 
-      if (contentFilter === 'videos' && postsData) {
-        if (videoType === 'short') {
-          postsData = postsData.filter(p => {
-            const isShort = p.subcategory?.toLowerCase().includes('short') || p.tags?.some(t => t.toLowerCase().includes('short')) || p.title?.toLowerCase().includes('short');
-            return isShort !== false;
-          });
-        } else if (videoType === 'long') {
-          postsData = postsData.filter(p => {
-            const isLong = p.subcategory?.toLowerCase().includes('long') || p.tags?.some(t => t.toLowerCase().includes('long')) || p.title?.toLowerCase().includes('full') || p.title?.toLowerCase().includes('long');
-            return isLong !== false;
-          });
-        }
-      }
+      // Duration-based filtering is handled when opening shorts viewer
+      // Short = ≤60s, Long = >60s (checked via video element duration at playback)
 
       let processedPosts = postsData || [];
       if (feedCategory === 'regional' && userCountry) processedPosts = processedPosts.filter(p => p.profiles?.country === userCountry);
@@ -241,39 +230,38 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Video Mode Toggle */}
+      {/* Video Duration Filter — Classic: Short (≤1min) / Long (>1min) */}
       {contentFilter === 'videos' && (
-        <Card className="glass-card border-primary/30 bg-primary/5 rounded-2xl">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-center gap-2">
-              {(['all', 'short', 'long'] as const).map((type) => (
-                <Button
-                  key={type}
-                  size="sm"
-                  variant={videoType === type ? 'default' : 'outline'}
-                  className="h-7 text-xs capitalize px-3 rounded-xl"
-                  onClick={() => {
-                    setVideoType(type);
-                    if (type === 'short') {
-                      const videoPosts = posts.filter(p => p.file_type?.includes('video') || p.media_types?.some(t => t.includes('video')));
-                      const shortVideos = videoPosts.map(p => ({
-                        id: p.id, url: p.file_url || (p.media_urls && p.media_urls[0]) || '',
-                        title: p.title, username: p.profiles?.name || 'User', userAvatar: p.profiles?.avatar_url || undefined,
-                        userId: p.user_id, likesCount: likeCounts[p.id] || 0, isLiked: likedPosts.has(p.id),
-                        isSaved: savedPosts.has(p.id), isOwner: p.user_id === user.id
-                      })).filter(v => v.url);
-                      if (shortVideos.length > 0) { setShortsData(shortVideos); setShowShortsViewer(true); }
-                    }
-                  }}
-                >
-                  {type === 'all' && 'All'}
-                  {type === 'short' && 'Short'}
-                  {type === 'long' && 'Long'}
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex items-center gap-2">
+          {(['all', 'short', 'long'] as const).map((type) => (
+            <Button
+              key={type}
+              size="sm"
+              variant={videoType === type ? 'default' : 'ghost'}
+              className={cn(
+                "h-8 text-xs px-4 rounded-full transition-all",
+                videoType === type && "shadow-md"
+              )}
+              onClick={() => {
+                setVideoType(type);
+                // Open shorts viewer for short videos
+                if (type === 'short') {
+                  const videoPosts = posts.filter(p => p.file_type?.includes('video') || p.media_types?.some(t => t.includes('video')));
+                  const shortVideos = videoPosts.map(p => ({
+                    id: p.id, url: p.file_url || (p.media_urls && p.media_urls[0]) || '',
+                    title: p.title, username: p.profiles?.name || 'User', userAvatar: p.profiles?.avatar_url || undefined,
+                    userId: p.user_id, likesCount: likeCounts[p.id] || 0, isLiked: likedPosts.has(p.id),
+                    isSaved: savedPosts.has(p.id), isOwner: p.user_id === user.id,
+                    createdAt: p.created_at || undefined, commentsCount: 0, viewsCount: p.views_count || 0,
+                  })).filter(v => v.url);
+                  if (shortVideos.length > 0) { setShortsData(shortVideos); setShowShortsViewer(true); }
+                }
+              }}
+            >
+              {type === 'all' ? 'All' : type === 'short' ? 'Short' : 'Long'}
+            </Button>
+          ))}
+        </div>
       )}
 
       {/* Ghost Mode Notice */}

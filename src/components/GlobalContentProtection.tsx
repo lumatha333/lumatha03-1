@@ -108,22 +108,10 @@ export function useGlobalProtection() {
   return { username: profile?.name || 'User' };
 }
 
-/** Dynamic watermark — subtle, covers the page */
+/** Watermark removed — was too intrusive and boring for users */
 export function GlobalWatermark({ username }: { username: string }) {
-  const sessionId = Math.random().toString(36).slice(2, 8);
-  const stamp = `${username} • ${sessionId}`;
-
-  return (
-    <div className="fixed inset-0 pointer-events-none z-[9990] overflow-hidden opacity-[0.025]" aria-hidden="true">
-      <div className="absolute inset-0 flex flex-wrap items-start justify-start gap-20 p-8 -rotate-[30deg] scale-[1.8] origin-center">
-        {Array.from({ length: 40 }).map((_, i) => (
-          <span key={i} className="text-foreground text-[10px] font-medium whitespace-nowrap select-none">
-            {stamp}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
+  // Watermark disabled per user feedback - protection is handled by blur + anti-copy instead
+  return null;
 }
 
 /** Blur overlay shown when tab is hidden or screenshot detected */

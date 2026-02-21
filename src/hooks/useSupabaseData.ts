@@ -42,16 +42,18 @@ export function useSupabaseData() {
 
       setPosts(postsData || []);
 
-      // Fetch likes count for each post
-      if (postsData) {
+      // Batch fetch likes count efficiently
+      if (postsData && postsData.length > 0) {
+        const postIds = postsData.map(p => p.id);
+        const { data: allLikes } = await supabase
+          .from('likes')
+          .select('post_id')
+          .in('post_id', postIds);
         const counts: Record<string, number> = {};
-        for (const post of postsData) {
-          const { count } = await supabase
-            .from('likes')
-            .select('*', { count: 'exact', head: true })
-            .eq('post_id', post.id);
-          counts[post.id] = count || 0;
-        }
+        postIds.forEach(id => { counts[id] = 0; });
+        allLikes?.forEach(like => {
+          counts[like.post_id] = (counts[like.post_id] || 0) + 1;
+        });
         setLikesCount(counts);
       }
 
