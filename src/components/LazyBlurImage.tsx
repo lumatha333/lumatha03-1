@@ -105,13 +105,14 @@ const LazyBlurImage: React.FC<LazyBlurImageProps> = ({
         />
       )}
 
-      {/* Fallback for error */}
+      {/* Fallback for error — styled discovery placeholder */}
       {hasError && (
         <div 
-          className="absolute inset-0 flex items-center justify-center bg-muted"
+          className="absolute inset-0 flex flex-col items-center justify-center"
           style={{ background: blurGradient }}
         >
-          <span className="text-muted-foreground text-xs">Image unavailable</span>
+          <div className="text-3xl mb-1 opacity-70">🌍</div>
+          <p className="text-[10px] text-white/80 font-medium drop-shadow-sm">Discovering this place</p>
         </div>
       )}
     </div>
