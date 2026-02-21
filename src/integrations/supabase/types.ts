@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       challenge_submissions: {
         Row: {
           challenge_id: string
@@ -714,12 +735,14 @@ export type Database = {
       profiles: {
         Row: {
           age_group: string | null
+          allow_messages_from: string | null
           avatar_url: string | null
           bio: string | null
           country: string | null
           cover_url: string | null
           created_at: string | null
           id: string
+          is_private: boolean | null
           location: string | null
           name: string
           total_followers: number | null
@@ -730,12 +753,14 @@ export type Database = {
         }
         Insert: {
           age_group?: string | null
+          allow_messages_from?: string | null
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
           cover_url?: string | null
           created_at?: string | null
           id: string
+          is_private?: boolean | null
           location?: string | null
           name: string
           total_followers?: number | null
@@ -746,12 +771,14 @@ export type Database = {
         }
         Update: {
           age_group?: string | null
+          allow_messages_from?: string | null
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
           cover_url?: string | null
           created_at?: string | null
           id?: string
+          is_private?: boolean | null
           location?: string | null
           name?: string
           total_followers?: number | null
@@ -1257,9 +1284,17 @@ export type Database = {
         }
         Returns: string
       }
+      get_mutual_friends_count: {
+        Args: { user1: string; user2: string }
+        Returns: number
+      }
       get_random_connect_report_count: {
         Args: { check_user_id: string }
         Returns: number
+      }
+      is_blocked: {
+        Args: { checker_id: string; target_id: string }
+        Returns: boolean
       }
     }
     Enums: {
