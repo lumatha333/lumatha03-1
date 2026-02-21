@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { SplashScreen } from '@/components/SplashScreen';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { useGlobalProtection, GlobalWatermark, GlobalBlurOverlay } from '@/components/GlobalContentProtection';
 import Home from '@/pages/Home';
 import Education from '@/pages/Education';
 import MusicAdventure from '@/pages/MusicAdventure';
@@ -26,6 +27,7 @@ export default function Index() {
       <SplashScreen />
       <BrowserRouter>
         <AuthProvider>
+          <ProtectionLayer />
           <Layout>
             <Routes>
               <Route path="/auth" element={<Auth />} />
@@ -50,6 +52,17 @@ export default function Index() {
           </Layout>
         </AuthProvider>
       </BrowserRouter>
+    </>
+  );
+}
+
+/** Renders global watermark + blur overlay + activates protection hooks */
+function ProtectionLayer() {
+  const { username } = useGlobalProtection();
+  return (
+    <>
+      <GlobalWatermark username={username} />
+      <GlobalBlurOverlay />
     </>
   );
 }

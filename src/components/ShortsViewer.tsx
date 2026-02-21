@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Heart, MessageCircle, Share2, Play, Bookmark, BookmarkCheck, MoreVertical, Download, Calendar, Eye, ThumbsDown, Ban, X, Volume2, VolumeX } from 'lucide-react';
+import { ArrowLeft, Heart, MessageCircle, Send, Play, Bookmark, BookmarkCheck, MoreVertical, Download, Calendar, Eye, ThumbsDown, Ban, X, Volume2, VolumeX, Music } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import {
@@ -145,7 +145,6 @@ export function ShortsViewer({
     const now = Date.now();
     const position = { x: e.clientX, y: e.clientY };
     if (now - lastTapTime.current < 300) {
-      // Double tap — like
       const videoId = currentVideo?.id;
       if (videoId && !likedVideos.has(videoId)) {
         setLikedVideos(prev => new Set(prev).add(videoId));
@@ -202,15 +201,11 @@ export function ShortsViewer({
   if (!currentVideo) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col select-none" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-      {/* Progress Bar */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 z-[110]">
-        <div className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-100" style={{ width: `${progress}%` }} />
-      </div>
-
-      {/* Video Swipe Container */}
+    <div className="fixed inset-0 z-[9999] bg-black select-none" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh' }}>
+      
+      {/* Video Swipe Container — full screen */}
       <div
-        className="absolute inset-0 overflow-hidden"
+        className="absolute inset-0"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -219,23 +214,24 @@ export function ShortsViewer({
           <div
             key={video.id}
             className={cn(
-              "absolute inset-0 transition-transform duration-300 ease-out",
-              index === currentIndex ? "translate-y-0 opacity-100 z-10" :
-              index < currentIndex ? "-translate-y-full opacity-0 z-0" : "translate-y-full opacity-0 z-0"
+              "absolute inset-0 transition-transform duration-300 ease-out will-change-transform",
+              index === currentIndex ? "translate-y-0 z-10" :
+              index < currentIndex ? "-translate-y-full z-0" : "translate-y-full z-0"
             )}
             onClick={handleVideoAreaTap}
           >
             <video
               ref={(el) => { if (el) videoRefs.current.set(index, el); }}
               src={video.url}
-              className="absolute inset-0 w-full h-full object-cover bg-black"
+              className="absolute inset-0 w-full h-full object-cover"
               loop playsInline muted={isMuted}
             />
+            {/* Pause overlay */}
             {!isPlaying && index === currentIndex && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-20"
+              <div className="absolute inset-0 flex items-center justify-center z-20"
                 onClick={(e) => { e.stopPropagation(); togglePlay(); }}>
-                <div className="w-16 h-16 rounded-full bg-white/15 flex items-center justify-center backdrop-blur-md">
-                  <Play className="w-8 h-8 text-white ml-1" fill="white" />
+                <div className="w-20 h-20 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
+                  <Play className="w-10 h-10 text-white ml-1" fill="white" fillOpacity={0.9} />
                 </div>
               </div>
             )}
@@ -243,38 +239,40 @@ export function ShortsViewer({
         ))}
       </div>
 
-      {/* Double Tap Heart */}
+      {/* Double Tap Heart Animation */}
       {showHeartAnimation && (
-        <div className="fixed z-[120] pointer-events-none animate-heart-pop"
+        <div className="fixed z-[200] pointer-events-none animate-heart-pop"
           style={{ left: heartPosition.x - 40, top: heartPosition.y - 40 }}>
           <Heart className="w-20 h-20 text-red-500 fill-red-500 drop-shadow-2xl" />
         </div>
       )}
 
       {/* ═══ TOP BAR ═══ */}
-      <div className="absolute top-0 left-0 right-0 z-[130] pointer-events-none">
-        <div className="flex items-center justify-between px-3 pt-3 pb-1 pointer-events-auto">
+      <div className="absolute top-0 left-0 right-0 z-[130] pointer-events-none safe-area-top">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 pointer-events-auto">
+          {/* Back button */}
           <button
-            className="h-9 w-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform"
             onClick={(e) => { e.stopPropagation(); onClose(); }}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-6 h-6" strokeWidth={2.5} />
           </button>
 
-          <div className="flex items-center gap-2">
-            {/* Mute toggle */}
+          <span className="text-white font-bold text-base tracking-wide">Reels</span>
+
+          {/* Right controls */}
+          <div className="flex items-center gap-1">
             <button
-              className="h-9 w-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform"
               onClick={(e) => { e.stopPropagation(); setIsMuted(p => !p); }}
             >
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>
 
-            {/* Triple-dot Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="h-9 w-9 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MoreVertical className="w-5 h-5" />
@@ -282,18 +280,18 @@ export function ShortsViewer({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="bg-black/90 backdrop-blur-xl border-white/15 text-white min-w-[200px] rounded-2xl p-1"
+                className="bg-zinc-900/95 backdrop-blur-xl border-white/10 text-white min-w-[200px] rounded-2xl p-1"
                 onClick={(e) => e.stopPropagation()}
               >
                 <DropdownMenuItem onClick={() => handleDownload()} className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10 cursor-pointer">
-                  <Download className="w-4 h-4 text-blue-400" /><span>Download</span>
+                  <Download className="w-4 h-4 text-blue-400" /><span>Save video</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10" disabled>
-                  <Calendar className="w-4 h-4 text-purple-400" /><span>Posted {formatDate(currentVideo.createdAt)}</span>
+                  <Calendar className="w-4 h-4 text-purple-400" /><span>{formatDate(currentVideo.createdAt)}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-white/10" />
                 <DropdownMenuItem className="gap-3 rounded-xl px-3 py-2.5 focus:bg-white/10" disabled>
-                  <Eye className="w-4 h-4 text-cyan-400" /><span>{currentVideo.viewsCount ?? 0} views</span>
+                  <Eye className="w-4 h-4 text-cyan-400" /><span>{formatCount(currentVideo.viewsCount ?? 0)} views</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-white/10" />
                 <DropdownMenuItem
@@ -325,75 +323,123 @@ export function ShortsViewer({
         </div>
       </div>
 
-      {/* ═══ RIGHT-SIDE ACTION BAR (Instagram-style) ═══ */}
-      <div className="absolute right-3 bottom-32 z-[130] flex flex-col items-center gap-5 pointer-events-auto">
+      {/* ═══ RIGHT ACTION BAR — Instagram Reels style ═══ */}
+      <div className="absolute right-3 z-[130] flex flex-col items-center gap-6 pointer-events-auto" style={{ bottom: '160px' }}>
         {/* Like */}
         <button
           onClick={(e) => handleLike(e, currentVideo.id)}
-          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+          className="flex flex-col items-center gap-1 active:scale-75 transition-transform"
         >
-          <Heart className={cn(
-            "w-7 h-7 transition-all duration-200",
-            likedVideos.has(currentVideo.id) ? "text-red-500 fill-red-500 scale-110" : "text-white"
-          )} />
-          <span className="text-white text-[11px] font-semibold">{formatCount(likeCounts[currentVideo.id] || 0)}</span>
+          <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
+            <Heart className={cn(
+              "w-7 h-7 transition-all duration-200",
+              likedVideos.has(currentVideo.id) ? "text-red-500 fill-red-500 scale-110" : "text-white"
+            )} />
+          </div>
+          <span className="text-white text-[11px] font-bold drop-shadow-lg">{formatCount(likeCounts[currentVideo.id] || 0)}</span>
         </button>
 
         {/* Comment */}
         <button
           onClick={(e) => { e.stopPropagation(); onComment(currentVideo.id); }}
-          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+          className="flex flex-col items-center gap-1 active:scale-75 transition-transform"
         >
-          <MessageCircle className="w-7 h-7 text-white" />
-          <span className="text-white text-[11px] font-semibold">{formatCount(currentVideo.commentsCount ?? 0)}</span>
+          <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
+            <MessageCircle className="w-7 h-7 text-white" />
+          </div>
+          <span className="text-white text-[11px] font-bold drop-shadow-lg">{formatCount(currentVideo.commentsCount ?? 0)}</span>
         </button>
 
-        {/* Share */}
+        {/* Share / Send */}
         <button
           onClick={(e) => { e.stopPropagation(); onShare(currentVideo.id); }}
-          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+          className="flex flex-col items-center gap-1 active:scale-75 transition-transform"
         >
-          <Share2 className="w-7 h-7 text-white" />
+          <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
+            <Send className="w-6 h-6 text-white" />
+          </div>
         </button>
 
-        {/* Save */}
+        {/* Bookmark / Save */}
         <button
           onClick={(e) => handleSave(e, currentVideo.id)}
-          className="flex flex-col items-center gap-1 active:scale-90 transition-transform"
+          className="flex flex-col items-center gap-1 active:scale-75 transition-transform"
         >
-          {savedVideos.has(currentVideo.id)
-            ? <BookmarkCheck className="w-7 h-7 text-yellow-400 fill-yellow-400" />
-            : <Bookmark className="w-7 h-7 text-white" />
-          }
+          <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center">
+            {savedVideos.has(currentVideo.id)
+              ? <BookmarkCheck className="w-7 h-7 text-yellow-400 fill-yellow-400" />
+              : <Bookmark className="w-7 h-7 text-white" />
+            }
+          </div>
         </button>
+
+        {/* Music disc (spinning) */}
+        <div className="w-10 h-10 rounded-full border-2 border-white/30 overflow-hidden animate-spin-slow">
+          <Avatar className="w-full h-full">
+            <AvatarImage src={currentVideo.userAvatar} />
+            <AvatarFallback className="bg-gradient-to-br from-pink-600 to-purple-700 text-white text-[10px]">
+              <Music className="w-4 h-4" />
+            </AvatarFallback>
+          </Avatar>
+        </div>
       </div>
 
-      {/* ═══ BOTTOM-LEFT USER INFO + DESCRIPTION ═══ */}
-      <div className="absolute bottom-0 left-0 right-0 z-[130] pointer-events-none">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />
-        <div className="relative pointer-events-auto px-4 pb-8 pt-10 pr-16">
+      {/* ═══ BOTTOM SECTION — User info + description ═══ */}
+      <div className="absolute bottom-0 left-0 right-16 z-[130] pointer-events-none">
+        {/* Gradient fade */}
+        <div className="h-40 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+        <div className="bg-black/80 px-4 pb-6 pt-0 pointer-events-auto -mt-1">
           {/* User row */}
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2.5 mb-2.5">
             <button
               onClick={(e) => { e.stopPropagation(); onProfileClick(currentVideo.userId); }}
-              className="flex items-center gap-2"
+              className="flex-shrink-0"
             >
-              <Avatar className="w-9 h-9 ring-2 ring-white/50">
+              <Avatar className="w-9 h-9 ring-2 ring-white/60">
                 <AvatarImage src={currentVideo.userAvatar} />
                 <AvatarFallback className="bg-gradient-to-br from-pink-500 to-purple-600 text-white text-xs font-bold">
                   {currentVideo.username[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-white text-sm font-bold drop-shadow-lg">@{currentVideo.username}</span>
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onProfileClick(currentVideo.userId); }}
+            >
+              <span className="text-white text-[13px] font-bold">{currentVideo.username}</span>
+            </button>
+            <button className="ml-1 border border-white/60 rounded-md px-3 py-0.5 text-white text-[11px] font-semibold active:scale-95 transition-transform">
+              Follow
             </button>
           </div>
 
           {/* Description */}
-          <p className="text-white/90 text-sm line-clamp-2 leading-snug drop-shadow-lg">
+          <p className="text-white/90 text-[13px] leading-[18px] line-clamp-2">
             {currentVideo.title}
           </p>
+
+          {/* Audio track bar */}
+          <div className="flex items-center gap-2 mt-2">
+            <Music className="w-3 h-3 text-white/60" />
+            <div className="overflow-hidden flex-1">
+              <p className="text-white/50 text-[11px] whitespace-nowrap animate-marquee">
+                Original Audio — {currentVideo.username}
+              </p>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="mt-3 h-[2px] bg-white/20 rounded-full overflow-hidden">
+            <div className="h-full bg-white transition-all duration-100 rounded-full" style={{ width: `${progress}%` }} />
+          </div>
         </div>
       </div>
+
+      {/* Reel counter indicator */}
+      {videos.length > 1 && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[130]">
+          <span className="text-white/40 text-[10px] font-medium">{currentIndex + 1}/{videos.length}</span>
+        </div>
+      )}
 
       <style>{`
         @keyframes heart-pop {
@@ -405,6 +451,12 @@ export function ShortsViewer({
           100% { transform: scale(1); opacity: 0; }
         }
         .animate-heart-pop { animation: heart-pop 0.8s ease-out forwards; }
+        .animate-spin-slow { animation: spin 4s linear infinite; }
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee { animation: marquee 8s linear infinite; }
       `}</style>
     </div>,
     document.body
