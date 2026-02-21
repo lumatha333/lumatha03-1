@@ -311,10 +311,51 @@ export default function Settings() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Private Account</p>
+              <p className="text-[10px] text-muted-foreground">Only approved followers can see your posts</p>
+            </div>
+            <Switch 
+              checked={localStorage.getItem('lumatha_private_account') === 'true'} 
+              onCheckedChange={async (checked) => {
+                localStorage.setItem('lumatha_private_account', String(checked));
+                if (user) {
+                  await supabase.from('profiles').update({ is_private: checked } as any).eq('id', user.id);
+                }
+                toast.success(checked ? 'Account set to private' : 'Account set to public');
+              }}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Who can message you</p>
+              <p className="text-[10px] text-muted-foreground">Control who sends you messages</p>
+            </div>
+            <Select 
+              value={localStorage.getItem('lumatha_msg_perm') || 'friends'} 
+              onValueChange={async (val) => {
+                localStorage.setItem('lumatha_msg_perm', val);
+                if (user) {
+                  await supabase.from('profiles').update({ allow_messages_from: val } as any).eq('id', user.id);
+                }
+                toast.success('Messaging preference updated');
+              }}
+            >
+              <SelectTrigger className="glass-card h-8 w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="everyone">Everyone</SelectItem>
+                <SelectItem value="followers">Followers</SelectItem>
+                <SelectItem value="friends">Friends Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30">
             <AlertCircle className="w-4 h-4 text-amber-500" />
             <p className="text-xs text-muted-foreground">
-              You can only change your name and region once every 17 days for security.
+              Name and region can only change once every 17 days.
             </p>
           </div>
           <Button variant="outline" size="sm" className="w-full gap-2">

@@ -14,7 +14,7 @@ import { FriendTick } from '@/components/lumatha/FriendTick';
 import { 
   ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
   MapPin, Calendar, Globe, Star, Trophy, Eye, MessageCircle, UserCheck, Clock, Users,
-  UserCircle2, X
+  UserCircle2, X, Shield, Ban, Flag, Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
@@ -126,6 +126,9 @@ export default function Profile() {
   const [adventurePoints, setAdventurePoints] = useState({ challenges: 0, discovery: 0, explore: 0, total: 0 });
   const [isFriend, setIsFriend] = useState(false);
   const [friendRequestStatus, setFriendRequestStatus] = useState<'none' | 'pending_sent' | 'pending_received' | 'accepted'>('none');
+  const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [hasBlockedMe, setHasBlockedMe] = useState(false);
   const { sendFriendRequest, acceptFriendRequest } = useFriends();
 
   useEffect(() => {
@@ -162,23 +165,38 @@ export default function Profile() {
         setLikesCount(counts);
       }
 
-      if (currentUser) {
-        const [followResult, savedResult, likesResult, friendResult] = await Promise.all([
+      if (currentUser && currentUser.id !== userId) {
+        const [followResult, savedResult, likesResult, friendResult, mutualResult, blockResult] = await Promise.all([
           supabase.from('follows').select('id').eq('follower_id', currentUser.id).eq('following_id', userId).maybeSingle(),
           supabase.from('saved').select('post_id').eq('user_id', currentUser.id),
           supabase.from('likes').select('post_id').eq('user_id', currentUser.id),
           supabase.from('friend_requests').select('*').or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`).maybeSingle(),
+          (supabase.rpc as any)('get_mutual_friends_count', { user1: currentUser.id, user2: userId }),
+          supabase.from('blocks').select('blocker_id').or(`and(blocker_id.eq.${currentUser.id},blocked_id.eq.${userId}),and(blocker_id.eq.${userId},blocked_id.eq.${currentUser.id})`),
         ]);
 
         setIsFollowing(!!followResult.data);
         setSaved(savedResult.data?.map(s => s.post_id) || []);
         setLikes(likesResult.data || []);
+        setMutualFriendsCount(mutualResult.data || 0);
+
+        // Check block status
+        const blockData = blockResult.data || [];
+        setIsBlocked(blockData.some((b: any) => b.blocker_id === currentUser.id));
+        setHasBlockedMe(blockData.some((b: any) => b.blocker_id === userId));
 
         const friendData = friendResult.data;
         if (friendData) {
           if (friendData.status === 'accepted') { setIsFriend(true); setFriendRequestStatus('accepted'); }
           else if (friendData.status === 'pending') { setFriendRequestStatus(friendData.sender_id === currentUser.id ? 'pending_sent' : 'pending_received'); }
         } else { setIsFriend(false); setFriendRequestStatus('none'); }
+      } else if (currentUser) {
+        const [savedResult, likesResult] = await Promise.all([
+          supabase.from('saved').select('post_id').eq('user_id', currentUser.id),
+          supabase.from('likes').select('post_id').eq('user_id', currentUser.id),
+        ]);
+        setSaved(savedResult.data?.map(s => s.post_id) || []);
+        setLikes(likesResult.data || []);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -418,61 +436,98 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Action Buttons — unique Lumatha style, different from any social platform */}
-          {!isOwnProfile && currentUser && (
+          {/* Mutual friends indicator */}
+          {!isOwnProfile && currentUser && mutualFriendsCount > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
+              <Users className="w-3 h-3" />
+              <span>{mutualFriendsCount} mutual friend{mutualFriendsCount > 1 ? 's' : ''}</span>
+            </div>
+          )}
+
+          {/* Blocked state */}
+          {hasBlockedMe ? (
+            <div className="mt-4 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-center">
+              <Ban className="w-5 h-5 mx-auto text-destructive mb-1" />
+              <p className="text-xs text-destructive">This profile is not available</p>
+            </div>
+          ) : isBlocked ? (
             <div className="flex flex-wrap gap-2 mt-4">
-              {/* Lumatha Follow Button — aurora gradient, teal-to-emerald, unlike any other platform */}
-              <Button
-                size="sm"
-                onClick={handleFollow}
-                className={cn(
-                  "gap-1.5 font-semibold transition-all duration-300",
-                  isFollowing
-                    ? "bg-muted/60 text-muted-foreground border border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-                    : "text-white border-0 shadow-lg shadow-teal-500/20"
-                )}
-                style={!isFollowing ? {
-                  background: 'linear-gradient(135deg, hsl(175 70% 45%), hsl(160 60% 50%), hsl(200 70% 55%))',
-                  boxShadow: '0 4px 20px hsl(175 70% 45% / 0.4)'
-                } : undefined}
-              >
-                {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                {isFollowing ? 'Unfollow' : '+ Follow'}
+              <Button size="sm" variant="outline" className="gap-1.5 border-destructive/30 text-destructive"
+                onClick={async () => {
+                  await supabase.from('blocks').delete().eq('blocker_id', currentUser!.id).eq('blocked_id', userId);
+                  setIsBlocked(false);
+                  toast.success('Unblocked');
+                }}>
+                <Ban className="w-4 h-4" /> Unblock
               </Button>
+            </div>
+          ) : !isOwnProfile && currentUser && (
+            <div className="space-y-2 mt-4">
+              <div className="flex flex-wrap gap-2">
+                {/* Follow Button */}
+                <Button size="sm" onClick={handleFollow}
+                  className={cn("gap-1.5 font-semibold transition-all duration-300",
+                    isFollowing ? "bg-muted/60 text-muted-foreground border border-border hover:bg-destructive/10 hover:text-destructive" : "text-white border-0"
+                  )}
+                  style={!isFollowing ? { background: 'linear-gradient(135deg, hsl(175 70% 45%), hsl(160 60% 50%), hsl(200 70% 55%))' } : undefined}>
+                  {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                  {isFollowing ? 'Unfollow' : '+ Follow'}
+                </Button>
 
-              {friendRequestStatus === 'none' && (
-                <Button size="sm" variant="outline" onClick={() => { sendFriendRequest(userId!); setFriendRequestStatus('pending_sent'); }} className="gap-1.5 border-primary/30 hover:bg-primary/10">
-                  <UserPlus className="w-4 h-4" /> Add Friend
-                </Button>
-              )}
-              {friendRequestStatus === 'pending_sent' && (
-                <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-60">
-                  <Clock className="w-4 h-4" /> Request Sent
-                </Button>
-              )}
-              {friendRequestStatus === 'pending_received' && (
-                <Button size="sm" onClick={async () => {
-                  const { data } = await supabase.from('friend_requests').select('id').eq('sender_id', userId).eq('receiver_id', currentUser.id).single();
-                  if (data) { acceptFriendRequest(data.id, userId!); setFriendRequestStatus('accepted'); setIsFriend(true); }
-                }} className="gap-1.5" style={{ background: 'linear-gradient(135deg, hsl(270 70% 60%), hsl(340 75% 58%))' }}>
-                  <UserCheck className="w-4 h-4" /> Accept Request
-                </Button>
-              )}
-              {friendRequestStatus === 'accepted' && (
-                <Button size="sm" variant="outline" disabled className="gap-1.5 border-green-500/40 text-green-500">
-                  <UserCheck className="w-4 h-4" /> Friends
-                </Button>
-              )}
+                {/* Friend request states */}
+                {friendRequestStatus === 'none' && (
+                  <Button size="sm" variant="outline" onClick={() => { sendFriendRequest(userId!); setFriendRequestStatus('pending_sent'); }} className="gap-1.5 border-primary/30 hover:bg-primary/10">
+                    <UserPlus className="w-4 h-4" /> Add Friend
+                  </Button>
+                )}
+                {friendRequestStatus === 'pending_sent' && (
+                  <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-60">
+                    <Clock className="w-4 h-4" /> Request Sent
+                  </Button>
+                )}
+                {friendRequestStatus === 'pending_received' && (
+                  <Button size="sm" onClick={async () => {
+                    const { data } = await supabase.from('friend_requests').select('id').eq('sender_id', userId).eq('receiver_id', currentUser.id).single();
+                    if (data) { acceptFriendRequest(data.id, userId!); setFriendRequestStatus('accepted'); setIsFriend(true); }
+                  }} className="gap-1.5" style={{ background: 'linear-gradient(135deg, hsl(270 70% 60%), hsl(340 75% 58%))' }}>
+                    <UserCheck className="w-4 h-4" /> Accept
+                  </Button>
+                )}
+                {friendRequestStatus === 'accepted' && (
+                  <Button size="sm" variant="outline" disabled className="gap-1.5 border-emerald-500/40 text-emerald-400">
+                    <UserCheck className="w-4 h-4" /> Friends
+                  </Button>
+                )}
 
-              {isFriend ? (
-                <Button size="sm" variant="secondary" onClick={() => navigate('/chat')} className="gap-1.5">
-                  <MessageCircle className="w-4 h-4" /> Message
+                {/* Message */}
+                {isFriend ? (
+                  <Button size="sm" variant="secondary" onClick={() => navigate('/chat')} className="gap-1.5">
+                    <MessageCircle className="w-4 h-4" /> Message
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-40" title="Only friends can message">
+                    <MessageCircle className="w-4 h-4" /> Message
+                  </Button>
+                )}
+              </div>
+
+              {/* Block & Report — subtle row */}
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" className="gap-1 text-[10px] text-muted-foreground h-6 px-2 hover:text-destructive"
+                  onClick={async () => {
+                    await supabase.from('blocks').insert({ blocker_id: currentUser!.id, blocked_id: userId! });
+                    // Remove follow & friend
+                    await supabase.from('follows').delete().eq('follower_id', currentUser!.id).eq('following_id', userId);
+                    await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', currentUser!.id);
+                    setIsBlocked(true); setIsFollowing(false);
+                    toast.success('User blocked');
+                  }}>
+                  <Ban className="w-3 h-3" /> Block
                 </Button>
-              ) : (
-                <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-40" title="Only friends can message">
-                  <MessageCircle className="w-4 h-4" /> Message
+                <Button size="sm" variant="ghost" className="gap-1 text-[10px] text-muted-foreground h-6 px-2 hover:text-amber-500">
+                  <Flag className="w-3 h-3" /> Report
                 </Button>
-              )}
+              </div>
             </div>
           )}
         </CardContent>

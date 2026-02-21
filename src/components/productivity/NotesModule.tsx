@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Plus, Search, Folder, FolderPlus, StickyNote, Trash2, Edit2, Bookmark, BookmarkCheck, ArrowLeft, Pin, PinOff, MoreHorizontal, Clock } from 'lucide-react';
 import { RichTextEditor } from './RichTextEditor';
+import { NotesAnalytics } from './NotesAnalytics';
 import { EmptyNotes, EmptySaved, EmptyFolders } from '@/components/EmptyStates';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -38,7 +39,7 @@ const NOTE_COLORS = [
 
 export function NotesModule() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'all' | 'folders' | 'saved'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'folders' | 'saved' | 'analytics'>('all');
   const [notes, setNotes] = useState<Note[]>([]);
   const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [search, setSearch] = useState('');
@@ -183,10 +184,11 @@ export function NotesModule() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as any); setSelectedFolder(null); }}>
-        <TabsList className="grid w-full grid-cols-3 rounded-xl h-10">
+        <TabsList className="grid w-full grid-cols-4 rounded-xl h-10">
           <TabsTrigger value="all" className="rounded-lg gap-1.5 text-xs"><StickyNote className="w-3.5 h-3.5" />All</TabsTrigger>
           <TabsTrigger value="folders" className="rounded-lg gap-1.5 text-xs"><Folder className="w-3.5 h-3.5" />Folders</TabsTrigger>
           <TabsTrigger value="saved" className="rounded-lg gap-1.5 text-xs"><Bookmark className="w-3.5 h-3.5" />Saved</TabsTrigger>
+          <TabsTrigger value="analytics" className="rounded-lg gap-1.5 text-xs">📊 Stats</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-4 space-y-4">
@@ -312,6 +314,10 @@ export function NotesModule() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="analytics" className="mt-4">
+          <NotesAnalytics />
         </TabsContent>
       </Tabs>
 
