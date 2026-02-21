@@ -148,8 +148,9 @@ export function TodoModule() {
 
   return (
     <div className="space-y-4 page-enter">
-      {/* Stats Bar — gradient card */}
+      {/* Stats Bar — enhanced gradient card */}
       <Card className="gradient-border rounded-2xl overflow-hidden" style={{ background: 'var(--gradient-warm)' }}>
+        <div className="h-1 bg-gradient-to-r from-orange-500 via-rose-500 to-violet-500" />
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -162,19 +163,55 @@ export function TodoModule() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="text-right mr-2">
-                <p className="text-lg font-bold gradient-text">{overallProgress}%</p>
-                <p className="text-[10px] text-muted-foreground">Overall</p>
-              </div>
               <Button variant="outline" size="sm" onClick={() => setView('progress')} className="gap-1.5 rounded-xl">
                 <TrendingUp className="w-4 h-4" />
                 <span className="hidden sm:inline">Progress</span>
               </Button>
             </div>
           </div>
-          {/* Overall progress bar */}
-          <div className="mt-3 h-1.5 bg-background/30 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-orange-400 to-red-400 rounded-full transition-all duration-500" style={{ width: `${overallProgress}%` }} />
+
+          {/* Overall progress bar with percentage */}
+          <div className="mt-3 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">Overall Progress</span>
+              <span className="text-sm font-bold gradient-text">{overallProgress}%</span>
+            </div>
+            <div className="h-2.5 bg-background/30 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-orange-400 via-rose-400 to-violet-400 rounded-full transition-all duration-700 relative"
+                style={{ width: `${overallProgress}%` }}
+              >
+                <div className="absolute inset-0 bg-white/20 animate-shimmer" />
+              </div>
+            </div>
+            <div className="flex justify-between text-[9px] text-muted-foreground">
+              <span>{completedAll} done</span>
+              <span>{totalAll - completedAll} remaining</span>
+            </div>
+          </div>
+
+          {/* Category mini-bars */}
+          <div className="mt-3 grid grid-cols-5 gap-1.5">
+            {categoryCards.map(cat => {
+              const completed = getCompletedCount(cat.id);
+              const total = getTotalCount(cat.id);
+              const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+              const colors: Record<string, string> = {
+                daily: 'from-blue-400 to-blue-500',
+                weekly: 'from-teal-400 to-teal-500',
+                monthly: 'from-violet-400 to-violet-500',
+                yearly: 'from-amber-400 to-amber-500',
+                lifetime: 'from-rose-400 to-rose-500',
+              };
+              return (
+                <div key={cat.id} className="text-center">
+                  <div className="h-1 bg-background/20 rounded-full overflow-hidden mb-0.5">
+                    <div className={`h-full bg-gradient-to-r ${colors[cat.id] || 'from-primary to-secondary'} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-[8px] text-muted-foreground">{pct}%</span>
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

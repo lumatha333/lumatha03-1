@@ -240,21 +240,27 @@ const WIKIMEDIA_IMAGES: Record<string, string> = {
   'Madeira Island': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Funchal_Monte_001.jpg/1280px-Funchal_Monte_001.jpg',
 };
 
-// Regional fallback images - Real nature photos for unverified small places
+// Regional fallback images - REAL verified Wikimedia Commons photos
 const FALLBACK_CATEGORIES: Record<'unesco' | 'hidden', string[]> = {
   unesco: [
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Sunrise_over_the_sea.jpg/1280px-Sunrise_over_the_sea.jpg',
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mountain_landscape.jpg/1280px-Mountain_landscape.jpg',
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Ancient_temple_ruins.jpg/1280px-Ancient_temple_ruins.jpg',
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Historic_town_view.jpg/1280px-Historic_town_view.jpg',
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Cultural_heritage_site.jpg/1280px-Cultural_heritage_site.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Good_Morning_From_the_Matterhorn_%28Unsplash%29.jpg/1280px-Good_Morning_From_the_Matterhorn_%28Unsplash%29.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Tunnel_View%2C_Yosemite_Valley%2C_Yosemite_NP_-_Diliff.jpg/1280px-Tunnel_View%2C_Yosemite_Valley%2C_Yosemite_NP_-_Diliff.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Kheops-Pyramid.jpg/1280px-Kheops-Pyramid.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Colosseo_2020.jpg/1280px-Colosseo_2020.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Meteora_Greece.JPG/1280px-Meteora_Greece.JPG',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Terracotta_Army%2C_View_of_Pit_1.jpg/1280px-Terracotta_Army%2C_View_of_Pit_1.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/The_Acropolis_of_Athens_viewed_from_the_Hill_of_the_Muses_%2814220794964%29.jpg/1280px-The_Acropolis_of_Athens_viewed_from_the_Hill_of_the_Muses_%2814220794964%29.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bd/Potala_palace24.jpg/1280px-Potala_palace24.jpg',
   ],
   hidden: [
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Natural_waterfall_landscape.jpg/1280px-Natural_waterfall_landscape.jpg',
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Forest_trail_path.jpg/1280px-Forest_trail_path.jpg',
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Remote_village_view.jpg/1280px-Remote_village_view.jpg',
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Hidden_beach_paradise.jpg/1280px-Hidden_beach_paradise.jpg',
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Mountain_valley_scenic.jpg/1280px-Mountain_valley_scenic.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Rara_Lake_Mugu_Nepal.jpg/1280px-Rara_Lake_Mugu_Nepal.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Jomon_Sugi_07.jpg/1280px-Jomon_Sugi_07.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Bibury_Arlington_Row.jpg/1280px-Bibury_Arlington_Row.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Baia_do_Sancho.jpg/1280px-Baia_do_Sancho.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Tilicho_Lake.jpg/1280px-Tilicho_Lake.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Varenna_sul_lago_di_Como.jpg/1280px-Varenna_sul_lago_di_Como.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Reine_Lofoten_2009.JPG/1280px-Reine_Lofoten_2009.JPG',
+    'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Torres_del_Paine.jpg/1280px-Torres_del_Paine.jpg',
   ],
 };
 
