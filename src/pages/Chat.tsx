@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Send, ArrowLeft, Search, Paperclip, X, MoreVertical, 
-  Archive, Ghost, Trash2, Smile, Mic, 
+  Archive, Ghost, Trash2, Smile, Mic, Music,
   Lock, Image, Users, UserSearch, MessageCircle, Star, Phone, Video as VideoIcon,
   Palette, Eye, EyeOff, Pin
 } from 'lucide-react';
@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { useChatProtection, WatermarkOverlay, BlurOverlay } from '@/components/chat/ChatProtection';
 import { EmojiReactionPicker } from '@/components/chat/EmojiReactionPicker';
+import { SharedMusicPlayer, MusicBar } from '@/components/chat/SharedMusicPlayer';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
@@ -71,6 +72,8 @@ export default function Chat() {
   const [messageReactions, setMessageReactions] = useState<Record<string, Record<string, number>>>({});
   const [chatTheme, setChatTheme] = useState(() => localStorage.getItem('chatTheme') || 'default');
   const [pinnedMessages, setPinnedMessages] = useState<Set<string>>(new Set());
+  const [showMusicPlayer, setShowMusicPlayer] = useState(false);
+  const [activeMusicTrack, setActiveMusicTrack] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -176,6 +179,13 @@ export default function Chat() {
   const addToPrivate = (chatUserId: string) => {
     savePrivateChats(new Set([...privateChats, chatUserId]));
     toast.success('Added to private chats');
+  };
+
+  const togglePrivate = (chatUserId: string) => {
+    const newPrivate = new Set(privateChats);
+    if (newPrivate.has(chatUserId)) { newPrivate.delete(chatUserId); toast.success('Removed from private'); }
+    else { newPrivate.add(chatUserId); toast.success('Added to private chats'); }
+    savePrivateChats(newPrivate);
   };
 
   const handlePrivateAccess = (chatUserId: string) => {
@@ -430,6 +440,9 @@ export default function Chat() {
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
 
+                <DropdownMenuItem onClick={() => setShowMusicPlayer(true)}>
+                  <Music className="w-4 h-4 mr-2" />Shared Sound
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowMediaGallery(true)}>
                   <Image className="w-4 h-4 mr-2" />Media Gallery
                 </DropdownMenuItem>
@@ -440,8 +453,8 @@ export default function Chat() {
                 <DropdownMenuItem onClick={() => toggleArchive(currentChatUser)}>
                   <Archive className="w-4 h-4 mr-2" />{archivedChats.has(currentChatUser) ? 'Unarchive' : 'Archive'}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => addToPrivate(currentChatUser)}>
-                  <Lock className="w-4 h-4 mr-2" />Add to Private
+                <DropdownMenuItem onClick={() => togglePrivate(currentChatUser)}>
+                  <Lock className="w-4 h-4 mr-2" />{privateChats.has(currentChatUser) ? 'Remove from Private' : 'Add to Private'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => deleteEntireChat(currentChatUser)} className="text-destructive">
@@ -629,6 +642,13 @@ export default function Chat() {
             </Tabs>
           </DialogContent>
         </Dialog>
+
+        {/* Shared Music Player */}
+        <SharedMusicPlayer
+          isOpen={showMusicPlayer}
+          onClose={() => setShowMusicPlayer(false)}
+          partnerName={selectedConversation?.user_name || 'User'}
+        />
       </div>
     );
   }

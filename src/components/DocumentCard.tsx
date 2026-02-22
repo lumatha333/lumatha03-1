@@ -41,6 +41,7 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState(doc.title);
   const [editDescription, setEditDescription] = useState(doc.description || '');
 
   // Fetch reactions on mount
@@ -186,8 +187,8 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
     loadComments();
   };
 
-  const handleEditDescription = async () => {
-    await supabase.from('documents').update({ description: editDescription }).eq('id', doc.id);
+  const handleEditDocument = async () => {
+    await supabase.from('documents').update({ title: editTitle, description: editDescription }).eq('id', doc.id);
     toast.success('Updated!');
     setEditDialogOpen(false);
     onRefresh();
@@ -303,8 +304,8 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
                   )}
                   {isOwner && (
                     <>
-                      <DropdownMenuItem onClick={() => { setEditDescription(doc.description || ''); setEditDialogOpen(true); }}>
-                        <Edit className="w-3.5 h-3.5 mr-2" />Edit Description
+                      <DropdownMenuItem onClick={() => { setEditTitle(doc.title); setEditDescription(doc.description || ''); setEditDialogOpen(true); }}>
+                        <Edit className="w-3.5 h-3.5 mr-2" />Edit Document
                       </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={() => onDelete(doc.id, doc.file_url)}>
                         <Trash2 className="w-3.5 h-3.5 mr-2" />Delete
@@ -409,13 +410,21 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
         </DialogContent>
       </Dialog>
 
-      {/* Edit Description Dialog */}
+      {/* Edit Document Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="glass-card max-w-sm mx-4">
           <DialogHeader>
-            <DialogTitle className="text-sm">Edit Description</DialogTitle>
+            <DialogTitle className="text-sm">Edit Document</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div>
+              <Label className="text-[10px]">Title</Label>
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="text-xs"
+              />
+            </div>
             <div>
               <Label className="text-[10px]">Description</Label>
               <Textarea 
@@ -425,7 +434,7 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
                 placeholder="Add a description..."
               />
             </div>
-            <Button onClick={handleEditDescription} className="w-full h-8 text-xs">Save</Button>
+            <Button onClick={handleEditDocument} className="w-full h-8 text-xs">Save</Button>
           </div>
         </DialogContent>
       </Dialog>
