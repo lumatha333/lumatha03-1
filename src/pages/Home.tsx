@@ -242,21 +242,7 @@ export default function Home() {
                 "h-8 text-xs px-4 rounded-full transition-all",
                 videoType === type && "shadow-md"
               )}
-              onClick={() => {
-                setVideoType(type);
-                // Open shorts viewer for short videos
-                if (type === 'short') {
-                  const videoPosts = posts.filter(p => p.file_type?.includes('video') || p.media_types?.some(t => t.includes('video')));
-                  const shortVideos = videoPosts.map(p => ({
-                    id: p.id, url: p.file_url || (p.media_urls && p.media_urls[0]) || '',
-                    title: p.title, username: p.profiles?.name || 'User', userAvatar: p.profiles?.avatar_url || undefined,
-                    userId: p.user_id, likesCount: likeCounts[p.id] || 0, isLiked: likedPosts.has(p.id),
-                    isSaved: savedPosts.has(p.id), isOwner: p.user_id === user.id,
-                    createdAt: p.created_at || undefined, commentsCount: 0, viewsCount: p.views_count || 0,
-                  })).filter(v => v.url);
-                  if (shortVideos.length > 0) { setShortsData(shortVideos); setShowShortsViewer(true); }
-                }
-              }}
+              onClick={() => setVideoType(type)}
             >
               {type === 'all' ? 'All' : type === 'short' ? 'Short' : 'Long'}
             </Button>

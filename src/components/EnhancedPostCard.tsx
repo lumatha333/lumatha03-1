@@ -49,9 +49,7 @@ const setCurrentPlayingVideo = (video: HTMLVideoElement | null) => {
 
 interface PostSettings {
   commentsOff?: boolean;
-  downloadOff?: boolean;
   shareOff?: boolean;
-  hideLikes?: boolean;
 }
 
 interface EnhancedPostCardProps {
@@ -63,7 +61,7 @@ interface EnhancedPostCardProps {
   onToggleSave: (id: string) => void;
   onToggleLike: (id: string) => void;
   onDelete?: (id: string) => void;
-  onUpdate?: (id: string, updates: Partial<Post>) => void;
+  onUpdate?: ((id: string, updates: Partial<Post>) => void) | (() => void) | (() => Promise<void>);
 }
 
 export function EnhancedPostCard({ 
@@ -97,7 +95,7 @@ export function EnhancedPostCard({
     const newSettings = { ...postSettings, [key]: value };
     setPostSettings(newSettings);
     localStorage.setItem(`post_settings_${post.id}`, JSON.stringify(newSettings));
-    toast.success(`${key === 'commentsOff' ? 'Comments' : key === 'downloadOff' ? 'Download' : key === 'shareOff' ? 'Sharing' : 'Like count'} ${value ? 'disabled' : 'enabled'}`);
+    toast.success(`${key === 'commentsOff' ? 'Comments' : 'Sharing'} ${value ? 'disabled' : 'enabled'}`);
   };
   
   // Get all media URLs
@@ -180,12 +178,6 @@ export function EnhancedPostCard({
       toast.error('Ghost posts cannot be downloaded');
       return;
     }
-    
-    // Check if download is disabled by owner
-    if (postSettings.downloadOff && !isOwner) {
-      toast.error('Download disabled by owner');
-      return;
-    }
     try {
       const response = await fetch(currentMedia);
       const blob = await response.blob();
@@ -201,11 +193,16 @@ export function EnhancedPostCard({
     }
   };
 
-  const handleSaveEdit = () => {
-    if (onUpdate) {
-      onUpdate(post.id, { content: editContent });
+  const handleSaveEdit = async () => {
+    if (!isOwner) return;
+    try {
+      const { error } = await supabase.from('posts').update({ content: editContent }).eq('id', post.id);
+      if (error) throw error;
       setIsEditing(false);
       toast.success("Post updated!");
+      if (onUpdate) onUpdate(post.id, { content: editContent });
+    } catch {
+      toast.error("Failed to update post");
     }
   };
 
@@ -321,7 +318,7 @@ export function EnhancedPostCard({
               <DropdownMenuItem onClick={handleCopy} className="text-xs">
                 <Copy className="w-3.5 h-3.5 mr-2" /> Copy text
               </DropdownMenuItem>
-              {hasMedia && !postSettings.downloadOff && post.category !== 'ghost' && (
+              {hasMedia && post.category !== 'ghost' && (
                 <DropdownMenuItem onClick={handleDownload} className="text-xs">
                   <Download className="w-3.5 h-3.5 mr-2" /> Download media
                 </DropdownMenuItem>
@@ -338,17 +335,9 @@ export function EnhancedPostCard({
                     <MessageSquareOff className="w-3.5 h-3.5 mr-2" /> 
                     {postSettings.commentsOff ? '✓ Comments OFF' : 'Turn off comments'}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => updatePostSetting('downloadOff', !postSettings.downloadOff)} className="text-xs">
-                    <Download className="w-3.5 h-3.5 mr-2" /> 
-                    {postSettings.downloadOff ? '✓ Download OFF' : 'Turn off download'}
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => updatePostSetting('shareOff', !postSettings.shareOff)} className="text-xs">
                     <Share2 className="w-3.5 h-3.5 mr-2" /> 
                     {postSettings.shareOff ? '✓ Sharing OFF' : 'Turn off sharing'}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => updatePostSetting('hideLikes', !postSettings.hideLikes)} className="text-xs">
-                    <Heart className="w-3.5 h-3.5 mr-2" /> 
-                    {postSettings.hideLikes ? '✓ Likes hidden' : 'Hide like count'}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {onDelete && (
