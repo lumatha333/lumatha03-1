@@ -30,6 +30,7 @@ import { ChatVideoPlayer } from '@/components/chat/ChatVideoPlayer';
 import { LinkPreviewCard, extractUrls } from '@/components/chat/LinkPreviewCard';
 import { UploadProgressBar } from '@/components/chat/UploadProgressBar';
 import { ForwardMessageDialog } from '@/components/chat/ForwardMessageDialog';
+import { SharedPostPreview, extractInternalPostId, isSharedPostMessage } from '@/components/chat/SharedPostPreview';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
@@ -596,16 +597,22 @@ export default function Chat() {
                         </div>
                       )}
 
-                      {/* Text content */}
-                      {msg.content && !msg.content.startsWith('📎 ') && msg.content !== '🎤 Voice message' && msg.content.trim() !== '' && msg.content.trim() !== ' ' && (
+                      {/* Shared post preview (native card instead of raw URL) */}
+                      {msg.content && isSharedPostMessage(msg.content) && (() => {
+                        const postId = extractInternalPostId(msg.content);
+                        return postId ? <SharedPostPreview postId={postId} className="m-1" /> : null;
+                      })()}
+
+                      {/* Text content - hide if it's a shared post message */}
+                      {msg.content && !msg.content.startsWith('📎 ') && msg.content !== '🎤 Voice message' && msg.content.trim() !== '' && msg.content.trim() !== ' ' && !isSharedPostMessage(msg.content) && (
                         <p className={cn(
                           "text-sm break-words leading-relaxed",
                           msg.media_url ? "px-3.5 py-2" : ""
                         )}>{msg.content}</p>
                       )}
                       
-                      {/* Link previews */}
-                      {msg.content && extractUrls(msg.content).slice(0, 1).map((url) => (
+                      {/* Link previews - skip for shared posts (already shown natively) */}
+                      {msg.content && !isSharedPostMessage(msg.content) && extractUrls(msg.content).slice(0, 1).map((url) => (
                         <LinkPreviewCard key={url} url={url} className="mt-1 mx-1 mb-1" />
                       ))}
                       
