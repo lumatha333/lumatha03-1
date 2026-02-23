@@ -110,12 +110,20 @@ export function useChat() {
       setMessages(data as Message[]);
       setCurrentChatUser(otherUserId);
 
-      // Mark messages as read
-      await supabase
+      // Mark messages as read and immediately update local conversation unread count
+      const { error: updateError } = await supabase
         .from('messages')
         .update({ is_read: true })
         .eq('receiver_id', user.id)
-        .eq('sender_id', otherUserId);
+        .eq('sender_id', otherUserId)
+        .eq('is_read', false);
+
+      if (!updateError) {
+        // Clear unread count locally so badge disappears immediately
+        setConversations(prev => prev.map(c => 
+          c.user_id === otherUserId ? { ...c, unread_count: 0 } : c
+        ));
+      }
 
     } catch (error: any) {
       console.error('Error fetching messages:', error);
