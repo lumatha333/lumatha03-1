@@ -301,7 +301,7 @@ export default function Chat() {
         if (uploadError) continue;
         const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
         const mediaType = file.type.startsWith('image') ? 'image' : file.type.startsWith('video') ? 'video' : 'document';
-        await sendMessage(currentChatUser, `📎 ${file.name}`, publicUrl, mediaType);
+        await sendMessage(currentChatUser, '', publicUrl, mediaType);
       }
       if (newMessage.trim()) await sendMessage(currentChatUser, newMessage);
       setNewMessage('');
@@ -536,21 +536,30 @@ export default function Chat() {
                         : 'bg-muted rounded-bl-md',
                       isPinned && 'ring-1 ring-primary/30'
                     )}>
-                      {msg.media_url && (
-                        <div className="mb-2 rounded-2xl overflow-hidden">
-                          {msg.media_type === 'image' && (
-                            <ChatImageGrid urls={[msg.media_url]} isOwn={isOwn} />
-                          )}
-                          {msg.media_type === 'video' && (
-                            <ChatVideoPlayer src={msg.media_url} />
-                          )}
-                          {msg.media_type === 'audio' && <audio src={msg.media_url} controls className="w-full" />}
+                      {/* Media rendering - type-based */}
+                      {msg.media_url && msg.media_type === 'image' && (
+                        <div className="rounded-2xl overflow-hidden -mx-1 -mt-0.5">
+                          <ChatImageGrid urls={[msg.media_url]} isOwn={isOwn} />
                         </div>
                       )}
-                      <p className="text-sm break-words">{msg.content}</p>
+                      {msg.media_url && msg.media_type === 'video' && (
+                        <div className="rounded-2xl overflow-hidden -mx-1 -mt-0.5">
+                          <ChatVideoPlayer src={msg.media_url} />
+                        </div>
+                      )}
+                      {msg.media_url && msg.media_type === 'audio' && (
+                        <div className="rounded-2xl overflow-hidden">
+                          <audio src={msg.media_url} controls className="w-full" />
+                        </div>
+                      )}
+
+                      {/* Text content - hide empty/attachment-only content */}
+                      {msg.content && !msg.content.startsWith('📎 ') && msg.content !== '🎤 Voice message' && msg.content.trim() !== '' && (
+                        <p className={cn("text-sm break-words", msg.media_url && "mt-1.5")}>{msg.content}</p>
+                      )}
                       
-                      {/* Link previews */}
-                      {extractUrls(msg.content).slice(0, 1).map((url) => (
+                      {/* Link previews for text messages */}
+                      {msg.content && extractUrls(msg.content).slice(0, 1).map((url) => (
                         <LinkPreviewCard key={url} url={url} className="mt-2" />
                       ))}
                       

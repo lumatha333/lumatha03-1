@@ -147,7 +147,7 @@ export function useChat() {
         .insert({
           sender_id: user.id,
           receiver_id: receiverId,
-          content,
+          content: content || ' ',
           media_url: mediaUrl,
           media_type: mediaType,
         });
