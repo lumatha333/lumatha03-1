@@ -154,18 +154,13 @@ export function useChat() {
 
       if (error) throw error;
 
-      // Create notification
-      await supabase.from('notifications').insert({
+      // Create notification silently
+      supabase.from('notifications').insert({
         user_id: receiverId,
         type: 'message',
         from_user_id: user.id,
         content: `${user.user_metadata?.name || 'Someone'} sent you a message`,
         link: `/chat/${user.id}`,
-      });
-
-      toast({
-        title: 'Sent',
-        description: 'Message sent successfully',
       });
     } catch (error: any) {
       console.error('Error sending message:', error);

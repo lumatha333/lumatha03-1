@@ -634,22 +634,40 @@ export default function Chat() {
                           ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
                           : <Check className="w-3.5 h-3.5 text-muted-foreground" />
                       )}
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => togglePinMessage(msg.id)} className="text-muted-foreground hover:text-primary transition-colors p-0.5">
-                          <Pin className={cn("w-2.5 h-2.5", isPinned && "text-primary fill-primary")} />
-                        </button>
-                        <button 
-                          onClick={() => setForwardMsg({ content: msg.content || '', mediaUrl: msg.media_url || undefined, mediaType: msg.media_type || undefined })}
-                          className="text-muted-foreground hover:text-primary transition-colors p-0.5"
-                        >
-                          <Forward className="w-2.5 h-2.5" />
-                        </button>
-                        {isOwn && (
-                          <button onClick={() => deleteMessage(msg.id)} className="text-muted-foreground hover:text-destructive transition-colors p-0.5">
-                            <Trash2 className="w-2.5 h-2.5" />
+                      {/* Three-dot menu - WhatsApp/Messenger style */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-muted/50 ml-auto">
+                            <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>
-                        )}
-                      </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align={isOwn ? 'end' : 'start'} className="w-48 rounded-2xl shadow-xl border-border/40 p-1">
+                          <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => togglePinMessage(msg.id)}>
+                            <Pin className={cn("w-4 h-4", isPinned && "text-primary fill-primary")} />
+                            {isPinned ? 'Unpin Message' : 'Pin Message'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => {
+                            navigator.clipboard.writeText(msg.content || '');
+                            toast.success('Copied!');
+                          }}>
+                            <Reply className="w-4 h-4" />
+                            Copy Text
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => setForwardMsg({ content: msg.content || '', mediaUrl: msg.media_url || undefined, mediaType: msg.media_type || undefined })}>
+                            <Forward className="w-4 h-4" />
+                            Forward
+                          </DropdownMenuItem>
+                          {isOwn && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer text-destructive focus:text-destructive" onClick={() => deleteMessage(msg.id)}>
+                                <Trash2 className="w-4 h-4" />
+                                Delete Message
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
