@@ -10,12 +10,12 @@ import { LazyImage } from '@/components/LazyImage';
 import { CommentsDialog } from '@/components/CommentsDialog';
 import { ShareDialog } from '@/components/ShareDialog';
 import { SymbolicHeart } from '@/components/lumatha/SymbolicHeart';
+import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
 import { 
   Star, MoreVertical, Copy, Edit, Trash2, Heart, X, ChevronLeft, ChevronRight, 
   Play, MessageCircle, Share2, Download, UserPlus, UserMinus, VolumeX, Volume2,
   Maximize, MessageSquareOff
 } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 
@@ -455,30 +455,21 @@ export function EnhancedPostCard({
           </div>
         )}
 
-        {/* Full Screen Image Dialog */}
-        <Dialog open={imageOpen} onOpenChange={setImageOpen}>
-          <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none">
-            <Button variant="ghost" size="icon" className="absolute top-3 right-3 z-50 text-white bg-black/50 hover:bg-black/70 rounded-full" onClick={() => setImageOpen(false)}>
-              <X className="w-5 h-5" />
-            </Button>
-            <div className="relative flex items-center justify-center min-h-[60vh]">
-              <img src={currentMedia} alt="Full size" className="max-w-full max-h-[90vh] object-contain" />
-              {hasMultipleMedia && (
-                <>
-                  <Button variant="ghost" size="icon" className="absolute left-3 bg-white/20 hover:bg-white/40 text-white rounded-full" onClick={prevMedia}>
-                    <ChevronLeft className="w-5 h-5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="absolute right-3 bg-white/20 hover:bg-white/40 text-white rounded-full" onClick={nextMedia}>
-                    <ChevronRight className="w-5 h-5" />
-                  </Button>
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-white text-xs">
-                    {currentMediaIndex + 1} / {mediaUrls.length}
-                  </div>
-                </>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Full Screen Image Viewer — centered, with like/comment/save below */}
+        <FullScreenMediaViewer
+          open={imageOpen}
+          onOpenChange={setImageOpen}
+          mediaUrls={mediaUrls}
+          mediaTypes={mediaTypes}
+          initialIndex={currentMediaIndex}
+          title={post.title}
+          likesCount={likesCount}
+          isLiked={isLiked}
+          onLike={() => onToggleLike(post.id)}
+          onComment={() => { setImageOpen(false); setCommentsOpen(true); }}
+          onShare={() => { setImageOpen(false); setShareOpen(true); }}
+          isGhostPost={post.category === 'ghost'}
+        />
 
         {/* Action buttons - Strict owner controls applied */}
         <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/50 mt-auto relative">

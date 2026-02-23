@@ -634,14 +634,14 @@ export default function Chat() {
                           ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
                           : <Check className="w-3.5 h-3.5 text-muted-foreground" />
                       )}
-                      {/* Three-dot menu - WhatsApp/Messenger style */}
-                      <DropdownMenu>
+                      {/* Three-dot menu - always visible on mobile */}
+                      <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
-                          <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-muted/50 ml-auto">
+                          <button className="p-1 rounded-full hover:bg-muted/50 ml-auto opacity-60 hover:opacity-100 transition-opacity">
                             <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align={isOwn ? 'end' : 'start'} className="w-48 rounded-2xl shadow-xl border-border/40 p-1">
+                        <DropdownMenuContent align={isOwn ? 'end' : 'start'} side="top" sideOffset={4} className="w-48 rounded-2xl shadow-xl border-border/40 p-1 z-[100] bg-popover">
                           <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => togglePinMessage(msg.id)}>
                             <Pin className={cn("w-4 h-4", isPinned && "text-primary fill-primary")} />
                             {isPinned ? 'Unpin Message' : 'Pin Message'}

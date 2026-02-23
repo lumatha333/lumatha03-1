@@ -83,6 +83,7 @@ export function ChatImageGrid({ urls, isOwn = false }: ChatImageGridProps) {
         mediaUrls={urls}
         mediaTypes={urls.map(() => 'image')}
         initialIndex={viewerIndex}
+        minimal
       />
     </>
   );
