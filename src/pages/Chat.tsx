@@ -4,7 +4,7 @@ import {
   Send, ArrowLeft, Search, Paperclip, X, MoreVertical, 
   Archive, Ghost, Trash2, Smile, Mic, Music,
   Lock, Image, Users, UserSearch, MessageCircle, Star, Phone, Video as VideoIcon,
-  Palette, Eye, EyeOff, Pin
+  Palette, Eye, EyeOff, Pin, Check, CheckCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -548,6 +548,11 @@ export default function Chat() {
                       <p className="text-[10px] text-muted-foreground">
                         {formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}
                       </p>
+                      {isOwn && (
+                        msg.is_read 
+                          ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
+                          : <Check className="w-3.5 h-3.5 text-muted-foreground" />
+                      )}
                       <button onClick={() => togglePinMessage(msg.id)} className="text-muted-foreground hover:text-primary transition-colors">
                         <Pin className={cn("w-2.5 h-2.5", isPinned && "text-primary fill-primary")} />
                       </button>
