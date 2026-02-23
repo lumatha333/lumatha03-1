@@ -93,7 +93,8 @@ export function SharedPostPreview({ postId, className }: SharedPostPreviewProps)
   const isImage = mediaType?.startsWith('image');
 
   const handleClick = () => {
-    window.open(`/?post=${post.id}`, '_blank');
+    // Navigate inline instead of opening new tab
+    window.location.href = `/?post=${post.id}`;
   };
 
   return (
