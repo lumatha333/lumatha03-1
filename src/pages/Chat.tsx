@@ -734,7 +734,7 @@ export default function Chat() {
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
                     </div>
-                    {conv.unread_count > 0 && <Badge variant="destructive" className="text-[10px] h-5 min-w-[20px]">{conv.unread_count}</Badge>}
+                    {conv.unread_count > 0 && <Badge variant="destructive" className="text-[10px] h-5 min-w-[20px] animate-scale-in">{conv.unread_count}</Badge>}
                   </CardContent>
                 </Card>
               </SwipeableChatCard>
