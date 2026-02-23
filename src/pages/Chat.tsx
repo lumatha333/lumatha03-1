@@ -139,7 +139,12 @@ export default function Chat() {
     }
   };
 
-  useEffect(() => { if (userId) fetchMessages(userId); }, [userId, fetchMessages]);
+  // When opening a chat, fetch messages and immediately mark as read locally
+  useEffect(() => {
+    if (userId) {
+      fetchMessages(userId);
+    }
+  }, [userId, fetchMessages]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   useEffect(() => {
@@ -159,6 +164,34 @@ export default function Chat() {
     if (stored) setArchivedChats(new Set(JSON.parse(stored)));
     if (storedPrivate) setPrivateChats(new Set(JSON.parse(storedPrivate)));
   }, []);
+
+  // Auto-archive chats from unfriended users
+  useEffect(() => {
+    if (!user || conversations.length === 0) return;
+    const checkFriendStatus = async () => {
+      const convUserIds = conversations.map(c => c.user_id);
+      const { data: friendData } = await supabase
+        .from('friend_requests')
+        .select('sender_id, receiver_id')
+        .eq('status', 'accepted')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+      
+      const friendIds = new Set(
+        friendData?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || []
+      );
+      
+      const newArchived = new Set(archivedChats);
+      let changed = false;
+      convUserIds.forEach(uid => {
+        if (!friendIds.has(uid) && !newArchived.has(uid) && !privateChats.has(uid)) {
+          newArchived.add(uid);
+          changed = true;
+        }
+      });
+      if (changed) saveArchivedChats(newArchived);
+    };
+    checkFriendStatus();
+  }, [user, conversations]);
 
   const saveArchivedChats = (chats: Set<string>) => {
     localStorage.setItem('archivedChats', JSON.stringify([...chats]));
@@ -377,8 +410,8 @@ export default function Chat() {
         <WatermarkOverlay username={username} />
         {isBlurred && <BlurOverlay />}
 
-        {/* Chat Header - clean professional icons */}
-        <div className="px-3 py-2.5 border-b border-border/30 flex items-center gap-2.5 bg-card/60 backdrop-blur-md shrink-0">
+        {/* Chat Header - sticky at top */}
+        <div className="px-3 py-2.5 border-b border-border/30 flex items-center gap-2.5 bg-card/60 backdrop-blur-md shrink-0 sticky top-0 z-30">
           <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full" onClick={handleBackToChats}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
