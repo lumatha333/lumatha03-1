@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X, ChevronLeft, ChevronRight, Heart, MessageCircle, Share2, MoreHorizontal, Download } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface FullScreenMediaViewerProps {
   open: boolean;
@@ -17,6 +18,8 @@ interface FullScreenMediaViewerProps {
   onShare?: () => void;
   isGhostPost?: boolean;
   downloadDisabled?: boolean;
+  /** Minimal mode: only back, slide, download — no social actions (for chat) */
+  minimal?: boolean;
 }
 
 export function FullScreenMediaViewer({
@@ -32,7 +35,8 @@ export function FullScreenMediaViewer({
   onComment,
   onShare,
   isGhostPost = false,
-  downloadDisabled = false
+  downloadDisabled = false,
+  minimal = false
 }: FullScreenMediaViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   
@@ -131,27 +135,29 @@ export function FullScreenMediaViewer({
             )}
           </div>
 
-          {/* Bottom action bar */}
+          {/* Bottom bar */}
           <div className="absolute bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-16 pb-6">
-            <div className="flex items-center justify-center gap-10 px-6">
-              <button onClick={onLike} className={`flex flex-col items-center gap-1 transition-colors ${isLiked ? 'text-red-500' : 'text-white/80 hover:text-white'}`}>
-                <Heart className={`w-7 h-7 ${isLiked ? 'fill-current' : ''}`} />
-                {likesCount > 0 && <span className="text-xs">{likesCount}</span>}
-              </button>
-              <button onClick={onComment} className="flex flex-col items-center gap-1 text-white/80 hover:text-white transition-colors">
-                <MessageCircle className="w-7 h-7" />
-              </button>
-              <button className="flex flex-col items-center gap-1 text-white/80 hover:text-white transition-colors">
-                <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                </svg>
-              </button>
-              <button onClick={onShare} className="flex flex-col items-center gap-1 text-white/80 hover:text-white transition-colors">
-                <Share2 className="w-7 h-7" />
-              </button>
-            </div>
+            {!minimal && (
+              <div className="flex items-center justify-center gap-10 px-6">
+                <button onClick={onLike} className={`flex flex-col items-center gap-1 transition-colors ${isLiked ? 'text-red-500' : 'text-white/80 hover:text-white'}`}>
+                  <Heart className={`w-7 h-7 ${isLiked ? 'fill-current' : ''}`} />
+                  {likesCount > 0 && <span className="text-xs">{likesCount}</span>}
+                </button>
+                <button onClick={onComment} className="flex flex-col items-center gap-1 text-white/80 hover:text-white transition-colors">
+                  <MessageCircle className="w-7 h-7" />
+                </button>
+                <button className="flex flex-col items-center gap-1 text-white/80 hover:text-white transition-colors">
+                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                  </svg>
+                </button>
+                <button onClick={onShare} className="flex flex-col items-center gap-1 text-white/80 hover:text-white transition-colors">
+                  <Share2 className="w-7 h-7" />
+                </button>
+              </div>
+            )}
             {hasMultiple && (
-              <div className="text-center mt-4 text-white/60 text-sm">
+              <div className={cn("text-center text-white/60 text-sm", !minimal && "mt-4")}>
                 {currentIndex + 1} / {mediaUrls.length}
               </div>
             )}
