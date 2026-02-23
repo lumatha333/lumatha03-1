@@ -24,6 +24,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useChatProtection, WatermarkOverlay, BlurOverlay } from '@/components/chat/ChatProtection';
 import { EmojiReactionPicker } from '@/components/chat/EmojiReactionPicker';
 import { SharedMusicPlayer, MusicBar } from '@/components/chat/SharedMusicPlayer';
+import { SwipeableChatCard } from '@/components/chat/SwipeableChatCard';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
@@ -715,22 +716,28 @@ export default function Chat() {
             </Card>
           ) : (
             filteredConversations.map((conv) => (
-              <Card key={conv.user_id} className="glass-card cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate(`/chat/${conv.user_id}`)}>
-                <CardContent className="p-3 flex items-center gap-3">
-                  <Avatar className="w-12 h-12">
-                    <AvatarImage src={conv.user_avatar || undefined} />
-                    <AvatarFallback className="bg-primary/20">{conv.user_name?.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-sm truncate">{conv.user_name}</p>
-                      <p className="text-[10px] text-muted-foreground">{conv.last_message_time && formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: true })}</p>
+              <SwipeableChatCard
+                key={conv.user_id}
+                onSwipeLeft={() => toggleArchive(conv.user_id)}
+                leftLabel="Archive"
+              >
+                <Card className="glass-card cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate(`/chat/${conv.user_id}`)}>
+                  <CardContent className="p-3 flex items-center gap-3">
+                    <Avatar className="w-12 h-12">
+                      <AvatarImage src={conv.user_avatar || undefined} />
+                      <AvatarFallback className="bg-primary/20">{conv.user_name?.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-sm truncate">{conv.user_name}</p>
+                        <p className="text-[10px] text-muted-foreground">{conv.last_message_time && formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: true })}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
-                  </div>
-                  {conv.unread_count > 0 && <Badge variant="destructive" className="text-[10px] h-5 min-w-[20px]">{conv.unread_count}</Badge>}
-                </CardContent>
-              </Card>
+                    {conv.unread_count > 0 && <Badge variant="destructive" className="text-[10px] h-5 min-w-[20px]">{conv.unread_count}</Badge>}
+                  </CardContent>
+                </Card>
+              </SwipeableChatCard>
             ))
           )}
         </TabsContent>
@@ -807,15 +814,21 @@ export default function Chat() {
               <p className="text-muted-foreground">No archived chats</p>
             </CardContent></Card>
           ) : filteredConversations.map((conv) => (
-            <Card key={conv.user_id} className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => navigate(`/chat/${conv.user_id}`)}>
-              <CardContent className="p-3 flex items-center gap-3">
-                <Avatar className="w-12 h-12"><AvatarImage src={conv.user_avatar || undefined} /><AvatarFallback>{conv.user_name?.charAt(0)}</AvatarFallback></Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{conv.user_name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
-                </div>
-              </CardContent>
-            </Card>
+            <SwipeableChatCard
+              key={conv.user_id}
+              onSwipeRight={() => toggleArchive(conv.user_id)}
+              rightLabel="Unarchive"
+            >
+              <Card className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => navigate(`/chat/${conv.user_id}`)}>
+                <CardContent className="p-3 flex items-center gap-3">
+                  <Avatar className="w-12 h-12"><AvatarImage src={conv.user_avatar || undefined} /><AvatarFallback>{conv.user_name?.charAt(0)}</AvatarFallback></Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{conv.user_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </SwipeableChatCard>
           ))}
         </TabsContent>
 
@@ -839,15 +852,21 @@ export default function Chat() {
               <p className="text-xs text-muted-foreground mt-1">Add chats from the ⋮ menu</p>
             </CardContent></Card>
           ) : filteredConversations.map((conv) => (
-            <Card key={conv.user_id} className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => handlePrivateAccess(conv.user_id)}>
-              <CardContent className="p-3 flex items-center gap-3">
-                <Avatar className="w-12 h-12"><AvatarImage src={conv.user_avatar || undefined} /><AvatarFallback>{conv.user_name?.charAt(0)}</AvatarFallback></Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{conv.user_name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
-                </div>
-              </CardContent>
-            </Card>
+            <SwipeableChatCard
+              key={conv.user_id}
+              onSwipeRight={() => togglePrivate(conv.user_id)}
+              rightLabel="Unprivate"
+            >
+              <Card className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => handlePrivateAccess(conv.user_id)}>
+                <CardContent className="p-3 flex items-center gap-3">
+                  <Avatar className="w-12 h-12"><AvatarImage src={conv.user_avatar || undefined} /><AvatarFallback>{conv.user_name?.charAt(0)}</AvatarFallback></Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{conv.user_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </SwipeableChatCard>
           ))}
         </TabsContent>
       </Tabs>
