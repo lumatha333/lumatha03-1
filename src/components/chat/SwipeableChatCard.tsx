@@ -67,8 +67,10 @@ export function SwipeableChatCard({
   const handleTouchEnd = useCallback(() => {
     setSwiping(false);
     if (offsetX < -SWIPE_THRESHOLD && onSwipeLeft) {
+      if (navigator.vibrate) navigator.vibrate(30);
       onSwipeLeft();
     } else if (offsetX > SWIPE_THRESHOLD && onSwipeRight) {
+      if (navigator.vibrate) navigator.vibrate(30);
       onSwipeRight();
     }
     setOffsetX(0);
