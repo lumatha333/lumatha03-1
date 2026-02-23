@@ -25,6 +25,10 @@ import { useChatProtection, WatermarkOverlay, BlurOverlay } from '@/components/c
 import { EmojiReactionPicker } from '@/components/chat/EmojiReactionPicker';
 import { SharedMusicPlayer, MusicBar } from '@/components/chat/SharedMusicPlayer';
 import { SwipeableChatCard } from '@/components/chat/SwipeableChatCard';
+import { ChatImageGrid } from '@/components/chat/ChatImageGrid';
+import { ChatVideoPlayer } from '@/components/chat/ChatVideoPlayer';
+import { LinkPreviewCard, extractUrls } from '@/components/chat/LinkPreviewCard';
+import { UploadProgressBar } from '@/components/chat/UploadProgressBar';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
@@ -56,6 +60,7 @@ export default function Chat() {
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadIndex, setUploadIndex] = useState(0);
   const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
   const [privateChats, setPrivateChats] = useState<Set<string>>(new Set());
   const [privateUnlocked, setPrivateUnlocked] = useState(false);
@@ -284,8 +289,11 @@ export default function Chat() {
   const handleSend = async () => {
     if ((!newMessage.trim() && mediaFiles.length === 0) || !currentChatUser) return;
     setUploading(true);
+    setUploadIndex(0);
     try {
-      for (const file of mediaFiles) {
+      for (let i = 0; i < mediaFiles.length; i++) {
+        setUploadIndex(i);
+        const file = mediaFiles[i];
         const fileExt = file.name.split('.').pop();
         const fileName = `${user?.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
@@ -299,7 +307,7 @@ export default function Chat() {
       setNewMessage('');
       clearAllMedia();
     } catch { toast.error('Failed to send message'); }
-    finally { setUploading(false); }
+    finally { setUploading(false); setUploadIndex(0); }
   };
 
   const handleReactToMessage = (messageId: string, emoji: string) => {
@@ -529,13 +537,22 @@ export default function Chat() {
                       isPinned && 'ring-1 ring-primary/30'
                     )}>
                       {msg.media_url && (
-                        <div className="mb-2 rounded-lg overflow-hidden">
-                          {msg.media_type === 'image' && <img src={msg.media_url} alt="" className="max-w-full rounded-lg" draggable={false} />}
-                          {msg.media_type === 'video' && <video src={msg.media_url} controls className="max-w-full rounded-lg" />}
+                        <div className="mb-2 rounded-2xl overflow-hidden">
+                          {msg.media_type === 'image' && (
+                            <ChatImageGrid urls={[msg.media_url]} isOwn={isOwn} />
+                          )}
+                          {msg.media_type === 'video' && (
+                            <ChatVideoPlayer src={msg.media_url} />
+                          )}
                           {msg.media_type === 'audio' && <audio src={msg.media_url} controls className="w-full" />}
                         </div>
                       )}
                       <p className="text-sm break-words">{msg.content}</p>
+                      
+                      {/* Link previews */}
+                      {extractUrls(msg.content).slice(0, 1).map((url) => (
+                        <LinkPreviewCard key={url} url={url} className="mt-2" />
+                      ))}
                       
                       {/* Emoji Reaction Picker */}
                       <EmojiReactionPicker 
@@ -577,6 +594,11 @@ export default function Chat() {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Upload Progress */}
+        {uploading && mediaFiles.length > 0 && (
+          <UploadProgressBar filesCount={mediaFiles.length} currentIndex={uploadIndex} />
         )}
 
         {/* Voice Recording UI */}
