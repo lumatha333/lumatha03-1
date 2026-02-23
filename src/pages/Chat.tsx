@@ -4,7 +4,7 @@ import {
   Send, ArrowLeft, Search, Paperclip, X, MoreVertical, 
   Archive, Ghost, Trash2, Smile, Mic, Music,
   Lock, Image, Users, UserSearch, MessageCircle, Star, Phone, Video as VideoIcon,
-  Palette, Eye, EyeOff, Pin, Check, CheckCheck
+  Palette, Eye, EyeOff, Pin, Check, CheckCheck, Forward, Reply
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,7 @@ import { ChatImageGrid } from '@/components/chat/ChatImageGrid';
 import { ChatVideoPlayer } from '@/components/chat/ChatVideoPlayer';
 import { LinkPreviewCard, extractUrls } from '@/components/chat/LinkPreviewCard';
 import { UploadProgressBar } from '@/components/chat/UploadProgressBar';
+import { ForwardMessageDialog } from '@/components/chat/ForwardMessageDialog';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
@@ -80,6 +81,7 @@ export default function Chat() {
   const [pinnedMessages, setPinnedMessages] = useState<Set<string>>(new Set());
   const [showMusicPlayer, setShowMusicPlayer] = useState(false);
   const [activeMusicTrack, setActiveMusicTrack] = useState<string | null>(null);
+  const [forwardMsg, setForwardMsg] = useState<{ content: string; mediaUrl?: string; mediaType?: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -291,18 +293,46 @@ export default function Chat() {
     setUploading(true);
     setUploadIndex(0);
     try {
-      for (let i = 0; i < mediaFiles.length; i++) {
-        setUploadIndex(i);
-        const file = mediaFiles[i];
+      // Separate image files from other media
+      const imageFiles = mediaFiles.filter(f => f.type.startsWith('image'));
+      const otherFiles = mediaFiles.filter(f => !f.type.startsWith('image'));
+
+      // Upload all images and send as single grid message
+      if (imageFiles.length > 0) {
+        const imageUrls: string[] = [];
+        for (let i = 0; i < imageFiles.length; i++) {
+          setUploadIndex(i);
+          const file = imageFiles[i];
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${user?.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage
+            .from('chat-media').upload(fileName, file, { cacheControl: '31536000', contentType: file.type });
+          if (uploadError) continue;
+          const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
+          imageUrls.push(publicUrl);
+        }
+        if (imageUrls.length > 0) {
+          // Store as JSON array for multi-image, plain URL for single
+          const mediaUrl = imageUrls.length === 1 ? imageUrls[0] : JSON.stringify(imageUrls);
+          const mediaType = imageUrls.length === 1 ? 'image' : 'images';
+          await sendMessage(currentChatUser, '', mediaUrl, mediaType);
+        }
+      }
+
+      // Upload other files individually
+      for (let i = 0; i < otherFiles.length; i++) {
+        setUploadIndex(imageFiles.length + i);
+        const file = otherFiles[i];
         const fileExt = file.name.split('.').pop();
         const fileName = `${user?.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from('chat-media').upload(fileName, file, { cacheControl: '31536000', contentType: file.type });
         if (uploadError) continue;
         const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
-        const mediaType = file.type.startsWith('image') ? 'image' : file.type.startsWith('video') ? 'video' : 'document';
+        const mediaType = file.type.startsWith('video') ? 'video' : 'document';
         await sendMessage(currentChatUser, '', publicUrl, mediaType);
       }
+
       if (newMessage.trim()) await sendMessage(currentChatUser, newMessage);
       setNewMessage('');
       clearAllMedia();
@@ -528,39 +558,55 @@ export default function Chat() {
               
               return (
                 <div key={msg.id} className={cn("flex", isOwn ? 'justify-end' : 'justify-start')}>
-                  <div className={cn("max-w-[75%] relative", isOwn ? 'order-2' : '')}>
+                  <div className={cn("max-w-[80%] relative group", isOwn ? 'order-2' : '')}>
+                    {/* Forwarded label */}
+                    {msg.is_forwarded && (
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5 flex items-center gap-1 italic">
+                        <Forward className="w-2.5 h-2.5" /> Forwarded
+                      </p>
+                    )}
                     <div className={cn(
-                      "rounded-2xl px-3 py-2 relative",
+                      "rounded-[20px] relative overflow-hidden",
+                      msg.media_url ? 'p-0' : 'px-3.5 py-2',
                       isOwn 
-                        ? cn(currentTheme.bubble, 'text-white rounded-br-md') 
-                        : 'bg-muted rounded-bl-md',
+                        ? cn(currentTheme.bubble, 'text-white', !msg.media_url && 'rounded-br-md') 
+                        : cn('bg-muted', !msg.media_url && 'rounded-bl-md'),
                       isPinned && 'ring-1 ring-primary/30'
                     )}>
-                      {/* Media rendering - type-based */}
-                      {msg.media_url && msg.media_type === 'image' && (
-                        <div className="rounded-2xl overflow-hidden -mx-1 -mt-0.5">
-                          <ChatImageGrid urls={[msg.media_url]} isOwn={isOwn} />
-                        </div>
-                      )}
+                      {/* Multi-image grid */}
+                      {msg.media_url && (msg.media_type === 'image' || msg.media_type === 'images') && (() => {
+                        let urls: string[] = [];
+                        try {
+                          if (msg.media_type === 'images') {
+                            urls = JSON.parse(msg.media_url!);
+                          } else {
+                            urls = [msg.media_url!];
+                          }
+                        } catch {
+                          urls = [msg.media_url!];
+                        }
+                        return <ChatImageGrid urls={urls} isOwn={isOwn} />;
+                      })()}
                       {msg.media_url && msg.media_type === 'video' && (
-                        <div className="rounded-2xl overflow-hidden -mx-1 -mt-0.5">
-                          <ChatVideoPlayer src={msg.media_url} />
-                        </div>
+                        <ChatVideoPlayer src={msg.media_url} />
                       )}
                       {msg.media_url && msg.media_type === 'audio' && (
-                        <div className="rounded-2xl overflow-hidden">
-                          <audio src={msg.media_url} controls className="w-full" />
+                        <div className="p-2">
+                          <audio src={msg.media_url} controls className="w-full max-w-[260px]" />
                         </div>
                       )}
 
-                      {/* Text content - hide empty/attachment-only content */}
-                      {msg.content && !msg.content.startsWith('📎 ') && msg.content !== '🎤 Voice message' && msg.content.trim() !== '' && (
-                        <p className={cn("text-sm break-words", msg.media_url && "mt-1.5")}>{msg.content}</p>
+                      {/* Text content */}
+                      {msg.content && !msg.content.startsWith('📎 ') && msg.content !== '🎤 Voice message' && msg.content.trim() !== '' && msg.content.trim() !== ' ' && (
+                        <p className={cn(
+                          "text-sm break-words leading-relaxed",
+                          msg.media_url ? "px-3.5 py-2" : ""
+                        )}>{msg.content}</p>
                       )}
                       
-                      {/* Link previews for text messages */}
+                      {/* Link previews */}
                       {msg.content && extractUrls(msg.content).slice(0, 1).map((url) => (
-                        <LinkPreviewCard key={url} url={url} className="mt-2" />
+                        <LinkPreviewCard key={url} url={url} className="mt-1 mx-1 mb-1" />
                       ))}
                       
                       {/* Emoji Reaction Picker */}
@@ -570,7 +616,9 @@ export default function Chat() {
                         isOwn={isOwn}
                       />
                     </div>
-                    <div className="flex items-center gap-2 mt-1.5">
+
+                    {/* Message meta + actions */}
+                    <div className="flex items-center gap-1.5 mt-1 px-1">
                       <p className="text-[10px] text-muted-foreground">
                         {formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}
                       </p>
@@ -579,9 +627,22 @@ export default function Chat() {
                           ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
                           : <Check className="w-3.5 h-3.5 text-muted-foreground" />
                       )}
-                      <button onClick={() => togglePinMessage(msg.id)} className="text-muted-foreground hover:text-primary transition-colors">
-                        <Pin className={cn("w-2.5 h-2.5", isPinned && "text-primary fill-primary")} />
-                      </button>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => togglePinMessage(msg.id)} className="text-muted-foreground hover:text-primary transition-colors p-0.5">
+                          <Pin className={cn("w-2.5 h-2.5", isPinned && "text-primary fill-primary")} />
+                        </button>
+                        <button 
+                          onClick={() => setForwardMsg({ content: msg.content || '', mediaUrl: msg.media_url || undefined, mediaType: msg.media_type || undefined })}
+                          className="text-muted-foreground hover:text-primary transition-colors p-0.5"
+                        >
+                          <Forward className="w-2.5 h-2.5" />
+                        </button>
+                        {isOwn && (
+                          <button onClick={() => deleteMessage(msg.id)} className="text-muted-foreground hover:text-destructive transition-colors p-0.5">
+                            <Trash2 className="w-2.5 h-2.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -593,15 +654,24 @@ export default function Chat() {
 
         {/* Media Preview */}
         {mediaPreviews.length > 0 && (
-          <div className="p-2 border-t border-border/30 flex gap-2 overflow-x-auto">
-            {mediaPreviews.map((preview, i) => (
-              <div key={i} className="relative shrink-0">
-                <img src={preview} alt="" className="h-16 w-16 object-cover rounded-lg" />
-                <Button size="icon" variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 rounded-full" onClick={() => removeMedia(i)}>
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
+          <div className="p-2.5 border-t border-border/20 bg-card/40 backdrop-blur-sm">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {mediaPreviews.map((preview, i) => (
+                <div key={i} className="relative shrink-0">
+                  {mediaFiles[i]?.type.startsWith('video') ? (
+                    <div className="h-16 w-16 rounded-xl bg-muted flex items-center justify-center">
+                      <VideoIcon className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <img src={preview} alt="" className="h-16 w-16 object-cover rounded-xl" />
+                  )}
+                  <Button size="icon" variant="destructive" className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full shadow-md" onClick={() => removeMedia(i)}>
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">{mediaFiles.length} file{mediaFiles.length > 1 ? 's' : ''} selected</p>
           </div>
         )}
 
@@ -718,6 +788,15 @@ export default function Chat() {
           isOpen={showMusicPlayer}
           onClose={() => setShowMusicPlayer(false)}
           partnerName={selectedConversation?.user_name || 'User'}
+        />
+
+        {/* Forward Message Dialog */}
+        <ForwardMessageDialog
+          open={!!forwardMsg}
+          onOpenChange={(open) => !open && setForwardMsg(null)}
+          messageContent={forwardMsg?.content || ''}
+          mediaUrl={forwardMsg?.mediaUrl}
+          mediaType={forwardMsg?.mediaType}
         />
       </div>
     );
