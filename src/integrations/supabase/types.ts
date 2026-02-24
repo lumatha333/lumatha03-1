@@ -741,14 +741,19 @@ export type Database = {
           country: string | null
           cover_url: string | null
           created_at: string | null
+          detected_city: string | null
+          first_name: string | null
           id: string
           is_private: boolean | null
+          last_name: string | null
           location: string | null
           name: string
+          timezone: string | null
           total_followers: number | null
           total_following: number | null
           total_posts: number | null
           updated_at: string | null
+          username: string | null
           website: string | null
         }
         Insert: {
@@ -759,14 +764,19 @@ export type Database = {
           country?: string | null
           cover_url?: string | null
           created_at?: string | null
+          detected_city?: string | null
+          first_name?: string | null
           id: string
           is_private?: boolean | null
+          last_name?: string | null
           location?: string | null
           name: string
+          timezone?: string | null
           total_followers?: number | null
           total_following?: number | null
           total_posts?: number | null
           updated_at?: string | null
+          username?: string | null
           website?: string | null
         }
         Update: {
@@ -777,14 +787,19 @@ export type Database = {
           country?: string | null
           cover_url?: string | null
           created_at?: string | null
+          detected_city?: string | null
+          first_name?: string | null
           id?: string
           is_private?: boolean | null
+          last_name?: string | null
           location?: string | null
           name?: string
+          timezone?: string | null
           total_followers?: number | null
           total_following?: number | null
           total_posts?: number | null
           updated_at?: string | null
+          username?: string | null
           website?: string | null
         }
         Relationships: []

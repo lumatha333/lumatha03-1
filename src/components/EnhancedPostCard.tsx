@@ -95,7 +95,6 @@ export function EnhancedPostCard({
     const newSettings = { ...postSettings, [key]: value };
     setPostSettings(newSettings);
     localStorage.setItem(`post_settings_${post.id}`, JSON.stringify(newSettings));
-    toast.success(`${key === 'commentsOff' ? 'Comments' : 'Sharing'} ${value ? 'disabled' : 'enabled'}`);
   };
   
   // Get all media URLs
@@ -308,13 +307,13 @@ export function EnhancedPostCard({
           </div>
           
           {/* Three dots menu */}
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-7 w-7 rounded-full p-0">
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="glass-card border-border w-48">
+            <DropdownMenuContent align="end" className="glass-card border-border w-48 z-[100] bg-popover shadow-xl rounded-xl">
               <DropdownMenuItem onClick={handleCopy} className="text-xs">
                 <Copy className="w-3.5 h-3.5 mr-2" /> Copy text
               </DropdownMenuItem>

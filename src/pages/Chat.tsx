@@ -245,7 +245,6 @@ export default function Chat() {
       setShowPrivateAuth(false);
       setPrivateUnlocked(true);
       if (pendingPrivateChat) navigate(`/chat/${pendingPrivateChat}`);
-      toast.success('Private chat password set!');
     } else if (input === saved) {
       setShowPrivateAuth(false);
       setPrivateUnlocked(true);
@@ -486,12 +485,12 @@ export default function Chat() {
                   <DropdownMenuSubTrigger><Ghost className="w-4 h-4 mr-2" />Ghost Mode</DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
                     {GHOST_MODES.map((mode) => (
-                      <DropdownMenuItem key={mode.value} onClick={() => { setGhostMode(mode.value); toast.success(`Ghost: ${mode.label}`); }}>
+                      <DropdownMenuItem key={mode.value} onClick={() => setGhostMode(mode.value)}>
                         <span className="mr-2">{mode.icon}</span>{mode.label}
                         {ghostMode === mode.value && <span className="ml-auto text-primary">✓</span>}
                       </DropdownMenuItem>
                     ))}
-                    <DropdownMenuItem onClick={() => { setGhostMode(null); toast.success('Ghost mode off'); }}>
+                    <DropdownMenuItem onClick={() => setGhostMode(null)}>
                       Off {!ghostMode && <span className="ml-auto text-primary">✓</span>}
                     </DropdownMenuItem>
                   </DropdownMenuSubContent>
