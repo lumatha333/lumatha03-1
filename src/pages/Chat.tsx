@@ -213,20 +213,19 @@ export default function Chat() {
 
   const toggleArchive = (chatUserId: string) => {
     const newArchived = new Set(archivedChats);
-    if (newArchived.has(chatUserId)) { newArchived.delete(chatUserId); toast.success('Chat unarchived'); }
-    else { newArchived.add(chatUserId); toast.success('Chat archived'); }
+    if (newArchived.has(chatUserId)) { newArchived.delete(chatUserId); }
+    else { newArchived.add(chatUserId); }
     saveArchivedChats(newArchived);
   };
 
   const addToPrivate = (chatUserId: string) => {
     savePrivateChats(new Set([...privateChats, chatUserId]));
-    toast.success('Added to private chats');
   };
 
   const togglePrivate = (chatUserId: string) => {
     const newPrivate = new Set(privateChats);
-    if (newPrivate.has(chatUserId)) { newPrivate.delete(chatUserId); toast.success('Removed from private'); }
-    else { newPrivate.add(chatUserId); toast.success('Added to private chats'); }
+    if (newPrivate.has(chatUserId)) { newPrivate.delete(chatUserId); }
+    else { newPrivate.add(chatUserId); }
     savePrivateChats(newPrivate);
   };
 
@@ -260,7 +259,6 @@ export default function Chat() {
     if (!user) return;
     await supabase.from('messages').delete()
       .or(`and(sender_id.eq.${user.id},receiver_id.eq.${chatUserId}),and(sender_id.eq.${chatUserId},receiver_id.eq.${user.id})`);
-    toast.success('Chat deleted');
     navigate('/chat');
   };
 
@@ -352,8 +350,8 @@ export default function Chat() {
   const togglePinMessage = (messageId: string) => {
     setPinnedMessages(prev => {
       const next = new Set(prev);
-      if (next.has(messageId)) { next.delete(messageId); toast.success('Unpinned'); }
-      else { next.add(messageId); toast.success('Pinned!'); }
+      if (next.has(messageId)) { next.delete(messageId); }
+      else { next.add(messageId); }
       return next;
     });
   };
@@ -439,7 +437,6 @@ export default function Chat() {
   const applyTheme = (themeId: string) => {
     setChatTheme(themeId);
     localStorage.setItem('chatTheme', themeId);
-    toast.success('Theme applied!');
   };
 
   // ─────── FULL SCREEN CHAT VIEW ───────
@@ -478,13 +475,13 @@ export default function Chat() {
               onClick={() => toast.info('Video call starting...')}>
               <VideoIcon className="w-[18px] h-[18px] text-blue-500" />
             </Button>
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                   <MoreVertical className="w-[18px] h-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-52 z-[100] bg-popover shadow-xl border-border rounded-2xl p-1">
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger><Ghost className="w-4 h-4 mr-2" />Ghost Mode</DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
