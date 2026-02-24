@@ -3,6 +3,7 @@ import { Layout } from '@/components/Layout';
 import { SplashScreen } from '@/components/SplashScreen';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useGlobalProtection, GlobalWatermark, GlobalBlurOverlay } from '@/components/GlobalContentProtection';
+import { useAutoTheme } from '@/hooks/useAutoTheme';
 import Home from '@/pages/Home';
 import Education from '@/pages/Education';
 import MusicAdventure from '@/pages/MusicAdventure';
@@ -56,9 +57,10 @@ export default function Index() {
   );
 }
 
-/** Renders global watermark + blur overlay + activates protection hooks */
+/** Renders global watermark + blur overlay + activates protection hooks + auto theme */
 function ProtectionLayer() {
   const { username } = useGlobalProtection();
+  useAutoTheme(); // Auto light/dark based on time of day
   return (
     <>
       <GlobalWatermark username={username} />
