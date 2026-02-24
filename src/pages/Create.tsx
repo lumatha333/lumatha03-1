@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { Sparkles, Trash2, Image, Film, X, ChevronLeft, ChevronRight, ArrowLeft, Globe, Lock, Users, Ghost } from 'lucide-react';
+import { Sparkles, Trash2, Image, Film, X, ChevronLeft, ChevronRight, ArrowLeft, Globe, Lock, Users, Ghost, ScrollText } from 'lucide-react';
 
 const CATEGORIES = [
   { value: 'global', label: '🌍 Global', desc: 'Visible worldwide' },
@@ -25,7 +25,7 @@ const VISIBILITY = [
   { value: 'private', label: 'Private', icon: Lock },
 ];
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_FILES = 10;
 
 export default function Create() {
@@ -41,6 +41,7 @@ export default function Create() {
   const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [useLetterStyle, setUseLetterStyle] = useState(false);
 
   useEffect(() => {
     const draft = localStorage.getItem('lumatha_draft');
@@ -61,20 +62,13 @@ export default function Create() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-
     const validFiles = files.filter(file => {
-      if (file.size > MAX_FILE_SIZE) {
-        toast.error(`${file.name} too large. Max 50MB`);
-        return false;
-      }
+      if (file.size > MAX_FILE_SIZE) { toast.error(`${file.name} too large. Max 50MB`); return false; }
       return true;
     });
-
     const newFiles = [...mediaFiles, ...validFiles].slice(0, MAX_FILES);
     setMediaFiles(newFiles);
-    
-    const newPreviews = newFiles.map(file => URL.createObjectURL(file));
-    setPreviewUrls(newPreviews);
+    setPreviewUrls(newFiles.map(file => URL.createObjectURL(file)));
     setCurrentPreviewIndex(0);
   };
 
@@ -92,65 +86,38 @@ export default function Create() {
     localStorage.removeItem('lumatha_draft');
   };
 
-  const handleCancel = () => {
-    navigate('/');
-  };
-
   const handleSave = async () => {
     if (!content.trim()) return toast.error('Add some content');
     if (!user) return toast.error('Please login');
-
-    setLoading(true);
-    setUploadProgress(0);
-    
+    setLoading(true); setUploadProgress(0);
     try {
       const uploadedUrls: string[] = [];
       const uploadedTypes: string[] = [];
-
       if (mediaFiles.length > 0) {
         for (let i = 0; i < mediaFiles.length; i++) {
           const file = mediaFiles[i];
           const fileExt = file.name.split('.').pop();
           const fileName = `${user.id}/${Date.now()}_${i}.${fileExt}`;
-          
-          const { error: uploadError } = await supabase.storage.from('posts-media').upload(fileName, file, {
-            cacheControl: '31536000', contentType: file.type
-          });
-
+          const { error: uploadError } = await supabase.storage.from('posts-media').upload(fileName, file, { cacheControl: '31536000', contentType: file.type });
           if (uploadError) throw uploadError;
-
           const { data: { publicUrl } } = supabase.storage.from('posts-media').getPublicUrl(fileName);
           uploadedUrls.push(publicUrl);
           uploadedTypes.push(file.type.startsWith('video') ? 'video' : 'image');
           setUploadProgress(((i + 1) / mediaFiles.length) * 100);
         }
       }
-
       const postTitle = title.trim() || 'My Post';
-      
       const { error } = await supabase.from('posts').insert({
-        user_id: user.id,
-        title: postTitle,
-        content: content.trim(),
-        file_url: uploadedUrls[0] || null,
-        file_type: uploadedTypes[0] || null,
-        media_urls: uploadedUrls,
-        media_types: uploadedTypes,
-        category,
-        visibility
+        user_id: user.id, title: postTitle, content: content.trim(),
+        file_url: uploadedUrls[0] || null, file_type: uploadedTypes[0] || null,
+        media_urls: uploadedUrls, media_types: uploadedTypes,
+        category, visibility
       });
-
       if (error) throw error;
-
       toast.success('Post created!');
-      handleClear();
-      navigate('/');
-    } catch (error) {
-      toast.error('Failed to create post');
-    } finally {
-      setLoading(false);
-      setUploadProgress(0);
-    }
+      handleClear(); navigate('/');
+    } catch { toast.error('Failed to create post'); }
+    finally { setLoading(false); setUploadProgress(0); }
   };
 
   const isVideo = (file: File) => file.type.startsWith('video');
@@ -159,14 +126,85 @@ export default function Create() {
   return (
     <div className="space-y-4 pb-20 max-w-2xl mx-auto">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={handleCancel} className="h-8 w-8">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="h-8 w-8">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-primary animate-pulse" />
           <h1 className="text-xl font-bold gradient-text">Create Post</h1>
         </div>
+        <div className="ml-auto">
+          <Button variant={useLetterStyle ? 'default' : 'outline'} size="sm" className="gap-1.5 text-xs" onClick={() => setUseLetterStyle(!useLetterStyle)}>
+            <ScrollText className="w-3.5 h-3.5" />{useLetterStyle ? 'Letter On' : 'Letter Style'}
+          </Button>
+        </div>
       </div>
+
+      {/* Ancient Letter Style Preview */}
+      {useLetterStyle && content.trim() && (
+        <div className="relative">
+          <div className="rounded-xl overflow-hidden border-2 border-amber-800/30 shadow-2xl"
+            style={{
+              background: 'linear-gradient(135deg, #f5e6c8 0%, #e8d5a3 30%, #d4c08a 60%, #c4a96e 100%)',
+              boxShadow: '0 0 40px rgba(139, 90, 43, 0.15), inset 0 0 60px rgba(139, 90, 43, 0.08)',
+            }}>
+            {/* Aged edges effect */}
+            <div className="absolute inset-0 pointer-events-none rounded-xl"
+              style={{
+                background: 'radial-gradient(ellipse at top left, rgba(101, 67, 33, 0.15) 0%, transparent 50%), radial-gradient(ellipse at bottom right, rgba(101, 67, 33, 0.2) 0%, transparent 50%)',
+              }} />
+            
+            <div className="relative p-6 md:p-8">
+              {/* Decorative header */}
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-800/40 to-transparent" />
+                <ScrollText className="w-5 h-5 text-amber-800/60" />
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-800/40 to-transparent" />
+              </div>
+
+              {title && (
+                <h2 className="text-center text-xl md:text-2xl mb-4" style={{
+                  fontFamily: '"Georgia", "Palatino Linotype", "Book Antiqua", serif',
+                  color: '#4a3728', fontWeight: 600, letterSpacing: '0.05em',
+                  textShadow: '1px 1px 2px rgba(74, 55, 40, 0.1)',
+                }}>{title}</h2>
+              )}
+
+              <div className="h-px bg-amber-800/20 mb-4" />
+
+              <div style={{
+                fontFamily: '"Georgia", "Palatino Linotype", "Book Antiqua", serif',
+                color: '#3d2b1f', fontSize: '15px', lineHeight: '1.8',
+                letterSpacing: '0.02em', whiteSpace: 'pre-wrap',
+                textIndent: '2em',
+              }}>
+                {content}
+              </div>
+
+              {/* Signature area */}
+              <div className="mt-6 flex justify-end">
+                <div className="text-right" style={{
+                  fontFamily: '"Georgia", serif', color: '#5c4033',
+                  fontStyle: 'italic', fontSize: '14px',
+                }}>
+                  — {user?.user_metadata?.name || 'Anonymous'}
+                  <div className="text-[11px] mt-1 opacity-60">
+                    {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom ornament */}
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-800/40 to-transparent" />
+                <div className="w-2 h-2 rounded-full bg-amber-800/30" />
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-800/40 to-transparent" />
+              </div>
+            </div>
+          </div>
+          <p className="text-[10px] text-center text-muted-foreground mt-2">📜 Ancient Letter Preview — your post will appear like this</p>
+        </div>
+      )}
 
       <Card className="glass-card">
         <CardContent className="p-4 space-y-4">
@@ -177,13 +215,10 @@ export default function Create() {
               {VISIBILITY.map((v) => {
                 const Icon = v.icon;
                 return (
-                  <label 
-                    key={v.value}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm cursor-pointer flex-1 justify-center transition-all ${visibility === v.value ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
-                  >
+                  <label key={v.value}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm cursor-pointer flex-1 justify-center transition-all ${visibility === v.value ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}>
                     <RadioGroupItem value={v.value} className="sr-only" />
-                    <Icon className="w-4 h-4" />
-                    {v.label}
+                    <Icon className="w-4 h-4" />{v.label}
                   </label>
                 );
               })}
@@ -194,16 +229,11 @@ export default function Create() {
           <div>
             <Label className="text-xs">Category</Label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="glass-card h-10 mt-1">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="glass-card h-10 mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CATEGORIES.map((cat) => (
                   <SelectItem key={cat.value} value={cat.value}>
-                    <div className="flex flex-col">
-                      <span>{cat.label}</span>
-                      <span className="text-[10px] text-muted-foreground">{cat.desc}</span>
-                    </div>
+                    <div className="flex flex-col"><span>{cat.label}</span><span className="text-[10px] text-muted-foreground">{cat.desc}</span></div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -219,8 +249,7 @@ export default function Create() {
           {/* Content */}
           <div>
             <Label className="text-xs">What's on your mind?</Label>
-            <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Share your thoughts..." 
-              className="min-h-[100px] glass-card mt-1" />
+            <Textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Share your thoughts..." className="min-h-[100px] glass-card mt-1" />
           </div>
 
           {/* Media Upload */}
@@ -237,9 +266,7 @@ export default function Create() {
               </label>
             </div>
             {mediaFiles.length > 0 && (
-              <p className="text-[10px] text-muted-foreground mt-1">
-                {mediaFiles.length} file(s) • {(totalSize / (1024 * 1024)).toFixed(1)} MB
-              </p>
+              <p className="text-[10px] text-muted-foreground mt-1">{mediaFiles.length} file(s) • {(totalSize / (1024 * 1024)).toFixed(1)} MB</p>
             )}
           </div>
 
@@ -252,7 +279,6 @@ export default function Create() {
                 ) : (
                   <img src={previewUrls[currentPreviewIndex]} alt="Preview" className="w-full max-h-64 object-contain" />
                 )}
-                
                 {previewUrls.length > 1 && (
                   <>
                     <Button size="icon" variant="ghost" className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7 bg-background/80"
@@ -269,7 +295,6 @@ export default function Create() {
                   </>
                 )}
               </div>
-              
               <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
                 {previewUrls.map((url, i) => (
                   <div key={i} className={`relative shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 cursor-pointer ${i === currentPreviewIndex ? 'border-primary' : 'border-border'}`}
@@ -289,7 +314,6 @@ export default function Create() {
             </div>
           )}
 
-          {/* Upload Progress */}
           {loading && uploadProgress > 0 && (
             <div className="space-y-1">
               <Progress value={uploadProgress} className="h-2" />
@@ -297,7 +321,6 @@ export default function Create() {
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <Button onClick={handleSave} disabled={loading || !content.trim()} className="flex-1 gap-2">
               <Sparkles className="w-4 h-4" />{loading ? 'Creating...' : 'Create'}

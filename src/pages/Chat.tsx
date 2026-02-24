@@ -4,14 +4,15 @@ import {
   Send, ArrowLeft, Search, Paperclip, X, MoreVertical, 
   Archive, Ghost, Trash2, Smile, Mic, Music,
   Lock, Image, Users, UserSearch, MessageCircle, Star, Phone, Video as VideoIcon,
-  Palette, Eye, EyeOff, Pin, Check, CheckCheck, Forward, Reply
+  Palette, Eye, EyeOff, Pin, Check, CheckCheck, Forward, Reply,
+  Bell, BellOff, User, Edit3, Volume2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useChat } from '@/hooks/useChat';
@@ -35,7 +36,8 @@ import { SharedPostPreview, extractInternalPostId, isSharedPostMessage } from '@
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
 const GHOST_MODES = [
-  { label: '30 minutes', value: 30, icon: '⚡' },
+  { label: 'When seen', value: 1, icon: '👁️' },
+  { label: '1 hour', value: 60, icon: '⏰' },
   { label: '1 day', value: 1440, icon: '🌙' },
   { label: '1 week', value: 10080, icon: '📅' },
 ];
@@ -47,6 +49,7 @@ const CHAT_THEMES = [
   { id: 'sunset', label: 'Sunset', bg: 'bg-[#1a0a0a]', bubble: 'bg-orange-700' },
   { id: 'berry', label: 'Berry', bg: 'bg-[#150a1a]', bubble: 'bg-purple-700' },
 ];
+const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
 
 export default function Chat() {
   const { userId } = useParams();
@@ -76,13 +79,17 @@ export default function Chat() {
   const [showPrivateAuth, setShowPrivateAuth] = useState(false);
   const [pendingPrivateChat, setPendingPrivateChat] = useState<string | null>(null);
   const [showMediaGallery, setShowMediaGallery] = useState(false);
-  const [mediaGalleryTab, setMediaGalleryTab] = useState<'images' | 'videos' | 'audio'>('images');
+  const [mediaGalleryTab, setMediaGalleryTab] = useState<'images' | 'videos' | 'audio' | 'files'>('images');
   const [messageReactions, setMessageReactions] = useState<Record<string, Record<string, number>>>({});
   const [chatTheme, setChatTheme] = useState(() => localStorage.getItem('chatTheme') || 'default');
   const [pinnedMessages, setPinnedMessages] = useState<Set<string>>(new Set());
   const [showMusicPlayer, setShowMusicPlayer] = useState(false);
   const [activeMusicTrack, setActiveMusicTrack] = useState<string | null>(null);
   const [forwardMsg, setForwardMsg] = useState<{ content: string; mediaUrl?: string; mediaType?: string } | null>(null);
+  const [chatNicknames, setChatNicknames] = useState<Record<string, string>>({});
+  const [showNicknameDialog, setShowNicknameDialog] = useState(false);
+  const [nicknameInput, setNicknameInput] = useState('');
+  const [mutedChats, setMutedChats] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -92,19 +99,32 @@ export default function Chat() {
 
   const currentTheme = CHAT_THEMES.find(t => t.id === chatTheme) || CHAT_THEMES[0];
 
-  // Ghost mode auto-delete timer
+  // Load nicknames and muted chats
+  useEffect(() => {
+    const stored = localStorage.getItem('chatNicknames');
+    if (stored) setChatNicknames(JSON.parse(stored));
+    const muted = localStorage.getItem('mutedChats');
+    if (muted) setMutedChats(new Set(JSON.parse(muted)));
+  }, []);
+
+  // Ghost mode: "when seen" = delete read messages, else timer-based
   useEffect(() => {
     if (!ghostMode || !currentChatUser || !user) return;
+    if (ghostMode === 1) {
+      // Delete messages that are read
+      const readMsgs = messages.filter(m => m.is_read && m.sender_id === user.id);
+      readMsgs.forEach(msg => {
+        supabase.from('messages').delete().eq('id', msg.id).then(() => {});
+      });
+      return;
+    }
     const interval = setInterval(async () => {
       const cutoff = new Date(Date.now() - ghostMode * 60 * 1000).toISOString();
       const ghostMessages = messages.filter(m => 
-        m.created_at && m.created_at < cutoff &&
-        (m.sender_id === user.id || m.receiver_id === user.id)
+        m.created_at && m.created_at < cutoff && m.sender_id === user.id
       );
       for (const msg of ghostMessages) {
-        if (msg.sender_id === user.id) {
-          await supabase.from('messages').delete().eq('id', msg.id);
-        }
+        await supabase.from('messages').delete().eq('id', msg.id);
       }
     }, 30000);
     return () => clearInterval(interval);
@@ -148,19 +168,18 @@ export default function Chat() {
     }
   };
 
-  // When opening a chat, fetch messages and immediately mark as read locally
   useEffect(() => {
-    if (userId) {
-      fetchMessages(userId);
-    }
+    if (userId) fetchMessages(userId);
   }, [userId, fetchMessages]);
+
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   useEffect(() => {
     const searchUsers = async () => {
       if (!userSearchQuery.trim()) { setSearchResults([]); return; }
-      const { data } = await supabase.from('profiles').select('id, name, avatar_url, country')
-        .ilike('name', `%${userSearchQuery}%`).neq('id', user?.id).limit(15);
+      const { data } = await supabase.from('profiles').select('id, name, username, avatar_url, country')
+        .or(`name.ilike.%${userSearchQuery}%,username.ilike.%${userSearchQuery}%`)
+        .neq('id', user?.id).limit(15);
       setSearchResults(data || []);
     };
     const timer = setTimeout(searchUsers, 300);
@@ -180,21 +199,14 @@ export default function Chat() {
     const checkFriendStatus = async () => {
       const convUserIds = conversations.map(c => c.user_id);
       const { data: friendData } = await supabase
-        .from('friend_requests')
-        .select('sender_id, receiver_id')
-        .eq('status', 'accepted')
+        .from('friend_requests').select('sender_id, receiver_id').eq('status', 'accepted')
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
-      
-      const friendIds = new Set(
-        friendData?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || []
-      );
-      
+      const friendIds = new Set(friendData?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || []);
       const newArchived = new Set(archivedChats);
       let changed = false;
       convUserIds.forEach(uid => {
         if (!friendIds.has(uid) && !newArchived.has(uid) && !privateChats.has(uid)) {
-          newArchived.add(uid);
-          changed = true;
+          newArchived.add(uid); changed = true;
         }
       });
       if (changed) saveArchivedChats(newArchived);
@@ -213,8 +225,8 @@ export default function Chat() {
 
   const toggleArchive = (chatUserId: string) => {
     const newArchived = new Set(archivedChats);
-    if (newArchived.has(chatUserId)) { newArchived.delete(chatUserId); }
-    else { newArchived.add(chatUserId); }
+    if (newArchived.has(chatUserId)) newArchived.delete(chatUserId);
+    else newArchived.add(chatUserId);
     saveArchivedChats(newArchived);
   };
 
@@ -224,16 +236,31 @@ export default function Chat() {
 
   const togglePrivate = (chatUserId: string) => {
     const newPrivate = new Set(privateChats);
-    if (newPrivate.has(chatUserId)) { newPrivate.delete(chatUserId); }
-    else { newPrivate.add(chatUserId); }
+    if (newPrivate.has(chatUserId)) newPrivate.delete(chatUserId);
+    else newPrivate.add(chatUserId);
     savePrivateChats(newPrivate);
   };
 
+  const toggleMuteChat = (chatUserId: string) => {
+    const newMuted = new Set(mutedChats);
+    if (newMuted.has(chatUserId)) newMuted.delete(chatUserId);
+    else newMuted.add(chatUserId);
+    setMutedChats(newMuted);
+    localStorage.setItem('mutedChats', JSON.stringify([...newMuted]));
+  };
+
+  const saveNickname = () => {
+    if (!currentChatUser) return;
+    const updated = { ...chatNicknames, [currentChatUser]: nicknameInput.trim() };
+    if (!nicknameInput.trim()) delete updated[currentChatUser];
+    setChatNicknames(updated);
+    localStorage.setItem('chatNicknames', JSON.stringify(updated));
+    setShowNicknameDialog(false);
+    setNicknameInput('');
+  };
+
   const handlePrivateAccess = (chatUserId: string) => {
-    if (privateUnlocked) {
-      navigate(`/chat/${chatUserId}`);
-      return;
-    }
+    if (privateUnlocked) { navigate(`/chat/${chatUserId}`); return; }
     setPendingPrivateChat(chatUserId);
     setShowPrivateAuth(true);
   };
@@ -242,12 +269,10 @@ export default function Chat() {
     const saved = localStorage.getItem('privateChatPassword');
     if (!saved) {
       localStorage.setItem('privateChatPassword', input);
-      setShowPrivateAuth(false);
-      setPrivateUnlocked(true);
+      setShowPrivateAuth(false); setPrivateUnlocked(true);
       if (pendingPrivateChat) navigate(`/chat/${pendingPrivateChat}`);
     } else if (input === saved) {
-      setShowPrivateAuth(false);
-      setPrivateUnlocked(true);
+      setShowPrivateAuth(false); setPrivateUnlocked(true);
       if (pendingPrivateChat) navigate(`/chat/${pendingPrivateChat}`);
     } else {
       toast.error('Incorrect password');
@@ -282,20 +307,16 @@ export default function Chat() {
 
   const clearAllMedia = () => {
     mediaPreviews.forEach(url => URL.revokeObjectURL(url));
-    setMediaFiles([]);
-    setMediaPreviews([]);
+    setMediaFiles([]); setMediaPreviews([]);
   };
 
   const handleSend = async () => {
     if ((!newMessage.trim() && mediaFiles.length === 0) || !currentChatUser) return;
-    setUploading(true);
-    setUploadIndex(0);
+    setUploading(true); setUploadIndex(0);
     try {
-      // Separate image files from other media
       const imageFiles = mediaFiles.filter(f => f.type.startsWith('image'));
       const otherFiles = mediaFiles.filter(f => !f.type.startsWith('image'));
 
-      // Upload all images and send as single grid message
       if (imageFiles.length > 0) {
         const imageUrls: string[] = [];
         for (let i = 0; i < imageFiles.length; i++) {
@@ -310,14 +331,12 @@ export default function Chat() {
           imageUrls.push(publicUrl);
         }
         if (imageUrls.length > 0) {
-          // Store as JSON array for multi-image, plain URL for single
           const mediaUrl = imageUrls.length === 1 ? imageUrls[0] : JSON.stringify(imageUrls);
           const mediaType = imageUrls.length === 1 ? 'image' : 'images';
           await sendMessage(currentChatUser, '', mediaUrl, mediaType);
         }
       }
 
-      // Upload other files individually
       for (let i = 0; i < otherFiles.length; i++) {
         setUploadIndex(imageFiles.length + i);
         const file = otherFiles[i];
@@ -334,7 +353,7 @@ export default function Chat() {
       if (newMessage.trim()) await sendMessage(currentChatUser, newMessage);
       setNewMessage('');
       clearAllMedia();
-    } catch { toast.error('Failed to send message'); }
+    } catch { toast.error('Failed to send'); }
     finally { setUploading(false); setUploadIndex(0); }
   };
 
@@ -349,8 +368,8 @@ export default function Chat() {
   const togglePinMessage = (messageId: string) => {
     setPinnedMessages(prev => {
       const next = new Set(prev);
-      if (next.has(messageId)) { next.delete(messageId); }
-      else { next.add(messageId); }
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
       return next;
     });
   };
@@ -368,8 +387,7 @@ export default function Chat() {
         stream.getTracks().forEach(t => t.stop());
       };
       mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
+      setIsRecording(true); setRecordingTime(0);
       recordingIntervalRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000);
     } catch { toast.error('Microphone access denied'); }
   };
@@ -393,8 +411,7 @@ export default function Chat() {
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
       await sendMessage(currentChatUser, '🎤 Voice message', publicUrl, 'audio');
-      setAudioBlob(null);
-      setRecordingTime(0);
+      setAudioBlob(null); setRecordingTime(0);
     } catch { toast.error('Failed to send voice message'); }
     finally { setUploading(false); }
   };
@@ -415,6 +432,9 @@ export default function Chat() {
   const handleBackToChats = () => navigate('/chat', { replace: true });
 
   const selectedConversation = conversations.find(c => c.user_id === currentChatUser);
+  const displayName = currentChatUser && chatNicknames[currentChatUser] 
+    ? chatNicknames[currentChatUser] 
+    : selectedConversation?.user_name;
   
   const filteredConversations = conversations.filter(conv => {
     const matchesSearch = !searchQuery || conv.user_name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -427,9 +447,10 @@ export default function Chat() {
   });
 
   const mediaMessages = messages.filter(m => m.media_url);
-  const imageMessages = mediaMessages.filter(m => m.media_type === 'image');
+  const imageMessages = mediaMessages.filter(m => m.media_type === 'image' || m.media_type === 'images');
   const videoMessages = mediaMessages.filter(m => m.media_type === 'video');
   const audioMessages = mediaMessages.filter(m => m.media_type === 'audio');
+  const fileMessages = mediaMessages.filter(m => m.media_type === 'document');
 
   const pinnedMsgs = messages.filter(m => pinnedMessages.has(m.id));
 
@@ -442,29 +463,35 @@ export default function Chat() {
   if (currentChatUser) {
     return (
       <div className={cn("fixed inset-0 z-50 flex flex-col chat-protected animate-slide-in-right relative", currentTheme.bg)}>
-        {/* Privacy overlays */}
         <WatermarkOverlay username={username} />
         {isBlurred && <BlurOverlay />}
 
-        {/* Chat Header - sticky at top */}
+        {/* Chat Header */}
         <div className="px-3 py-2.5 border-b border-border/30 flex items-center gap-2.5 bg-card/60 backdrop-blur-md shrink-0 sticky top-0 z-30">
           <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full" onClick={handleBackToChats}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <Avatar className="w-9 h-9 shrink-0 cursor-pointer" onClick={() => navigate(`/profile/${currentChatUser}`)}>
             <AvatarImage src={selectedConversation?.user_avatar || undefined} />
-            <AvatarFallback className="bg-primary/20 text-xs">{selectedConversation?.user_name?.charAt(0)?.toUpperCase()}</AvatarFallback>
+            <AvatarFallback className="bg-primary/20 text-xs">{displayName?.charAt(0)?.toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/profile/${currentChatUser}`)}>
-            <h3 className="font-semibold text-sm truncate leading-tight">{selectedConversation?.user_name}</h3>
-            {ghostMode && (
-              <p className="text-[9px] text-orange-400 animate-pulse leading-tight">
-                Ghost • {GHOST_MODES.find(g => g.value === ghostMode)?.label}
-              </p>
-            )}
+            <h3 className="font-semibold text-sm truncate leading-tight">{displayName}</h3>
+            <div className="flex items-center gap-1.5">
+              {chatNicknames[currentChatUser] && (
+                <span className="text-[9px] text-muted-foreground">({selectedConversation?.user_name})</span>
+              )}
+              {ghostMode && (
+                <p className="text-[9px] text-orange-400 animate-pulse leading-tight">
+                  Ghost • {GHOST_MODES.find(g => g.value === ghostMode)?.label}
+                </p>
+              )}
+              {mutedChats.has(currentChatUser) && (
+                <BellOff className="w-2.5 h-2.5 text-muted-foreground" />
+              )}
+            </div>
           </div>
           
-          {/* Right icons - evenly spaced, no labels */}
           <div className="flex items-center gap-0.5">
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full"
               onClick={() => toast.info('Voice call starting...')}>
@@ -474,60 +501,102 @@ export default function Chat() {
               onClick={() => toast.info('Video call starting...')}>
               <VideoIcon className="w-[18px] h-[18px] text-blue-500" />
             </Button>
+            
+            {/* ── Messenger-style Three-dots Menu ── */}
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
                   <MoreVertical className="w-[18px] h-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 z-[100] bg-popover shadow-xl border-border rounded-2xl p-1">
+              <DropdownMenuContent align="end" className="w-56 z-[100] bg-popover shadow-xl border-border rounded-2xl p-1.5 max-h-[70vh] overflow-y-auto">
+                
+                {/* ── Profile & Identity ── */}
+                <DropdownMenuLabel className="text-[10px] text-muted-foreground px-3 py-1">Profile</DropdownMenuLabel>
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => navigate(`/profile/${currentChatUser}`)}>
+                  <User className="w-4 h-4" />View Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => { setNicknameInput(chatNicknames[currentChatUser] || ''); setShowNicknameDialog(true); }}>
+                  <Edit3 className="w-4 h-4" />Nicknames
+                </DropdownMenuItem>
+                
+                <DropdownMenuSeparator className="my-1" />
+                
+                {/* ── Customization ── */}
+                <DropdownMenuLabel className="text-[10px] text-muted-foreground px-3 py-1">Customization</DropdownMenuLabel>
                 <DropdownMenuSub>
-                  <DropdownMenuSubTrigger><Ghost className="w-4 h-4 mr-2" />Ghost Mode</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {GHOST_MODES.map((mode) => (
-                      <DropdownMenuItem key={mode.value} onClick={() => setGhostMode(mode.value)}>
-                        <span className="mr-2">{mode.icon}</span>{mode.label}
-                        {ghostMode === mode.value && <span className="ml-auto text-primary">✓</span>}
+                  <DropdownMenuSubTrigger className="rounded-xl py-2.5 px-3 gap-3"><Palette className="w-4 h-4 mr-2" />Chat Theme</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="rounded-xl z-[110] bg-popover">
+                    {CHAT_THEMES.map((theme) => (
+                      <DropdownMenuItem key={theme.id} onClick={() => applyTheme(theme.id)} className="rounded-lg gap-2">
+                        <div className={cn("w-4 h-4 rounded-full", theme.bubble)} />
+                        {theme.label}
+                        {chatTheme === theme.id && <span className="ml-auto text-primary text-xs">✓</span>}
                       </DropdownMenuItem>
                     ))}
-                    <DropdownMenuItem onClick={() => setGhostMode(null)}>
-                      Off {!ghostMode && <span className="ml-auto text-primary">✓</span>}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="rounded-xl py-2.5 px-3 gap-3"><Smile className="w-4 h-4 mr-2" />Quick Reactions</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="rounded-xl z-[110] bg-popover">
+                    <div className="p-2 grid grid-cols-3 gap-1">
+                      {QUICK_REACTIONS.map(emoji => (
+                        <button key={emoji} className="text-2xl p-2 rounded-lg hover:bg-muted transition-colors" onClick={() => {
+                          if (messages.length > 0) handleReactToMessage(messages[messages.length - 1].id, emoji);
+                        }}>{emoji}</button>
+                      ))}
+                    </div>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => setShowMusicPlayer(true)}>
+                  <Music className="w-4 h-4" />Shared Sound
+                </DropdownMenuItem>
+                
+                <DropdownMenuSeparator className="my-1" />
+                
+                {/* ── Messages & Media ── */}
+                <DropdownMenuLabel className="text-[10px] text-muted-foreground px-3 py-1">Messages & Media</DropdownMenuLabel>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="rounded-xl py-2.5 px-3 gap-3"><Ghost className="w-4 h-4 mr-2" />Disappearing Messages</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="rounded-xl z-[110] bg-popover">
+                    {GHOST_MODES.map((mode) => (
+                      <DropdownMenuItem key={mode.value} onClick={() => setGhostMode(mode.value)} className="rounded-lg gap-2">
+                        <span>{mode.icon}</span>{mode.label}
+                        {ghostMode === mode.value && <span className="ml-auto text-primary text-xs">✓</span>}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setGhostMode(null)} className="rounded-lg gap-2">
+                      Off {!ghostMode && <span className="ml-auto text-primary text-xs">✓</span>}
                     </DropdownMenuItem>
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
-
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger><Palette className="w-4 h-4 mr-2" />Chat Theme</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {CHAT_THEMES.map((theme) => (
-                      <DropdownMenuItem key={theme.id} onClick={() => applyTheme(theme.id)}>
-                        <div className={cn("w-4 h-4 rounded-full mr-2", theme.bubble)} />
-                        {theme.label}
-                        {chatTheme === theme.id && <span className="ml-auto text-primary">✓</span>}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                <DropdownMenuItem onClick={() => setShowMusicPlayer(true)}>
-                  <Music className="w-4 h-4 mr-2" />Shared Sound
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => setShowMediaGallery(true)}>
+                  <Image className="w-4 h-4" />Media, Files & Links
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowMediaGallery(true)}>
-                  <Image className="w-4 h-4 mr-2" />Media Gallery
+                
+                <DropdownMenuSeparator className="my-1" />
+                
+                {/* ── Notifications & Privacy ── */}
+                <DropdownMenuLabel className="text-[10px] text-muted-foreground px-3 py-1">Privacy</DropdownMenuLabel>
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => toggleMuteChat(currentChatUser)}>
+                  {mutedChats.has(currentChatUser) ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                  {mutedChats.has(currentChatUser) ? 'Unmute Notifications' : 'Mute Notifications'}
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => toast.info('Create a group chat with multiple friends!')}>
-                  <Users className="w-4 h-4 mr-2" />Create Group
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => toggleArchive(currentChatUser)}>
+                  <Archive className="w-4 h-4" />{archivedChats.has(currentChatUser) ? 'Unarchive' : 'Archive Chat'}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toggleArchive(currentChatUser)}>
-                  <Archive className="w-4 h-4 mr-2" />{archivedChats.has(currentChatUser) ? 'Unarchive' : 'Archive'}
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => togglePrivate(currentChatUser)}>
+                  <Lock className="w-4 h-4" />{privateChats.has(currentChatUser) ? 'Remove from Private' : 'Add to Private'}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => togglePrivate(currentChatUser)}>
-                  <Lock className="w-4 h-4 mr-2" />{privateChats.has(currentChatUser) ? 'Remove from Private' : 'Add to Private'}
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => toast.info('Group creation coming soon!')}>
+                  <Users className="w-4 h-4" />Create Group Chat
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => deleteEntireChat(currentChatUser)} className="text-destructive">
-                  <Trash2 className="w-4 h-4 mr-2" />Delete Chat
+                
+                <DropdownMenuSeparator className="my-1" />
+                
+                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer text-destructive focus:text-destructive" onClick={() => deleteEntireChat(currentChatUser)}>
+                  <Trash2 className="w-4 h-4" />Delete Conversation
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -556,7 +625,6 @@ export default function Chat() {
               return (
                 <div key={msg.id} className={cn("flex", isOwn ? 'justify-end' : 'justify-start')}>
                   <div className={cn("max-w-[80%] relative group", isOwn ? 'order-2' : '')}>
-                    {/* Forwarded label */}
                     {msg.is_forwarded && (
                       <p className="text-[10px] text-muted-foreground/60 mb-0.5 flex items-center gap-1 italic">
                         <Forward className="w-2.5 h-2.5" /> Forwarded
@@ -574,14 +642,9 @@ export default function Chat() {
                       {msg.media_url && (msg.media_type === 'image' || msg.media_type === 'images') && (() => {
                         let urls: string[] = [];
                         try {
-                          if (msg.media_type === 'images') {
-                            urls = JSON.parse(msg.media_url!);
-                          } else {
-                            urls = [msg.media_url!];
-                          }
-                        } catch {
-                          urls = [msg.media_url!];
-                        }
+                          if (msg.media_type === 'images') urls = JSON.parse(msg.media_url!);
+                          else urls = [msg.media_url!];
+                        } catch { urls = [msg.media_url!]; }
                         return <ChatImageGrid urls={urls} isOwn={isOwn} />;
                       })()}
                       {msg.media_url && msg.media_type === 'video' && (
@@ -592,14 +655,19 @@ export default function Chat() {
                           <audio src={msg.media_url} controls className="w-full max-w-[260px]" />
                         </div>
                       )}
+                      {msg.media_url && msg.media_type === 'document' && (
+                        <div className="p-3">
+                          <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm underline">
+                            <Paperclip className="w-4 h-4" /> View Document
+                          </a>
+                        </div>
+                      )}
 
-                      {/* Shared post preview (native card instead of raw URL) */}
                       {msg.content && isSharedPostMessage(msg.content) && (() => {
                         const postId = extractInternalPostId(msg.content);
                         return postId ? <SharedPostPreview postId={postId} className="m-1" /> : null;
                       })()}
 
-                      {/* Text content - hide if it's a shared post message */}
                       {msg.content && !msg.content.startsWith('📎 ') && msg.content !== '🎤 Voice message' && msg.content.trim() !== '' && msg.content.trim() !== ' ' && !isSharedPostMessage(msg.content) && (
                         <p className={cn(
                           "text-sm break-words leading-relaxed",
@@ -607,12 +675,10 @@ export default function Chat() {
                         )}>{msg.content}</p>
                       )}
                       
-                      {/* Link previews - skip for shared posts (already shown natively) */}
                       {msg.content && !isSharedPostMessage(msg.content) && extractUrls(msg.content).slice(0, 1).map((url) => (
                         <LinkPreviewCard key={url} url={url} className="mt-1 mx-1 mb-1" />
                       ))}
                       
-                      {/* Emoji Reaction Picker */}
                       <EmojiReactionPicker 
                         reactions={reactions}
                         onReact={(emoji) => handleReactToMessage(msg.id, emoji)}
@@ -630,7 +696,6 @@ export default function Chat() {
                           ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
                           : <Check className="w-3.5 h-3.5 text-muted-foreground" />
                       )}
-                      {/* Three-dot menu - always visible on mobile */}
                       <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <button className="p-1 rounded-full hover:bg-muted/50 ml-auto opacity-60 hover:opacity-100 transition-opacity">
@@ -638,27 +703,29 @@ export default function Chat() {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align={isOwn ? 'end' : 'start'} side="top" sideOffset={4} className="w-48 rounded-2xl shadow-xl border-border/40 p-1 z-[100] bg-popover">
+                          {/* Quick Reactions Row */}
+                          <div className="flex items-center justify-around px-2 py-1.5 border-b border-border/30 mb-1">
+                            {QUICK_REACTIONS.map(emoji => (
+                              <button key={emoji} className="text-lg hover:scale-125 transition-transform" onClick={() => handleReactToMessage(msg.id, emoji)}>
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
                           <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => togglePinMessage(msg.id)}>
                             <Pin className={cn("w-4 h-4", isPinned && "text-primary fill-primary")} />
-                            {isPinned ? 'Unpin Message' : 'Pin Message'}
+                            {isPinned ? 'Unpin' : 'Pin'}
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => {
-                            navigator.clipboard.writeText(msg.content || '');
-                            toast.success('Copied!');
-                          }}>
-                            <Reply className="w-4 h-4" />
-                            Copy Text
+                          <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => navigator.clipboard.writeText(msg.content || '')}>
+                            <Reply className="w-4 h-4" />Copy Text
                           </DropdownMenuItem>
                           <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => setForwardMsg({ content: msg.content || '', mediaUrl: msg.media_url || undefined, mediaType: msg.media_type || undefined })}>
-                            <Forward className="w-4 h-4" />
-                            Forward
+                            <Forward className="w-4 h-4" />Forward
                           </DropdownMenuItem>
                           {isOwn && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer text-destructive focus:text-destructive" onClick={() => deleteMessage(msg.id)}>
-                                <Trash2 className="w-4 h-4" />
-                                Delete Message
+                                <Trash2 className="w-4 h-4" />Delete
                               </DropdownMenuItem>
                             </>
                           )}
@@ -692,7 +759,7 @@ export default function Chat() {
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1">{mediaFiles.length} file{mediaFiles.length > 1 ? 's' : ''} selected</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{mediaFiles.length} file{mediaFiles.length > 1 ? 's' : ''}</p>
           </div>
         )}
 
@@ -749,17 +816,18 @@ export default function Chat() {
           </div>
         )}
 
-        {/* Media Gallery Dialog - Tabbed */}
+        {/* Media Gallery Dialog - Enhanced with Files tab */}
         <Dialog open={showMediaGallery} onOpenChange={setShowMediaGallery}>
           <DialogContent className="max-w-lg max-h-[80vh]">
             <DialogHeader>
-              <DialogTitle>Media Gallery</DialogTitle>
+              <DialogTitle>Media, Files & Links</DialogTitle>
             </DialogHeader>
             <Tabs value={mediaGalleryTab} onValueChange={(v) => setMediaGalleryTab(v as any)}>
-              <TabsList className="w-full grid grid-cols-3">
-                <TabsTrigger value="images">Photos ({imageMessages.length})</TabsTrigger>
-                <TabsTrigger value="videos">Videos ({videoMessages.length})</TabsTrigger>
-                <TabsTrigger value="audio">Audio ({audioMessages.length})</TabsTrigger>
+              <TabsList className="w-full grid grid-cols-4">
+                <TabsTrigger value="images" className="text-xs">Photos ({imageMessages.length})</TabsTrigger>
+                <TabsTrigger value="videos" className="text-xs">Videos ({videoMessages.length})</TabsTrigger>
+                <TabsTrigger value="audio" className="text-xs">Audio ({audioMessages.length})</TabsTrigger>
+                <TabsTrigger value="files" className="text-xs">Files ({fileMessages.length})</TabsTrigger>
               </TabsList>
               <TabsContent value="images">
                 <ScrollArea className="h-[50vh]">
@@ -800,25 +868,49 @@ export default function Chat() {
                   {audioMessages.length === 0 && <p className="text-center py-12 text-muted-foreground text-sm">No audio</p>}
                 </ScrollArea>
               </TabsContent>
+              <TabsContent value="files">
+                <ScrollArea className="h-[50vh]">
+                  <div className="space-y-2 p-1">
+                    {fileMessages.map((msg) => (
+                      <a key={msg.id} href={msg.media_url || ''} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors">
+                        <Paperclip className="w-5 h-5 text-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate">Document</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}
+                          </p>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                  {fileMessages.length === 0 && <p className="text-center py-12 text-muted-foreground text-sm">No files</p>}
+                </ScrollArea>
+              </TabsContent>
             </Tabs>
           </DialogContent>
         </Dialog>
 
-        {/* Shared Music Player */}
-        <SharedMusicPlayer
-          isOpen={showMusicPlayer}
-          onClose={() => setShowMusicPlayer(false)}
-          partnerName={selectedConversation?.user_name || 'User'}
-        />
+        {/* Nickname Dialog */}
+        <Dialog open={showNicknameDialog} onOpenChange={setShowNicknameDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Edit3 className="w-5 h-5" /> Set Nickname</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Set a nickname for {selectedConversation?.user_name}. Only you will see this.</p>
+              <Input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} placeholder="Enter nickname..." />
+              <div className="flex gap-2">
+                <Button onClick={saveNickname} className="flex-1">Save</Button>
+                {chatNicknames[currentChatUser] && (
+                  <Button variant="outline" onClick={() => { setNicknameInput(''); saveNickname(); }}>Remove</Button>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-        {/* Forward Message Dialog */}
-        <ForwardMessageDialog
-          open={!!forwardMsg}
-          onOpenChange={(open) => !open && setForwardMsg(null)}
-          messageContent={forwardMsg?.content || ''}
-          mediaUrl={forwardMsg?.mediaUrl}
-          mediaType={forwardMsg?.mediaType}
-        />
+        <SharedMusicPlayer isOpen={showMusicPlayer} onClose={() => setShowMusicPlayer(false)} partnerName={displayName || 'User'} />
+        <ForwardMessageDialog open={!!forwardMsg} onOpenChange={(open) => !open && setForwardMsg(null)} messageContent={forwardMsg?.content || ''} mediaUrl={forwardMsg?.mediaUrl} mediaType={forwardMsg?.mediaType} />
       </div>
     );
   }
@@ -836,7 +928,6 @@ export default function Chat() {
           <TabsTrigger value="private" className="text-[10px] py-1.5"><Lock className="w-3 h-3 mr-0.5" />Private</TabsTrigger>
         </TabsList>
 
-        {/* Main Tab */}
         <TabsContent value="main" className="mt-3 space-y-2">
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -852,11 +943,7 @@ export default function Chat() {
             </Card>
           ) : (
             filteredConversations.map((conv) => (
-              <SwipeableChatCard
-                key={conv.user_id}
-                onSwipeLeft={() => toggleArchive(conv.user_id)}
-                leftLabel="Archive"
-              >
+              <SwipeableChatCard key={conv.user_id} onSwipeLeft={() => toggleArchive(conv.user_id)} leftLabel="Archive">
                 <Card className="glass-card cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate(`/chat/${conv.user_id}`)}>
                   <CardContent className="p-3 flex items-center gap-3">
                     <Avatar className="w-12 h-12">
@@ -865,7 +952,10 @@ export default function Chat() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="font-semibold text-sm truncate">{conv.user_name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-sm truncate">{chatNicknames[conv.user_id] || conv.user_name}</p>
+                          {mutedChats.has(conv.user_id) && <BellOff className="w-3 h-3 text-muted-foreground shrink-0" />}
+                        </div>
                         <p className="text-[10px] text-muted-foreground">{conv.last_message_time && formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: true })}</p>
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
@@ -878,11 +968,10 @@ export default function Chat() {
           )}
         </TabsContent>
 
-        {/* Find Tab */}
         <TabsContent value="find" className="mt-3 space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} placeholder="Search users..." className="pl-10" />
+            <Input value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} placeholder="Search by name or @username..." className="pl-10" />
           </div>
           {searchResults.length > 0 && (
             <div className="space-y-2">
@@ -891,7 +980,10 @@ export default function Chat() {
                 <Card key={u.id} className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => startNewChat(u.id)}>
                   <CardContent className="p-3 flex items-center gap-3">
                     <Avatar className="w-10 h-10"><AvatarImage src={u.avatar_url || undefined} /><AvatarFallback>{u.name?.[0]}</AvatarFallback></Avatar>
-                    <div className="flex-1"><p className="font-medium text-sm">{u.name}</p><p className="text-[10px] text-muted-foreground">{u.country || 'Unknown'}</p></div>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{u.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{u.username ? `@${u.username}` : u.country || 'Unknown'}</p>
+                    </div>
                     <MessageCircle className="w-4 h-4 text-primary" />
                   </CardContent>
                 </Card>
@@ -942,7 +1034,6 @@ export default function Chat() {
           )}
         </TabsContent>
 
-        {/* Archive Tab */}
         <TabsContent value="archived" className="mt-3 space-y-2">
           {filteredConversations.length === 0 ? (
             <Card className="glass-card"><CardContent className="py-12 text-center">
@@ -950,11 +1041,7 @@ export default function Chat() {
               <p className="text-muted-foreground">No archived chats</p>
             </CardContent></Card>
           ) : filteredConversations.map((conv) => (
-            <SwipeableChatCard
-              key={conv.user_id}
-              onSwipeRight={() => toggleArchive(conv.user_id)}
-              rightLabel="Unarchive"
-            >
+            <SwipeableChatCard key={conv.user_id} onSwipeRight={() => toggleArchive(conv.user_id)} rightLabel="Unarchive">
               <Card className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => navigate(`/chat/${conv.user_id}`)}>
                 <CardContent className="p-3 flex items-center gap-3">
                   <Avatar className="w-12 h-12"><AvatarImage src={conv.user_avatar || undefined} /><AvatarFallback>{conv.user_name?.charAt(0)}</AvatarFallback></Avatar>
@@ -968,7 +1055,6 @@ export default function Chat() {
           ))}
         </TabsContent>
 
-        {/* Private Tab - hides profile until unlocked */}
         <TabsContent value="private" className="mt-3 space-y-2">
           {!privateUnlocked && filteredConversations.length > 0 ? (
             <Card className="glass-card">
@@ -988,11 +1074,7 @@ export default function Chat() {
               <p className="text-xs text-muted-foreground mt-1">Add chats from the ⋮ menu</p>
             </CardContent></Card>
           ) : filteredConversations.map((conv) => (
-            <SwipeableChatCard
-              key={conv.user_id}
-              onSwipeRight={() => togglePrivate(conv.user_id)}
-              rightLabel="Unprivate"
-            >
+            <SwipeableChatCard key={conv.user_id} onSwipeRight={() => togglePrivate(conv.user_id)} rightLabel="Unprivate">
               <Card className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => handlePrivateAccess(conv.user_id)}>
                 <CardContent className="p-3 flex items-center gap-3">
                   <Avatar className="w-12 h-12"><AvatarImage src={conv.user_avatar || undefined} /><AvatarFallback>{conv.user_name?.charAt(0)}</AvatarFallback></Avatar>
@@ -1019,23 +1101,18 @@ export default function Chat() {
             </p>
             <Input
               type="password"
-              placeholder="Enter password..."
-              onKeyPress={(e) => { if (e.key === 'Enter') verifyPrivatePassword((e.target as HTMLInputElement).value); }}
+              placeholder="Password..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') verifyPrivatePassword((e.target as HTMLInputElement).value);
+              }}
             />
-            <Button className="w-full" onClick={(e) => {
+            <Button onClick={(e) => {
               const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-              verifyPrivatePassword(input.value);
-            }}>
-              {localStorage.getItem('privateChatPassword') ? 'Unlock' : 'Set Password'}
-            </Button>
+              verifyPrivatePassword(input?.value || '');
+            }}>Confirm</Button>
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Privacy note */}
-      <p className="text-center text-[9px] text-muted-foreground/40 pb-2">
-        Privacy protected. Screenshots may still be possible on some devices.
-      </p>
     </div>
   );
 }
