@@ -25,9 +25,9 @@ const menuItems: { title: string; url: string; icon: LucideIcon; desc: string }[
   { title: 'Home', url: '/', icon: Home, desc: 'Social + Explore' },
   { title: 'Learn', url: '/education', icon: BookOpen, desc: 'Docs, Images, Videos' },
   { title: 'Messages', url: '/chat', icon: MessageSquare, desc: 'Chat + VC + Groups' },
-  { title: 'FunPun', url: '/funpun', icon: Gamepad2, desc: 'Games for Fresh Mind' },
-  { title: 'Adventure', url: '/music-adventure', icon: Mountain, desc: 'Challenges + Discover' },
   { title: 'Random Connect', url: '/random-connect', icon: Heart, desc: 'Share a moment' },
+  { title: 'Adventure', url: '/music-adventure', icon: Mountain, desc: 'Challenges + Discover' },
+  { title: 'FunPun', url: '/funpun', icon: Gamepad2, desc: 'Games for Fresh Mind' },
   { title: 'Marketplace', url: '/marketplace', icon: ShoppingCart, desc: 'Buy/Sell/Local' },
   { title: 'Settings', url: '/settings', icon: Settings, desc: 'Controls + Privacy' },
 ];

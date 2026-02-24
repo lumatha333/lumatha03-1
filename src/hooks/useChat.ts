@@ -1,40 +1,35 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Message, ChatConversation } from '@/types/chat';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
 
 export function useChat() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentChatUser, setCurrentChatUser] = useState<string | null>(null);
+  const currentChatUserRef = useRef<string | null>(null);
+
+  // Keep ref in sync
+  useEffect(() => { currentChatUserRef.current = currentChatUser; }, [currentChatUser]);
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
     if (!user) return;
-
     try {
-      // First fetch messages
       const { data: messagesData, error } = await supabase
         .from('messages')
         .select('*')
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
 
-      // Get unique user IDs
       const userIds = [...new Set(messagesData?.flatMap(m => [m.sender_id, m.receiver_id]) || [])];
-      
-      // Fetch profiles for those users
       const { data: profilesData } = await supabase
         .from('profiles')
         .select('id, name, avatar_url')
         .in('id', userIds);
-
       const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
 
       const data = messagesData?.map(m => ({
@@ -43,12 +38,10 @@ export function useChat() {
         receiver: profilesMap.get(m.receiver_id) || { id: m.receiver_id, name: 'Unknown', avatar_url: null }
       })) || [];
 
-      // Group messages by conversation
       const convMap = new Map<string, ChatConversation>();
       data?.forEach((msg: any) => {
         const otherUserId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
         const otherUser = msg.sender_id === user.id ? msg.receiver : msg.sender;
-        
         if (!convMap.has(otherUserId)) {
           convMap.set(otherUserId, {
             user_id: otherUserId,
@@ -59,47 +52,34 @@ export function useChat() {
             unread_count: 0,
           });
         }
-
-        // Count unread messages
         if (!msg.is_read && msg.receiver_id === user.id) {
           const conv = convMap.get(otherUserId)!;
           conv.unread_count++;
         }
       });
-
       setConversations(Array.from(convMap.values()));
     } catch (error: any) {
       console.error('Error fetching conversations:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load conversations',
-        variant: 'destructive',
-      });
     }
-  }, [user, toast]);
+  }, [user]);
 
   // Fetch messages for a specific user
   const fetchMessages = useCallback(async (otherUserId: string) => {
     if (!user) return;
-
     setLoading(true);
     try {
-      // Fetch messages
       const { data: messagesData, error } = await supabase
         .from('messages')
         .select('*')
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${user.id})`)
         .order('created_at', { ascending: true });
-
       if (error) throw error;
 
-      // Get sender profiles
       const senderIds = [...new Set(messagesData?.map(m => m.sender_id) || [])];
       const { data: profilesData } = await supabase
         .from('profiles')
         .select('id, name, avatar_url')
         .in('id', senderIds);
-
       const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
 
       const data = messagesData?.map(m => ({
@@ -110,39 +90,30 @@ export function useChat() {
       setMessages(data as Message[]);
       setCurrentChatUser(otherUserId);
 
-      // Mark messages as read and immediately update local conversation unread count
-      const { error: updateError } = await supabase
+      // Mark as read silently
+      supabase
         .from('messages')
         .update({ is_read: true })
         .eq('receiver_id', user.id)
         .eq('sender_id', otherUserId)
-        .eq('is_read', false);
-
-      if (!updateError) {
-        // Clear unread count locally so badge disappears immediately
-        setConversations(prev => prev.map(c => 
-          c.user_id === otherUserId ? { ...c, unread_count: 0 } : c
-        ));
-      }
-
+        .eq('is_read', false)
+        .then(() => {
+          setConversations(prev => prev.map(c =>
+            c.user_id === otherUserId ? { ...c, unread_count: 0 } : c
+          ));
+        });
     } catch (error: any) {
       console.error('Error fetching messages:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load messages',
-        variant: 'destructive',
-      });
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user]);
 
-  // Send message
+  // Send message - silent, no toasts
   const sendMessage = useCallback(async (receiverId: string, content: string, mediaUrl?: string, mediaType?: string) => {
     if (!user) return;
-
     try {
-      const { error } = await supabase
+      const { data: newMsg, error } = await supabase
         .from('messages')
         .insert({
           sender_id: user.id,
@@ -150,9 +121,22 @@ export function useChat() {
           content: content || ' ',
           media_url: mediaUrl,
           media_type: mediaType,
-        });
-
+        })
+        .select()
+        .single();
       if (error) throw error;
+
+      // Optimistic update - add message immediately
+      if (newMsg) {
+        const msgWithSender = {
+          ...newMsg,
+          sender: { id: user.id, name: user.user_metadata?.name || 'You', avatar_url: null }
+        };
+        setMessages(prev => {
+          if (prev.some(m => m.id === newMsg.id)) return prev;
+          return [...prev, msgWithSender as Message];
+        });
+      }
 
       // Create notification silently
       supabase.from('notifications').insert({
@@ -161,73 +145,61 @@ export function useChat() {
         from_user_id: user.id,
         content: `${user.user_metadata?.name || 'Someone'} sent you a message`,
         link: `/chat/${user.id}`,
-      });
+      }).then(() => {});
     } catch (error: any) {
       console.error('Error sending message:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to send message',
-        variant: 'destructive',
-      });
     }
-  }, [user, toast]);
+  }, [user]);
 
   // Delete message
   const deleteMessage = useCallback(async (messageId: string) => {
     try {
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('id', messageId);
-
+      const { error } = await supabase.from('messages').delete().eq('id', messageId);
       if (error) throw error;
-
       setMessages(prev => prev.filter(m => m.id !== messageId));
-      toast({
-        title: 'Deleted',
-        description: 'Message deleted',
-      });
     } catch (error: any) {
       console.error('Error deleting message:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete message',
-        variant: 'destructive',
-      });
     }
-  }, [toast]);
+  }, []);
 
-  // Real-time subscription
+  // Optimized real-time subscription with deduplication
   useEffect(() => {
     if (!user) return;
 
     const channel = supabase
-      .channel('messages')
+      .channel('chat-realtime')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${user.id}`,
-        },
-        () => {
-          fetchConversations();
-          if (currentChatUser) {
-            fetchMessages(currentChatUser);
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` },
+        (payload) => {
+          const newMsg = payload.new as any;
+          // If we're in the chat with this sender, add message directly
+          if (currentChatUserRef.current === newMsg.sender_id) {
+            setMessages(prev => {
+              if (prev.some(m => m.id === newMsg.id)) return prev;
+              return [...prev, { ...newMsg, sender: { id: newMsg.sender_id, name: '', avatar_url: null } } as Message];
+            });
+            // Mark as read immediately
+            supabase.from('messages').update({ is_read: true }).eq('id', newMsg.id).then(() => {});
           }
+          // Update conversation list
+          fetchConversations();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'messages' },
+        (payload) => {
+          const oldMsg = payload.old as any;
+          setMessages(prev => prev.filter(m => m.id !== oldMsg.id));
         }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, currentChatUser, fetchConversations, fetchMessages]);
+    return () => { supabase.removeChannel(channel); };
+  }, [user, fetchConversations]);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+  useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
   return {
     conversations,
