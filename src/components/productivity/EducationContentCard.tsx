@@ -3,11 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Heart, MessageCircle, Bookmark, BookmarkCheck, MoreVertical,
-  ExternalLink, Download, Trash2, Play, Pause, File,
-  Volume2, VolumeX, Maximize, X
+  ExternalLink, Download, Trash2, Play, Pause, File, Edit3,
+  Volume2, VolumeX, Maximize, X, FolderPlus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Database } from '@/integrations/supabase/types';
@@ -24,6 +26,8 @@ interface DocumentCardProps {
   onDelete: () => void;
   onOpenComments: () => void;
   onOpen: () => void;
+  onEdit?: (id: string, title: string, description: string) => void;
+  onMoveToFolder?: (docId: string) => void;
   likesCount?: number;
   commentsCount?: number;
   isLiked?: boolean;
@@ -32,9 +36,13 @@ interface DocumentCardProps {
 
 export function EducationDocCard({
   doc, isOwner, isSaved, onToggleSave, onDelete, onOpenComments, onOpen,
+  onEdit, onMoveToFolder,
   likesCount = 0, commentsCount = 0, isLiked = false, onToggleLike
 }: DocumentCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState(doc.title);
+  const [editDesc, setEditDesc] = useState(doc.description || '');
 
   const getFileIcon = (fileType?: string) => {
     const ext = fileType?.toLowerCase() || '';
@@ -42,6 +50,7 @@ export function EducationDocCard({
     if (['doc', 'docx'].includes(ext)) return <span className="text-blue-400 font-bold text-xs">DOC</span>;
     if (['ppt', 'pptx'].includes(ext)) return <span className="text-orange-400 font-bold text-xs">PPT</span>;
     if (['xls', 'xlsx'].includes(ext)) return <span className="text-green-400 font-bold text-xs">XLS</span>;
+    if (['txt'].includes(ext)) return <span className="text-gray-400 font-bold text-xs">TXT</span>;
     if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return <span className="text-purple-400 font-bold text-xs">IMG</span>;
     return <File className="w-4 h-4" />;
   };
@@ -58,6 +67,13 @@ export function EducationDocCard({
 
   const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(doc.file_type?.toLowerCase() || '');
   const previewUrl = getPreviewUrl();
+
+  const handleEditSave = () => {
+    if (onEdit && editTitle.trim()) {
+      onEdit(doc.id, editTitle.trim(), editDesc.trim());
+      setEditOpen(false);
+    }
+  };
 
   return (
     <>
@@ -100,39 +116,39 @@ export function EducationDocCard({
               </Button>
             </div>
 
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
                   <MoreVertical className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="z-[100] bg-popover shadow-xl rounded-xl">
                 {previewUrl && (
                   <DropdownMenuItem onClick={() => setPreviewOpen(true)}>
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Preview
+                    <ExternalLink className="w-4 h-4 mr-2" />Preview
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={onOpen}>
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Open in browser
+                  <ExternalLink className="w-4 h-4 mr-2" />Open in browser
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => {
-                  const a = document.createElement('a');
-                  a.href = doc.file_url;
-                  a.download = doc.file_name;
-                  a.target = '_blank';
-                  a.click();
+                  const a = document.createElement('a'); a.href = doc.file_url; a.download = doc.file_name; a.target = '_blank'; a.click();
                 }}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Download
+                  <Download className="w-4 h-4 mr-2" />Download
                 </DropdownMenuItem>
                 {isOwner && (
                   <>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => { setEditTitle(doc.title); setEditDesc(doc.description || ''); setEditOpen(true); }}>
+                      <Edit3 className="w-4 h-4 mr-2" />Edit
+                    </DropdownMenuItem>
+                    {onMoveToFolder && (
+                      <DropdownMenuItem onClick={() => onMoveToFolder(doc.id)}>
+                        <FolderPlus className="w-4 h-4 mr-2" />Move to Folder
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem className="text-destructive" onClick={onDelete}>
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
+                      <Trash2 className="w-4 h-4 mr-2" />Delete
                     </DropdownMenuItem>
                   </>
                 )}
@@ -150,20 +166,10 @@ export function EducationDocCard({
               <h3 className="font-medium text-sm truncate">{doc.title}</h3>
               <div className="flex gap-1">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                  const a = document.createElement('a');
-                  a.href = doc.file_url;
-                  a.download = doc.file_name;
-                  a.target = '_blank';
-                  a.click();
-                }}>
-                  <Download className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpen}>
-                  <ExternalLink className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPreviewOpen(false)}>
-                  <X className="w-4 h-4" />
-                </Button>
+                  const a = document.createElement('a'); a.href = doc.file_url; a.download = doc.file_name; a.target = '_blank'; a.click();
+                }}><Download className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpen}><ExternalLink className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPreviewOpen(false)}><X className="w-4 h-4" /></Button>
               </div>
             </div>
             <div className="flex-1 overflow-hidden">
@@ -173,6 +179,24 @@ export function EducationDocCard({
                 <iframe src={previewUrl || ''} className="w-full h-full border-0" title={doc.title} />
               )}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle>Edit Document</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Title</label>
+              <Input value={editTitle} onChange={e => setEditTitle(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Description</label>
+              <Textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={3} />
+            </div>
+            <Button className="w-full" onClick={handleEditSave} disabled={!editTitle.trim()}>Save Changes</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -187,6 +211,7 @@ interface VideoCardProps {
   onToggleSave: () => void;
   onDelete?: () => void;
   onOpenComments: () => void;
+  onEdit?: (id: string, title: string, content: string) => void;
   likesCount?: number;
   commentsCount?: number;
   isLiked?: boolean;
@@ -194,7 +219,7 @@ interface VideoCardProps {
 }
 
 export function EducationVideoCard({
-  video, isOwner, isSaved, onToggleSave, onDelete, onOpenComments,
+  video, isOwner, isSaved, onToggleSave, onDelete, onOpenComments, onEdit,
   likesCount = 0, commentsCount = 0, isLiked = false, onToggleLike
 }: VideoCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -205,26 +230,23 @@ export function EducationVideoCard({
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState(video.title);
+  const [editContent, setEditContent] = useState(video.content || '');
 
   const videoUrl = video.media_urls?.[0] || video.file_url;
 
   const togglePlay = useCallback(() => {
     const ref = fullscreen ? fullscreenVideoRef : videoRef;
     if (!ref.current) return;
-    if (ref.current.paused) {
-      ref.current.play().catch(() => {});
-    } else {
-      ref.current.pause();
-    }
+    if (ref.current.paused) ref.current.play().catch(() => {});
+    else ref.current.pause();
   }, [fullscreen]);
 
   const toggleMute = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     const ref = fullscreen ? fullscreenVideoRef : videoRef;
-    if (ref.current) {
-      ref.current.muted = !muted;
-      setMuted(!muted);
-    }
+    if (ref.current) { ref.current.muted = !muted; setMuted(!muted); }
   }, [muted, fullscreen]);
 
   const handleTimeUpdate = useCallback(() => {
@@ -232,9 +254,7 @@ export function EducationVideoCard({
     if (ref.current) {
       const ct = ref.current.currentTime;
       const dur = ref.current.duration || 1;
-      setCurrentTime(ct);
-      setDuration(dur);
-      setProgress((ct / dur) * 100);
+      setCurrentTime(ct); setDuration(dur); setProgress((ct / dur) * 100);
     }
   }, [fullscreen]);
 
@@ -242,24 +262,16 @@ export function EducationVideoCard({
     const ref = fullscreen ? fullscreenVideoRef : videoRef;
     if (!ref.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const pct = x / rect.width;
-    ref.current.currentTime = pct * (ref.current.duration || 0);
+    ref.current.currentTime = ((e.clientX - rect.left) / rect.width) * (ref.current.duration || 0);
   }, [fullscreen]);
 
-  const formatTime = (t: number) => {
-    const m = Math.floor(t / 60);
-    const s = Math.floor(t % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
+  const formatTime = (t: number) => `${Math.floor(t / 60)}:${Math.floor(t % 60).toString().padStart(2, '0')}`;
 
-  const openFullscreen = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (videoRef.current) {
-      videoRef.current.pause();
+  const handleEditSave = () => {
+    if (onEdit && editTitle.trim()) {
+      onEdit(video.id, editTitle.trim(), editContent.trim());
+      setEditOpen(false);
     }
-    setFullscreen(true);
-    setPlaying(false);
   };
 
   return (
@@ -267,28 +279,12 @@ export function EducationVideoCard({
       <Card className="overflow-hidden group">
         <div className="aspect-video bg-black relative cursor-pointer" onClick={togglePlay}>
           {videoUrl ? (
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              className="w-full h-full object-cover"
-              muted={muted}
-              playsInline
-              preload="metadata"
-              onEnded={() => setPlaying(false)}
-              onPause={() => setPlaying(false)}
-              onPlay={() => setPlaying(true)}
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={() => {
-                if (videoRef.current) setDuration(videoRef.current.duration);
-              }}
-            />
+            <video ref={videoRef} src={videoUrl} className="w-full h-full object-cover" muted={muted} playsInline preload="metadata"
+              onEnded={() => setPlaying(false)} onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)}
+              onTimeUpdate={handleTimeUpdate} onLoadedMetadata={() => { if (videoRef.current) setDuration(videoRef.current.duration); }} />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-              No video available
-            </div>
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">No video</div>
           )}
-          
-          {/* Play overlay */}
           {!playing && videoUrl && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/30">
               <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -296,17 +292,14 @@ export function EducationVideoCard({
               </div>
             </div>
           )}
-          
-          {/* Controls overlay */}
           {videoUrl && (
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              {/* Progress bar */}
-              <div className="w-full h-1 bg-white/20 rounded-full cursor-pointer mb-2" onClick={(e) => { e.stopPropagation(); seekTo(e); }}>
+              <div className="w-full h-1 bg-white/20 rounded-full cursor-pointer mb-2" onClick={e => { e.stopPropagation(); seekTo(e); }}>
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={(e) => { e.stopPropagation(); togglePlay(); }}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); togglePlay(); }}>
                     {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
                   </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={toggleMute}>
@@ -314,7 +307,7 @@ export function EducationVideoCard({
                   </Button>
                   <span className="text-[10px] text-white/80 ml-1">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={openFullscreen}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:bg-white/20" onClick={e => { e.stopPropagation(); if (videoRef.current) videoRef.current.pause(); setFullscreen(true); setPlaying(false); }}>
                   <Maximize className="w-3.5 h-3.5" />
                 </Button>
               </div>
@@ -335,7 +328,6 @@ export function EducationVideoCard({
             </div>
           )}
 
-          {/* Action bar */}
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="sm" className="h-7 gap-1 px-1.5" onClick={onToggleLike}>
@@ -351,38 +343,32 @@ export function EducationVideoCard({
               </Button>
             </div>
 
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <MoreVertical className="w-3.5 h-3.5" />
-                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="w-3.5 h-3.5" /></Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="z-[100] bg-popover shadow-xl rounded-xl">
                 {videoUrl && (
                   <>
                     <DropdownMenuItem onClick={() => window.open(videoUrl, '_blank')}>
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Open in browser
+                      <ExternalLink className="w-4 h-4 mr-2" />Open in browser
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      const a = document.createElement('a');
-                      a.href = videoUrl;
-                      a.download = video.title || 'video';
-                      a.target = '_blank';
-                      a.click();
-                    }}>
-                      <Download className="w-4 h-4 mr-2" />
-                      Download
+                    <DropdownMenuItem onClick={() => { const a = document.createElement('a'); a.href = videoUrl; a.download = video.title || 'video'; a.target = '_blank'; a.click(); }}>
+                      <Download className="w-4 h-4 mr-2" />Download
                     </DropdownMenuItem>
                   </>
                 )}
-                {isOwner && onDelete && (
+                {isOwner && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive" onClick={onDelete}>
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
+                    <DropdownMenuItem onClick={() => { setEditTitle(video.title); setEditContent(video.content || ''); setEditOpen(true); }}>
+                      <Edit3 className="w-4 h-4 mr-2" />Edit
                     </DropdownMenuItem>
+                    {onDelete && (
+                      <DropdownMenuItem className="text-destructive" onClick={onDelete}>
+                        <Trash2 className="w-4 h-4 mr-2" />Delete
+                      </DropdownMenuItem>
+                    )}
                   </>
                 )}
               </DropdownMenuContent>
@@ -391,58 +377,53 @@ export function EducationVideoCard({
         </CardContent>
       </Card>
 
-      {/* Fullscreen Video Dialog */}
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle>Edit Video</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Title</label>
+              <Input value={editTitle} onChange={e => setEditTitle(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Description</label>
+              <Textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={3} />
+            </div>
+            <Button className="w-full" onClick={handleEditSave} disabled={!editTitle.trim()}>Save Changes</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fullscreen Video */}
       <Dialog open={fullscreen} onOpenChange={setFullscreen}>
         <DialogContent className="max-w-[100vw] w-screen h-screen p-0 border-0 bg-black rounded-none [&>button]:hidden">
           <div className="relative w-full h-full flex items-center justify-center" onClick={togglePlay}>
             {videoUrl && (
-              <video
-                ref={fullscreenVideoRef}
-                src={videoUrl}
-                className="max-w-full max-h-full object-contain"
-                muted={muted}
-                playsInline
-                autoPlay
-                onEnded={() => setPlaying(false)}
-                onPause={() => setPlaying(false)}
-                onPlay={() => setPlaying(true)}
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={() => {
-                  if (fullscreenVideoRef.current) setDuration(fullscreenVideoRef.current.duration);
-                  setPlaying(true);
-                }}
-              />
+              <video ref={fullscreenVideoRef} src={videoUrl} className="max-w-full max-h-full object-contain" muted={muted} playsInline autoPlay
+                onEnded={() => setPlaying(false)} onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)}
+                onTimeUpdate={handleTimeUpdate} onLoadedMetadata={() => { if (fullscreenVideoRef.current) setDuration(fullscreenVideoRef.current.duration); }} />
             )}
-            
-            {/* Fullscreen controls */}
+            <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-white bg-black/50 rounded-full h-10 w-10 z-10"
+              onClick={e => { e.stopPropagation(); setFullscreen(false); }}>
+              <X className="w-5 h-5" />
+            </Button>
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-              <div className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer mb-3" onClick={(e) => { e.stopPropagation(); seekTo(e); }}>
+              <div className="w-full h-1.5 bg-white/20 rounded-full cursor-pointer mb-3" onClick={e => { e.stopPropagation(); seekTo(e); }}>
                 <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/20" onClick={(e) => { e.stopPropagation(); togglePlay(); }}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-white" onClick={e => { e.stopPropagation(); togglePlay(); }}>
                     {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/20" onClick={toggleMute}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-white" onClick={toggleMute}>
                     {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                   </Button>
                   <span className="text-sm text-white/80">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/20" onClick={(e) => { e.stopPropagation(); setFullscreen(false); }}>
-                  <X className="w-5 h-5" />
-                </Button>
               </div>
             </div>
-
-            {/* Play overlay in fullscreen */}
-            {!playing && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <Play className="w-8 h-8 text-white ml-1" />
-                </div>
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
