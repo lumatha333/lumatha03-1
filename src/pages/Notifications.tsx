@@ -33,7 +33,7 @@ const TABS = [
   { id: 'friends', label: 'Friends', icon: Users },
   { id: 'reactions', label: 'Reactions', icon: Heart },
   { id: 'mentions', label: 'Mentions', icon: AtSign },
-  { id: 'system', label: 'Activity', icon: Sparkles },
+  { id: 'activity', label: 'Activity', icon: Sparkles },
 ] as const;
 
 export default function Notifications() {
@@ -112,6 +112,9 @@ export default function Notifications() {
       case 'friend_request': return <Users className="w-3.5 h-3.5 text-amber-400" />;
       case 'mention': return <AtSign className="w-3.5 h-3.5 text-cyan-400" />;
       case 'message': return <MessageCircle className="w-3.5 h-3.5 text-primary" />;
+      case 'challenge': return <Mountain className="w-3.5 h-3.5 text-orange-400" />;
+      case 'todo': return <ListTodo className="w-3.5 h-3.5 text-emerald-400" />;
+      case 'adventure': return <Mountain className="w-3.5 h-3.5 text-teal-400" />;
       default: return <Bell className="w-3.5 h-3.5 text-muted-foreground" />;
     }
   };
@@ -121,7 +124,7 @@ export default function Notifications() {
       case 'friends': return n.type === 'follow' || n.type === 'friend_request';
       case 'reactions': return n.type === 'like' || n.type === 'share';
       case 'mentions': return n.type === 'comment' || n.type === 'mention';
-      case 'system': return n.type === 'system' || n.type === 'message';
+      case 'activity': return n.type === 'system' || n.type === 'message' || n.type === 'challenge' || n.type === 'todo' || n.type === 'adventure';
       default: return true;
     }
   });
