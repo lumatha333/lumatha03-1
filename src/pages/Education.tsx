@@ -29,10 +29,10 @@ export default function Education() {
     <div className="min-h-screen">
       <div className="max-w-2xl mx-auto px-3 py-4 pb-24">
         <SwipeableTabs tabs={TABS} activeTab={activeModule} onTabChange={setActiveModule}>
-          <div>{activeModule === 'todos' && <TodoModule />}</div>
-          <div>{activeModule === 'notes' && <NotesModule />}</div>
-          <div>{activeModule === 'education' && <EducationModule />}</div>
-          <div>{activeModule === 'analytics' && <ProductivityAnalytics />}</div>
+          <div><TodoModule /></div>
+          <div><NotesModule /></div>
+          <div><EducationModule /></div>
+          <div><ProductivityAnalytics /></div>
         </SwipeableTabs>
       </div>
     </div>

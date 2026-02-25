@@ -174,7 +174,7 @@ export default function Marketplace() {
       </div>
 
       {/* Swipeable tabs */}
-      <SwipeableTabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab}>
+      <SwipeableTabs tabs={TABS} activeTab={activeTab} onTabChange={(id) => { setActiveTab(id); }}>
         <div className="space-y-3">{renderListings()}</div>
         <div className="space-y-3">{renderListings()}</div>
         <div className="space-y-3">{renderListings()}</div>
