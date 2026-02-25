@@ -444,6 +444,165 @@ export type Database = {
           },
         ]
       }
+      marketplace_comments: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          listing_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          listing_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          listing_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_comments_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_likes: {
+        Row: {
+          created_at: string | null
+          id: string
+          listing_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          listing_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          listing_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_likes_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_listings: {
+        Row: {
+          category: string | null
+          comments_count: number | null
+          created_at: string
+          currency: string | null
+          description: string | null
+          id: string
+          likes_count: number | null
+          location: string | null
+          media_types: string[] | null
+          media_urls: string[] | null
+          price: number | null
+          qualification: string | null
+          salary_range: string | null
+          status: string | null
+          title: string
+          type: string
+          updated_at: string
+          user_id: string
+          views_count: number | null
+        }
+        Insert: {
+          category?: string | null
+          comments_count?: number | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          likes_count?: number | null
+          location?: string | null
+          media_types?: string[] | null
+          media_urls?: string[] | null
+          price?: number | null
+          qualification?: string | null
+          salary_range?: string | null
+          status?: string | null
+          title: string
+          type?: string
+          updated_at?: string
+          user_id: string
+          views_count?: number | null
+        }
+        Update: {
+          category?: string | null
+          comments_count?: number | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          likes_count?: number | null
+          location?: string | null
+          media_types?: string[] | null
+          media_urls?: string[] | null
+          price?: number | null
+          qualification?: string | null
+          salary_range?: string | null
+          status?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+          views_count?: number | null
+        }
+        Relationships: []
+      }
+      marketplace_saved: {
+        Row: {
+          created_at: string | null
+          id: string
+          listing_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          listing_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          listing_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_saved_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
