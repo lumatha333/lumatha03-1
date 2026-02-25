@@ -1,11 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ImagePlus, X, Loader2 } from 'lucide-react';
+import { ImagePlus, X, Loader2, MapPin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -31,6 +31,49 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [existingMedia, setExistingMedia] = useState<string[]>(editListing?.media_urls || []);
   const [saving, setSaving] = useState(false);
+  const [detectingLocation, setDetectingLocation] = useState(false);
+  const isEditing = !!editListing;
+
+  // Reset form when editListing changes
+  useEffect(() => {
+    if (editListing) {
+      setType(editListing.type);
+      setTitle(editListing.title);
+      setDescription(editListing.description || '');
+      setPrice(editListing.price?.toString() || '');
+      setLocation(editListing.location || '');
+      setCategory(editListing.category || '');
+      setQualification(editListing.qualification || '');
+      setSalaryRange(editListing.salary_range || '');
+      setExistingMedia(editListing.media_urls || []);
+    } else {
+      setType('sell'); setTitle(''); setDescription(''); setPrice('');
+      setLocation(''); setCategory(''); setQualification(''); setSalaryRange('');
+      setExistingMedia([]);
+    }
+    setMediaFiles([]);
+  }, [editListing, open]);
+
+  const detectLocation = async () => {
+    setDetectingLocation(true);
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+      );
+      const { latitude, longitude } = pos.coords;
+      const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`);
+      const data = await resp.json();
+      const city = data.address?.city || data.address?.town || data.address?.village || '';
+      const state = data.address?.state || '';
+      const country = data.address?.country || '';
+      const parts = [city, state, country].filter(Boolean);
+      setLocation(parts.join(', '));
+    } catch {
+      toast.error('Could not detect location');
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -48,6 +91,7 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
       let mediaUrls = [...existingMedia];
       let mediaTypes: string[] = existingMedia.map(() => 'image');
 
+      // Only upload new media if not editing, or if new files added
       for (const file of mediaFiles) {
         const ext = file.name.split('.').pop();
         const path = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
@@ -58,29 +102,36 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
         mediaTypes.push(file.type.startsWith('video') ? 'video' : 'image');
       }
 
-      const payload = {
-        user_id: user.id,
-        type,
-        title: title.trim(),
-        description: description.trim() || null,
-        price: price ? parseFloat(price) : null,
-        location: location.trim() || null,
-        category: category.trim() || null,
-        qualification: type === 'job' ? qualification.trim() || null : null,
-        salary_range: type === 'job' ? salaryRange.trim() || null : null,
-        media_urls: mediaUrls,
-        media_types: mediaTypes,
-      };
-
-      if (editListing) {
-        await supabase.from('marketplace_listings').update(payload).eq('id', editListing.id);
+      if (isEditing) {
+        // Edit only text fields + price, not type or media replacement
+        await supabase.from('marketplace_listings').update({
+          title: title.trim(),
+          description: description.trim() || null,
+          price: price ? parseFloat(price) : null,
+          location: location.trim() || null,
+          category: category.trim() || null,
+          qualification: type === 'job' ? qualification.trim() || null : null,
+          salary_range: type === 'job' ? salaryRange.trim() || null : null,
+          ...(mediaFiles.length > 0 ? { media_urls: mediaUrls, media_types: mediaTypes } : {}),
+        }).eq('id', editListing.id);
       } else {
-        await supabase.from('marketplace_listings').insert(payload);
+        await supabase.from('marketplace_listings').insert({
+          user_id: user.id,
+          type,
+          title: title.trim(),
+          description: description.trim() || null,
+          price: price ? parseFloat(price) : null,
+          location: location.trim() || null,
+          category: category.trim() || null,
+          qualification: type === 'job' ? qualification.trim() || null : null,
+          salary_range: type === 'job' ? salaryRange.trim() || null : null,
+          media_urls: mediaUrls,
+          media_types: mediaTypes,
+        });
       }
 
       onSuccess();
       onOpenChange(false);
-      setTitle(''); setDescription(''); setPrice(''); setMediaFiles([]); setExistingMedia([]);
     } catch (err: any) {
       toast.error(err.message || 'Failed to save');
     } finally {
@@ -92,17 +143,17 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editListing ? 'Edit Listing' : 'Create Listing'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Listing' : 'Create Listing'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
+          {/* Type - disabled when editing */}
           <div>
             <Label className="text-xs">Type</Label>
-            <Select value={type} onValueChange={setType}>
+            <Select value={type} onValueChange={setType} disabled={isEditing}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="sell">Sell</SelectItem>
-                <SelectItem value="buy">Buy</SelectItem>
                 <SelectItem value="job">Job</SelectItem>
                 <SelectItem value="rent">Rent</SelectItem>
               </SelectContent>
@@ -139,9 +190,23 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
             </>
           )}
 
+          {/* Location with auto-detect */}
           <div>
             <Label className="text-xs">Location</Label>
-            <Input value={location} onChange={e => setLocation(e.target.value)} placeholder="City/Area" />
+            <div className="flex gap-2">
+              <Input value={location} onChange={e => setLocation(e.target.value)} placeholder="Auto-detect or type" className="flex-1" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={detectLocation}
+                disabled={detectingLocation}
+                className="h-9 px-3 gap-1 shrink-0"
+              >
+                {detectingLocation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                <span className="text-xs">Detect</span>
+              </Button>
+            </div>
           </div>
 
           <div>
@@ -149,34 +214,36 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
             <Input value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. Electronics, Clothing" />
           </div>
 
-          {/* Media */}
-          <div>
-            <Label className="text-xs">Photos (up to 5)</Label>
-            <div className="flex gap-2 mt-1 flex-wrap">
-              {existingMedia.map((url, i) => (
-                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden">
-                  <img src={url} className="w-full h-full object-cover" />
-                  <button onClick={() => removeExisting(i)} className="absolute top-0 right-0 bg-black/60 rounded-bl p-0.5"><X className="w-3 h-3 text-white" /></button>
-                </div>
-              ))}
-              {mediaFiles.map((f, i) => (
-                <div key={`new-${i}`} className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted">
-                  <img src={URL.createObjectURL(f)} className="w-full h-full object-cover" />
-                  <button onClick={() => removeFile(i)} className="absolute top-0 right-0 bg-black/60 rounded-bl p-0.5"><X className="w-3 h-3 text-white" /></button>
-                </div>
-              ))}
-              {existingMedia.length + mediaFiles.length < 5 && (
-                <button onClick={() => fileRef.current?.click()} className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center hover:border-primary/50 transition-colors">
-                  <ImagePlus className="w-5 h-5 text-muted-foreground" />
-                </button>
-              )}
+          {/* Media - show only for new or allow adding more */}
+          {!isEditing && (
+            <div>
+              <Label className="text-xs">Photos (up to 5)</Label>
+              <div className="flex gap-2 mt-1 flex-wrap">
+                {existingMedia.map((url, i) => (
+                  <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden">
+                    <img src={url} className="w-full h-full object-cover" />
+                    <button onClick={() => removeExisting(i)} className="absolute top-0 right-0 bg-black/60 rounded-bl p-0.5"><X className="w-3 h-3 text-white" /></button>
+                  </div>
+                ))}
+                {mediaFiles.map((f, i) => (
+                  <div key={`new-${i}`} className="relative w-16 h-16 rounded-lg overflow-hidden bg-muted">
+                    <img src={URL.createObjectURL(f)} className="w-full h-full object-cover" />
+                    <button onClick={() => removeFile(i)} className="absolute top-0 right-0 bg-black/60 rounded-bl p-0.5"><X className="w-3 h-3 text-white" /></button>
+                  </div>
+                ))}
+                {existingMedia.length + mediaFiles.length < 5 && (
+                  <button onClick={() => fileRef.current?.click()} className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center hover:border-primary/50 transition-colors">
+                    <ImagePlus className="w-5 h-5 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+              <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
             </div>
-            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
-          </div>
+          )}
 
           <Button onClick={handleSubmit} disabled={saving || !title.trim()} className="w-full">
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            {editListing ? 'Update' : 'Post Listing'}
+            {isEditing ? 'Update' : 'Post Listing'}
           </Button>
         </div>
       </DialogContent>

@@ -49,14 +49,12 @@ interface Props {
 
 const typeIcons: Record<string, any> = {
   sell: ShoppingBag,
-  buy: ShoppingBag,
   job: Briefcase,
   rent: HomeIcon,
 };
 
 const typeColors: Record<string, string> = {
   sell: 'bg-emerald-500/20 text-emerald-400',
-  buy: 'bg-blue-500/20 text-blue-400',
   job: 'bg-purple-500/20 text-purple-400',
   rent: 'bg-amber-500/20 text-amber-400',
 };
@@ -94,9 +92,9 @@ export function MarketplaceListingCard({
             )}
           </div>
         </div>
-        <Badge className={cn("text-[10px] px-2 py-0.5", typeColors[listing.type])}>
+        <Badge className={cn("text-[10px] px-2 py-0.5", typeColors[listing.type] || 'bg-primary/20 text-primary')}>
           <TypeIcon className="w-3 h-3 mr-1" />
-          {listing.type.charAt(0).toUpperCase() + listing.type.slice(1)}
+          {listing.type === 'sell' ? 'Buy/Sell' : listing.type.charAt(0).toUpperCase() + listing.type.slice(1)}
         </Badge>
         {isOwner && (
           <DropdownMenu modal={false}>

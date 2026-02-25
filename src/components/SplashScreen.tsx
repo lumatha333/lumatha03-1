@@ -23,24 +23,24 @@ export function SplashScreen() {
         background: 'linear-gradient(135deg, #0a1628 0%, #1e3a5f 50%, #0a1628 100%)'
       }}
     >
-      {/* Subtle glow behind logo */}
+      {/* Golden glow behind logo */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div 
-          className="w-96 h-96 rounded-full blur-3xl opacity-30"
-          style={{ background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)' }}
+          className="w-80 h-80 rounded-full blur-3xl opacity-20"
+          style={{ background: 'radial-gradient(circle, #d4a843 0%, transparent 70%)' }}
         />
       </div>
 
       {/* Center content */}
       <div className="relative flex flex-col items-center gap-6">
-        {/* Circular Logo - NO rectangle, NO background */}
+        {/* Circular Logo - transparent background, no extra blue */}
         <div className="relative">
           <img 
             src={lumathaLogo} 
             alt="Lumatha" 
-            className="w-32 h-32 sm:w-40 sm:h-40 object-contain rounded-full"
+            className="w-36 h-36 sm:w-44 sm:h-44 object-contain drop-shadow-2xl"
             style={{ 
-              boxShadow: '0 0 60px rgba(59, 130, 246, 0.4), 0 0 120px rgba(59, 130, 246, 0.2)'
+              filter: 'drop-shadow(0 0 30px rgba(212, 168, 67, 0.4))',
             }}
           />
         </div>

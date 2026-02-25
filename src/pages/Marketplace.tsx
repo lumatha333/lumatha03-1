@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, ShoppingBag, Briefcase, Home as HomeIcon, SlidersHorizontal, Sliders, MessageCircle } from 'lucide-react';
+import { Plus, Search, ShoppingBag, Briefcase, Home as HomeIcon, SlidersHorizontal, Sliders, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,11 +11,10 @@ import { MarketplaceController } from '@/components/marketplace/MarketplaceContr
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
 
 const TABS = [
   { id: 'all', label: 'All', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
-  { id: 'sell', label: 'Buy', icon: <ShoppingBag className="w-3.5 h-3.5" /> },
+  { id: 'sell', label: 'Buy/Sell', icon: <ShoppingBag className="w-3.5 h-3.5" /> },
   { id: 'job', label: 'Jobs', icon: <Briefcase className="w-3.5 h-3.5" /> },
   { id: 'rent', label: 'Rent', icon: <HomeIcon className="w-3.5 h-3.5" /> },
   { id: 'controller', label: 'Me', icon: <Sliders className="w-3.5 h-3.5" /> },
@@ -54,29 +53,26 @@ export default function Marketplace() {
     const { data } = await query.limit(50);
 
     if (data) {
-      // Fetch profiles
       const userIds = [...new Set(data.map(d => d.user_id))];
       const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, username').in('id', userIds);
       const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
       const enriched = data.map(d => ({ ...d, profiles: profileMap[d.user_id] }));
       setListings(enriched);
 
-      // Likes
       const ids = data.map(d => d.id);
       const { data: myLikes } = await supabase.from('marketplace_likes').select('listing_id').eq('user_id', user.id).in('listing_id', ids);
       setLikedSet(new Set((myLikes || []).map(l => l.listing_id)));
 
-      // Saved
       const { data: mySaved } = await supabase.from('marketplace_saved').select('listing_id').eq('user_id', user.id).in('listing_id', ids);
       setSavedSet(new Set((mySaved || []).map(s => s.listing_id)));
 
-      // Count likes per listing
       const counts: Record<string, number> = {};
-      for (const d of data) counts[d.id] = d.likes_count || 0;
-      setLikeCounts(counts);
-
       const cCounts: Record<string, number> = {};
-      for (const d of data) cCounts[d.id] = d.comments_count || 0;
+      for (const d of data) {
+        counts[d.id] = d.likes_count || 0;
+        cCounts[d.id] = d.comments_count || 0;
+      }
+      setLikeCounts(counts);
       setCommentCounts(cCounts);
     }
 
@@ -128,11 +124,12 @@ export default function Marketplace() {
   const renderListings = () => {
     if (loading) return Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />);
     if (listings.length === 0) return (
-      <div className="text-center py-12">
-        <ShoppingBag className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-        <p className="text-sm text-muted-foreground">No listings found</p>
-        <Button size="sm" onClick={() => setCreateOpen(true)} className="mt-3 gap-1">
-          <Plus className="w-4 h-4" />Post something
+      <div className="text-center py-16">
+        <SearchX className="w-14 h-14 mx-auto text-muted-foreground/20 mb-4" />
+        <p className="text-sm font-medium text-muted-foreground mb-1">No results found</p>
+        <p className="text-xs text-muted-foreground/60 mb-4">Try a different search or category</p>
+        <Button size="sm" onClick={() => { setEditListing(null); setCreateOpen(true); }} className="gap-1">
+          <Plus className="w-4 h-4" />Post something new
         </Button>
       </div>
     );
@@ -178,19 +175,13 @@ export default function Marketplace() {
 
       {/* Swipeable tabs */}
       <SwipeableTabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab}>
-        {/* All */}
-        <div className="space-y-3">{activeTab === 'all' && renderListings()}</div>
-        {/* Sell/Buy */}
-        <div className="space-y-3">{activeTab === 'sell' && renderListings()}</div>
-        {/* Jobs */}
-        <div className="space-y-3">{activeTab === 'job' && renderListings()}</div>
-        {/* Rent */}
-        <div className="space-y-3">{activeTab === 'rent' && renderListings()}</div>
-        {/* Controller */}
-        <div>{activeTab === 'controller' && <MarketplaceController />}</div>
+        <div className="space-y-3">{renderListings()}</div>
+        <div className="space-y-3">{renderListings()}</div>
+        <div className="space-y-3">{renderListings()}</div>
+        <div className="space-y-3">{renderListings()}</div>
+        <div><MarketplaceController /></div>
       </SwipeableTabs>
 
-      {/* Dialogs */}
       <MarketplaceCreateDialog
         open={createOpen}
         onOpenChange={(o) => { setCreateOpen(o); if (!o) setEditListing(null); }}
