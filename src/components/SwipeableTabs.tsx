@@ -42,7 +42,8 @@ export const SwipeableTabs = memo(function SwipeableTabs({ tabs, activeTab, onTa
 
     currentDx.current = dx;
     const w = containerRef.current?.offsetWidth || 400;
-    let pct = (dx / w) * 100;
+    // pct is in terms of container width (which is tabs.length * 100% of parent)
+    let pct = (dx / w) * (100 / tabs.length);
     // Edge resistance
     if ((activeIndex === 0 && dx > 0) || (activeIndex === tabs.length - 1 && dx < 0)) {
       pct *= 0.2;
@@ -97,7 +98,7 @@ export const SwipeableTabs = memo(function SwipeableTabs({ tabs, activeTab, onTa
         <div
           className="flex"
           style={{
-            transform: `translateX(calc(${-activeIndex * 100}% + ${dragPct}%))`,
+            transform: `translateX(calc(${-activeIndex * (100 / tabs.length)}% + ${dragPct}%))`,
             transition: dragPct !== 0 ? 'none' : 'transform 250ms cubic-bezier(0.2,0.8,0.2,1)',
             width: `${tabs.length * 100}%`,
             willChange: dragPct !== 0 ? 'transform' : 'auto',
