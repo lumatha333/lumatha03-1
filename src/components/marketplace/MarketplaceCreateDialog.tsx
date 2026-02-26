@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ImagePlus, X, Loader2, MapPin } from 'lucide-react';
+import { ImagePlus, X, Loader2, MapPin, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -32,9 +32,9 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
   const [existingMedia, setExistingMedia] = useState<string[]>(editListing?.media_urls || []);
   const [saving, setSaving] = useState(false);
   const [detectingLocation, setDetectingLocation] = useState(false);
+  const [locationDetected, setLocationDetected] = useState(!!editListing?.location);
   const isEditing = !!editListing;
 
-  // Reset form when editListing changes
   useEffect(() => {
     if (editListing) {
       setType(editListing.type);
@@ -46,13 +46,22 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
       setQualification(editListing.qualification || '');
       setSalaryRange(editListing.salary_range || '');
       setExistingMedia(editListing.media_urls || []);
+      setLocationDetected(!!editListing.location);
     } else {
       setType('sell'); setTitle(''); setDescription(''); setPrice('');
       setLocation(''); setCategory(''); setQualification(''); setSalaryRange('');
       setExistingMedia([]);
+      setLocationDetected(false);
     }
     setMediaFiles([]);
   }, [editListing, open]);
+
+  // Auto-detect location on open for new listings
+  useEffect(() => {
+    if (open && !isEditing && !locationDetected) {
+      detectLocation();
+    }
+  }, [open, isEditing]);
 
   const detectLocation = async () => {
     setDetectingLocation(true);
@@ -61,15 +70,16 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
         navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
       );
       const { latitude, longitude } = pos.coords;
-      const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`);
+      const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`, { headers: { 'User-Agent': 'Lumatha/1.0' } });
       const data = await resp.json();
       const city = data.address?.city || data.address?.town || data.address?.village || '';
       const state = data.address?.state || '';
       const country = data.address?.country || '';
       const parts = [city, state, country].filter(Boolean);
       setLocation(parts.join(', '));
+      setLocationDetected(true);
     } catch {
-      toast.error('Could not detect location');
+      toast.error('Location access required to post listings. Please enable GPS.');
     } finally {
       setDetectingLocation(false);
     }
@@ -85,13 +95,16 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
 
   const handleSubmit = async () => {
     if (!user || !title.trim()) return;
+    if (!locationDetected || !location.trim()) {
+      toast.error('Location is required. Please enable GPS to detect your location.');
+      return;
+    }
     setSaving(true);
 
     try {
       let mediaUrls = [...existingMedia];
       let mediaTypes: string[] = existingMedia.map(() => 'image');
 
-      // Only upload new media if not editing, or if new files added
       for (const file of mediaFiles) {
         const ext = file.name.split('.').pop();
         const path = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
@@ -103,7 +116,6 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
       }
 
       if (isEditing) {
-        // Edit only text fields + price, not type or media replacement
         await supabase.from('marketplace_listings').update({
           title: title.trim(),
           description: description.trim() || null,
@@ -121,7 +133,7 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
           title: title.trim(),
           description: description.trim() || null,
           price: price ? parseFloat(price) : null,
-          location: location.trim() || null,
+          location: location.trim(),
           category: category.trim() || null,
           qualification: type === 'job' ? qualification.trim() || null : null,
           salary_range: type === 'job' ? salaryRange.trim() || null : null,
@@ -147,7 +159,6 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* Type - disabled when editing */}
           <div>
             <Label className="text-xs">Type</Label>
             <Select value={type} onValueChange={setType} disabled={isEditing}>
@@ -190,11 +201,17 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
             </>
           )}
 
-          {/* Location with auto-detect */}
+          {/* Location - Auto-detected, read-only */}
           <div>
-            <Label className="text-xs">Location</Label>
+            <Label className="text-xs flex items-center gap-1">
+              <MapPin className="w-3 h-3" />Location *
+              {!locationDetected && <span className="text-destructive text-[10px]">(GPS required)</span>}
+            </Label>
             <div className="flex gap-2">
-              <Input value={location} onChange={e => setLocation(e.target.value)} placeholder="Auto-detect or type" className="flex-1" />
+              <div className="relative flex-1">
+                <Input value={location} readOnly className="flex-1 bg-muted/30" placeholder="Detecting location..." />
+                {locationDetected && <MapPin className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400" />}
+              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -204,9 +221,14 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
                 className="h-9 px-3 gap-1 shrink-0"
               >
                 {detectingLocation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
-                <span className="text-xs">Detect</span>
+                <span className="text-xs">{locationDetected ? 'Refresh' : 'Detect'}</span>
               </Button>
             </div>
+            {!locationDetected && !detectingLocation && (
+              <p className="text-[10px] text-destructive mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />Enable location to post listings
+              </p>
+            )}
           </div>
 
           <div>
@@ -214,7 +236,6 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
             <Input value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. Electronics, Clothing" />
           </div>
 
-          {/* Media - show only for new or allow adding more */}
           {!isEditing && (
             <div>
               <Label className="text-xs">Photos (up to 5)</Label>
@@ -241,7 +262,7 @@ export function MarketplaceCreateDialog({ open, onOpenChange, editListing, onSuc
             </div>
           )}
 
-          <Button onClick={handleSubmit} disabled={saving || !title.trim()} className="w-full">
+          <Button onClick={handleSubmit} disabled={saving || !title.trim() || (!locationDetected && !isEditing)} className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90">
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             {isEditing ? 'Update' : 'Post Listing'}
           </Button>

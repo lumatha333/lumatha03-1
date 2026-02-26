@@ -684,6 +684,36 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_profiles: {
+        Row: {
+          bio: string | null
+          created_at: string
+          id: string
+          location: string | null
+          qualification: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          id?: string
+          location?: string | null
+          qualification?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          id?: string
+          location?: string | null
+          qualification?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       marketplace_saved: {
         Row: {
           created_at: string | null

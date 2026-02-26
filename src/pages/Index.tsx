@@ -9,6 +9,7 @@ import Education from '@/pages/Education';
 import MusicAdventure from '@/pages/MusicAdventure';
 import RandomConnect from '@/pages/RandomConnect';
 import Marketplace from '@/pages/Marketplace';
+import MarketplaceProfile from '@/pages/MarketplaceProfile';
 import Settings from '@/pages/Settings';
 import Auth from '@/pages/Auth';
 import Profile from '@/pages/Profile';
@@ -38,6 +39,7 @@ export default function Index() {
               <Route path="/music-adventure" element={<MusicAdventure />} />
               <Route path="/random-connect" element={<RandomConnect />} />
               <Route path="/marketplace" element={<Marketplace />} />
+              <Route path="/marketplace/profile/:userId" element={<MarketplaceProfile />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/profile/:userId" element={<Profile />} />
               <Route path="/chat/:userId?" element={<Chat />} />
