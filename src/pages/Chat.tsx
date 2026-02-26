@@ -5,14 +5,14 @@ import {
   Archive, Ghost, Trash2, Smile, Mic, Music,
   Lock, Image, Users, UserSearch, MessageCircle, Star, Phone, Video as VideoIcon,
   Palette, Eye, EyeOff, Pin, Check, CheckCheck, Forward, Reply,
-  Bell, BellOff, User, Edit3, Volume2
+  Bell, BellOff, User, Edit3, Volume2, CornerUpLeft, Pencil
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useChat } from '@/hooks/useChat';
@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { useChatProtection, WatermarkOverlay, BlurOverlay } from '@/components/chat/ChatProtection';
 import { EmojiReactionPicker } from '@/components/chat/EmojiReactionPicker';
-import { SharedMusicPlayer, MusicBar } from '@/components/chat/SharedMusicPlayer';
+import { SharedMusicPlayer } from '@/components/chat/SharedMusicPlayer';
 import { SwipeableChatCard } from '@/components/chat/SwipeableChatCard';
 import { ChatImageGrid } from '@/components/chat/ChatImageGrid';
 import { ChatVideoPlayer } from '@/components/chat/ChatVideoPlayer';
@@ -32,361 +32,316 @@ import { LinkPreviewCard, extractUrls } from '@/components/chat/LinkPreviewCard'
 import { UploadProgressBar } from '@/components/chat/UploadProgressBar';
 import { ForwardMessageDialog } from '@/components/chat/ForwardMessageDialog';
 import { SharedPostPreview, extractInternalPostId, isSharedPostMessage } from '@/components/chat/SharedPostPreview';
+import { ChatSettingsSheet } from '@/components/chat/ChatSettingsSheet';
+import { CallScreen } from '@/components/chat/CallScreen';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
-const GHOST_MODES = [
-  { label: 'When seen', value: 1, icon: '👁️' },
-  { label: '1 hour', value: 60, icon: '⏰' },
-  { label: '1 day', value: 1440, icon: '🌙' },
-  { label: '1 week', value: 10080, icon: '📅' },
-];
-const CHAT_THEMES = [
-  { id: 'default', label: 'Default', bg: 'bg-background', bubble: 'bg-primary' },
-  { id: 'midnight', label: 'Midnight', bg: 'bg-[#0a0e27]', bubble: 'bg-indigo-600' },
-  { id: 'forest', label: 'Forest', bg: 'bg-[#0a1a0a]', bubble: 'bg-emerald-700' },
-  { id: 'ocean', label: 'Ocean', bg: 'bg-[#051525]', bubble: 'bg-cyan-700' },
-  { id: 'sunset', label: 'Sunset', bg: 'bg-[#1a0a0a]', bubble: 'bg-orange-700' },
-  { id: 'berry', label: 'Berry', bg: 'bg-[#150a1a]', bubble: 'bg-purple-700' },
-];
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+
+const THEME_MAP: Record<string, { bg: string; bubble: string }> = {
+  default: { bg: 'bg-background', bubble: 'bg-primary' },
+  midnight: { bg: 'bg-[#0a0e27]', bubble: 'bg-indigo-600' },
+  forest: { bg: 'bg-[#0a1a0a]', bubble: 'bg-emerald-700' },
+  ocean: { bg: 'bg-[#051525]', bubble: 'bg-cyan-700' },
+  sunset: { bg: 'bg-[#1a0a0a]', bubble: 'bg-orange-700' },
+  berry: { bg: 'bg-[#150a1a]', bubble: 'bg-purple-700' },
+  rose: { bg: 'bg-[#1a0a0f]', bubble: 'bg-rose-600' },
+  amber: { bg: 'bg-[#1a150a]', bubble: 'bg-amber-600' },
+};
 
 export default function Chat() {
   const { userId } = useParams();
   const { user, profile } = useAuth();
   const { conversations, messages, loading, currentChatUser, fetchMessages, sendMessage, deleteMessage } = useChat();
   const { isBlurred, username } = useChatProtection();
+  const navigate = useNavigate();
+
+  // Core state
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
-  const [networkUsers, setNetworkUsers] = useState<any[]>([]);
+  const [chatTab, setChatTab] = useState<'main' | 'find' | 'archived' | 'private'>('main');
+  const [findSubTab, setFindSubTab] = useState<'suggestions' | 'network'>('suggestions');
+
+  // Media
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadIndex, setUploadIndex] = useState(0);
+
+  // Chat features
+  const [showStickers, setShowStickers] = useState(false);
+  const [messageReactions, setMessageReactions] = useState<Record<string, Record<string, number>>>({});
+  const [pinnedMessages, setPinnedMessages] = useState<Set<string>>(new Set());
+  const [forwardMsg, setForwardMsg] = useState<{ content: string; mediaUrl?: string; mediaType?: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; content: string; senderName: string } | null>(null);
+  const [editingMsg, setEditingMsg] = useState<{ id: string; content: string } | null>(null);
+
+  // Chat settings (per-chat, persisted via localStorage + DB)
+  const [chatTheme, setChatTheme] = useState('default');
+  const [chatNicknames, setChatNicknames] = useState<Record<string, string>>({});
+  const [mutedChats, setMutedChats] = useState<Set<string>>(new Set());
   const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
   const [privateChats, setPrivateChats] = useState<Set<string>>(new Set());
   const [privateUnlocked, setPrivateUnlocked] = useState(false);
-  const [chatTab, setChatTab] = useState<'main' | 'find' | 'archived' | 'private'>('main');
-  const [findSubTab, setFindSubTab] = useState<'suggestions' | 'network'>('suggestions');
-  const [ghostMode, setGhostMode] = useState<number | null>(null);
-  const [showStickers, setShowStickers] = useState(false);
+  const [ghostMode, setGhostMode] = useState(0);
+
+  // UI state
+  const [showSettings, setShowSettings] = useState(false);
+  const [showMediaGallery, setShowMediaGallery] = useState(false);
+  const [mediaGalleryTab, setMediaGalleryTab] = useState<'images' | 'videos' | 'audio' | 'files'>('images');
+  const [showMusicPlayer, setShowMusicPlayer] = useState(false);
+  const [showPrivateAuth, setShowPrivateAuth] = useState(false);
+  const [pendingPrivateChat, setPendingPrivateChat] = useState<string | null>(null);
+  const [callState, setCallState] = useState<{ open: boolean; isVideo: boolean }>({ open: false, isVideo: false });
+
+  // Voice recording
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [showPrivateAuth, setShowPrivateAuth] = useState(false);
-  const [pendingPrivateChat, setPendingPrivateChat] = useState<string | null>(null);
-  const [showMediaGallery, setShowMediaGallery] = useState(false);
-  const [mediaGalleryTab, setMediaGalleryTab] = useState<'images' | 'videos' | 'audio' | 'files'>('images');
-  const [messageReactions, setMessageReactions] = useState<Record<string, Record<string, number>>>({});
-  const [chatTheme, setChatTheme] = useState(() => localStorage.getItem('chatTheme') || 'default');
-  const [pinnedMessages, setPinnedMessages] = useState<Set<string>>(new Set());
-  const [showMusicPlayer, setShowMusicPlayer] = useState(false);
-  const [activeMusicTrack, setActiveMusicTrack] = useState<string | null>(null);
-  const [forwardMsg, setForwardMsg] = useState<{ content: string; mediaUrl?: string; mediaType?: string } | null>(null);
-  const [chatNicknames, setChatNicknames] = useState<Record<string, string>>({});
-  const [showNicknameDialog, setShowNicknameDialog] = useState(false);
-  const [nicknameInput, setNicknameInput] = useState('');
-  const [mutedChats, setMutedChats] = useState<Set<string>>(new Set());
+
+  // Find tab
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+  const [networkUsers, setNetworkUsers] = useState<any[]>([]);
+
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const navigate = useNavigate();
 
-  const currentTheme = CHAT_THEMES.find(t => t.id === chatTheme) || CHAT_THEMES[0];
+  const currentTheme = THEME_MAP[chatTheme] || THEME_MAP.default;
 
-  // Load nicknames and muted chats
+  // Load persisted settings
   useEffect(() => {
-    const stored = localStorage.getItem('chatNicknames');
-    if (stored) setChatNicknames(JSON.parse(stored));
+    const nicks = localStorage.getItem('chatNicknames');
+    if (nicks) setChatNicknames(JSON.parse(nicks));
     const muted = localStorage.getItem('mutedChats');
     if (muted) setMutedChats(new Set(JSON.parse(muted)));
+    const archived = localStorage.getItem('archivedChats');
+    if (archived) setArchivedChats(new Set(JSON.parse(archived)));
+    const priv = localStorage.getItem('privateChats');
+    if (priv) setPrivateChats(new Set(JSON.parse(priv)));
   }, []);
 
-  // Ghost mode: "when seen" = delete read messages, else timer-based
+  // Load per-chat theme
+  useEffect(() => {
+    if (currentChatUser) {
+      const themes = JSON.parse(localStorage.getItem('chatThemes') || '{}');
+      setChatTheme(themes[currentChatUser] || 'default');
+      const ghosts = JSON.parse(localStorage.getItem('chatGhostModes') || '{}');
+      setGhostMode(ghosts[currentChatUser] || 0);
+    }
+  }, [currentChatUser]);
+
+  // Ghost mode cleanup
   useEffect(() => {
     if (!ghostMode || !currentChatUser || !user) return;
     if (ghostMode === 1) {
-      // Delete messages that are read
-      const readMsgs = messages.filter(m => m.is_read && m.sender_id === user.id);
-      readMsgs.forEach(msg => {
+      messages.filter(m => m.is_read && m.sender_id === user.id).forEach(msg => {
         supabase.from('messages').delete().eq('id', msg.id).then(() => {});
       });
       return;
     }
     const interval = setInterval(async () => {
       const cutoff = new Date(Date.now() - ghostMode * 60 * 1000).toISOString();
-      const ghostMessages = messages.filter(m => 
-        m.created_at && m.created_at < cutoff && m.sender_id === user.id
-      );
-      for (const msg of ghostMessages) {
+      for (const msg of messages.filter(m => m.created_at && m.created_at < cutoff && m.sender_id === user.id)) {
         await supabase.from('messages').delete().eq('id', msg.id);
       }
     }, 30000);
     return () => clearInterval(interval);
   }, [ghostMode, currentChatUser, user, messages]);
 
-  // Load Find tab data
+  // Auto-archive unfriended
   useEffect(() => {
-    if (chatTab === 'find') loadFindData();
-  }, [chatTab, user]);
+    if (!user || conversations.length === 0) return;
+    const check = async () => {
+      const { data } = await supabase.from('friend_requests').select('sender_id, receiver_id')
+        .eq('status', 'accepted').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+      const friendIds = new Set(data?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || []);
+      const newArchived = new Set(archivedChats);
+      let changed = false;
+      conversations.forEach(c => {
+        if (!friendIds.has(c.user_id) && !newArchived.has(c.user_id) && !privateChats.has(c.user_id)) {
+          newArchived.add(c.user_id); changed = true;
+        }
+      });
+      if (changed) saveSet('archivedChats', newArchived, setArchivedChats);
+    };
+    check();
+  }, [user, conversations]);
+
+  // Find tab
+  useEffect(() => { if (chatTab === 'find') loadFindData(); }, [chatTab, user]);
 
   const loadFindData = async () => {
     if (!user) return;
-    try {
-      const [regionalRes, followingRes, friendsRes] = await Promise.all([
-        supabase.from('profiles').select('*').neq('id', user.id).order('total_followers', { ascending: false }).limit(20),
-        supabase.from('follows').select('following_id, profiles:following_id(*)').eq('follower_id', user.id).limit(20),
-        supabase.from('friend_requests').select('sender_id, receiver_id').eq('status', 'accepted').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      ]);
-      let suggestions = regionalRes.data || [];
-      const userCountry = profile?.country || '';
-      if (userCountry) {
-        const regional = suggestions.filter(u => u.country === userCountry);
-        const others = suggestions.filter(u => u.country !== userCountry);
-        suggestions = [...regional, ...others];
-      }
-      setSuggestedUsers(suggestions.slice(0, 15));
-      const followingUsers: any[] = [];
-      followingRes.data?.forEach((f: any) => {
-        if (f.profiles?.id) followingUsers.push(f.profiles);
-      });
-      const friendIds = friendsRes.data?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || [];
-      if (friendIds.length > 0) {
-        const { data: friendProfiles } = await supabase.from('profiles').select('*').in('id', friendIds);
-        const all = [...(friendProfiles || []), ...followingUsers];
-        setNetworkUsers(all.filter((u, i, arr) => arr.findIndex(x => x.id === u.id) === i));
-      } else {
-        setNetworkUsers(followingUsers);
-      }
-    } catch (error) {
-      console.error('Error loading find data:', error);
+    const [regional, following, friends] = await Promise.all([
+      supabase.from('profiles').select('*').neq('id', user.id).order('total_followers', { ascending: false }).limit(20),
+      supabase.from('follows').select('following_id, profiles:following_id(*)').eq('follower_id', user.id).limit(20),
+      supabase.from('friend_requests').select('sender_id, receiver_id').eq('status', 'accepted').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+    ]);
+    let suggestions = regional.data || [];
+    const country = profile?.country || '';
+    if (country) {
+      const r = suggestions.filter(u => u.country === country);
+      const o = suggestions.filter(u => u.country !== country);
+      suggestions = [...r, ...o];
     }
+    setSuggestedUsers(suggestions.slice(0, 15));
+    const fUsers: any[] = [];
+    following.data?.forEach((f: any) => { if (f.profiles?.id) fUsers.push(f.profiles); });
+    const fIds = friends.data?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || [];
+    if (fIds.length > 0) {
+      const { data: fp } = await supabase.from('profiles').select('*').in('id', fIds);
+      const all = [...(fp || []), ...fUsers];
+      setNetworkUsers(all.filter((u, i, arr) => arr.findIndex(x => x.id === u.id) === i));
+    } else setNetworkUsers(fUsers);
   };
 
-  useEffect(() => {
-    if (userId) fetchMessages(userId);
-  }, [userId, fetchMessages]);
-
+  useEffect(() => { if (userId) fetchMessages(userId); }, [userId, fetchMessages]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
+  // User search
   useEffect(() => {
-    const searchUsers = async () => {
-      if (!userSearchQuery.trim()) { setSearchResults([]); return; }
+    if (!userSearchQuery.trim()) { setSearchResults([]); return; }
+    const t = setTimeout(async () => {
       const { data } = await supabase.from('profiles').select('id, name, username, avatar_url, country')
         .or(`name.ilike.%${userSearchQuery}%,username.ilike.%${userSearchQuery}%`)
         .neq('id', user?.id).limit(15);
       setSearchResults(data || []);
-    };
-    const timer = setTimeout(searchUsers, 300);
-    return () => clearTimeout(timer);
+    }, 300);
+    return () => clearTimeout(t);
   }, [userSearchQuery, user]);
 
-  useEffect(() => {
-    const stored = localStorage.getItem('archivedChats');
-    const storedPrivate = localStorage.getItem('privateChats');
-    if (stored) setArchivedChats(new Set(JSON.parse(stored)));
-    if (storedPrivate) setPrivateChats(new Set(JSON.parse(storedPrivate)));
-  }, []);
-
-  // Auto-archive chats from unfriended users
-  useEffect(() => {
-    if (!user || conversations.length === 0) return;
-    const checkFriendStatus = async () => {
-      const convUserIds = conversations.map(c => c.user_id);
-      const { data: friendData } = await supabase
-        .from('friend_requests').select('sender_id, receiver_id').eq('status', 'accepted')
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
-      const friendIds = new Set(friendData?.map(f => f.sender_id === user.id ? f.receiver_id : f.sender_id) || []);
-      const newArchived = new Set(archivedChats);
-      let changed = false;
-      convUserIds.forEach(uid => {
-        if (!friendIds.has(uid) && !newArchived.has(uid) && !privateChats.has(uid)) {
-          newArchived.add(uid); changed = true;
-        }
-      });
-      if (changed) saveArchivedChats(newArchived);
-    };
-    checkFriendStatus();
-  }, [user, conversations]);
-
-  const saveArchivedChats = (chats: Set<string>) => {
-    localStorage.setItem('archivedChats', JSON.stringify([...chats]));
-    setArchivedChats(chats);
-  };
-  const savePrivateChats = (chats: Set<string>) => {
-    localStorage.setItem('privateChats', JSON.stringify([...chats]));
-    setPrivateChats(chats);
+  // Helpers
+  const saveSet = (key: string, set: Set<string>, setter: (s: Set<string>) => void) => {
+    localStorage.setItem(key, JSON.stringify([...set]));
+    setter(set);
   };
 
-  const toggleArchive = (chatUserId: string) => {
-    const newArchived = new Set(archivedChats);
-    if (newArchived.has(chatUserId)) newArchived.delete(chatUserId);
-    else newArchived.add(chatUserId);
-    saveArchivedChats(newArchived);
+  const toggleInSet = (key: string, id: string, set: Set<string>, setter: (s: Set<string>) => void) => {
+    const n = new Set(set);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    saveSet(key, n, setter);
   };
 
-  const addToPrivate = (chatUserId: string) => {
-    savePrivateChats(new Set([...privateChats, chatUserId]));
-  };
-
-  const togglePrivate = (chatUserId: string) => {
-    const newPrivate = new Set(privateChats);
-    if (newPrivate.has(chatUserId)) newPrivate.delete(chatUserId);
-    else newPrivate.add(chatUserId);
-    savePrivateChats(newPrivate);
-  };
-
-  const toggleMuteChat = (chatUserId: string) => {
-    const newMuted = new Set(mutedChats);
-    if (newMuted.has(chatUserId)) newMuted.delete(chatUserId);
-    else newMuted.add(chatUserId);
-    setMutedChats(newMuted);
-    localStorage.setItem('mutedChats', JSON.stringify([...newMuted]));
-  };
-
-  const saveNickname = () => {
-    if (!currentChatUser) return;
-    const updated = { ...chatNicknames, [currentChatUser]: nicknameInput.trim() };
-    if (!nicknameInput.trim()) delete updated[currentChatUser];
-    setChatNicknames(updated);
-    localStorage.setItem('chatNicknames', JSON.stringify(updated));
-    setShowNicknameDialog(false);
-    setNicknameInput('');
-  };
-
-  const handlePrivateAccess = (chatUserId: string) => {
-    if (privateUnlocked) { navigate(`/chat/${chatUserId}`); return; }
-    setPendingPrivateChat(chatUserId);
-    setShowPrivateAuth(true);
-  };
-
-  const verifyPrivatePassword = (input: string) => {
-    const saved = localStorage.getItem('privateChatPassword');
-    if (!saved) {
-      localStorage.setItem('privateChatPassword', input);
-      setShowPrivateAuth(false); setPrivateUnlocked(true);
-      if (pendingPrivateChat) navigate(`/chat/${pendingPrivateChat}`);
-    } else if (input === saved) {
-      setShowPrivateAuth(false); setPrivateUnlocked(true);
-      if (pendingPrivateChat) navigate(`/chat/${pendingPrivateChat}`);
-    } else {
-      toast.error('Incorrect password');
+  const saveChatTheme = (theme: string) => {
+    setChatTheme(theme);
+    if (currentChatUser) {
+      const themes = JSON.parse(localStorage.getItem('chatThemes') || '{}');
+      themes[currentChatUser] = theme;
+      localStorage.setItem('chatThemes', JSON.stringify(themes));
     }
   };
 
-  const deleteEntireChat = async (chatUserId: string) => {
-    if (!user) return;
-    await supabase.from('messages').delete()
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${chatUserId}),and(sender_id.eq.${chatUserId},receiver_id.eq.${user.id})`);
-    navigate('/chat');
+  const saveChatGhostMode = (mode: number) => {
+    setGhostMode(mode);
+    if (currentChatUser) {
+      const modes = JSON.parse(localStorage.getItem('chatGhostModes') || '{}');
+      modes[currentChatUser] = mode;
+      localStorage.setItem('chatGhostModes', JSON.stringify(modes));
+    }
   };
 
+  const saveNickname = (name: string) => {
+    if (!currentChatUser) return;
+    const updated = { ...chatNicknames, [currentChatUser]: name };
+    if (!name) delete updated[currentChatUser];
+    setChatNicknames(updated);
+    localStorage.setItem('chatNicknames', JSON.stringify(updated));
+  };
+
+  // File handling
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const validFiles: File[] = [];
-    const previews: string[] = [];
-    files.forEach(file => {
-      if (file.size > MAX_FILE_SIZE) { toast.error(`${file.name} too large. Max 10MB`); return; }
-      validFiles.push(file);
-      if (file.type.startsWith('image') || file.type.startsWith('video')) previews.push(URL.createObjectURL(file));
+    const valid: File[] = []; const previews: string[] = [];
+    files.forEach(f => {
+      if (f.size > MAX_FILE_SIZE) { toast.error(`${f.name} too large`); return; }
+      valid.push(f);
+      if (f.type.startsWith('image') || f.type.startsWith('video')) previews.push(URL.createObjectURL(f));
     });
-    setMediaFiles(prev => [...prev, ...validFiles]);
-    setMediaPreviews(prev => [...prev, ...previews]);
+    setMediaFiles(p => [...p, ...valid]);
+    setMediaPreviews(p => [...p, ...previews]);
   };
 
-  const removeMedia = (index: number) => {
-    if (mediaPreviews[index]) URL.revokeObjectURL(mediaPreviews[index]);
-    setMediaFiles(prev => prev.filter((_, i) => i !== index));
-    setMediaPreviews(prev => prev.filter((_, i) => i !== index));
+  const removeMedia = (i: number) => {
+    if (mediaPreviews[i]) URL.revokeObjectURL(mediaPreviews[i]);
+    setMediaFiles(p => p.filter((_, idx) => idx !== i));
+    setMediaPreviews(p => p.filter((_, idx) => idx !== i));
   };
 
   const clearAllMedia = () => {
-    mediaPreviews.forEach(url => URL.revokeObjectURL(url));
+    mediaPreviews.forEach(u => URL.revokeObjectURL(u));
     setMediaFiles([]); setMediaPreviews([]);
   };
 
+  // Send
   const handleSend = async () => {
     if ((!newMessage.trim() && mediaFiles.length === 0) || !currentChatUser) return;
+
+    // Edit mode
+    if (editingMsg) {
+      await supabase.from('messages').update({ content: newMessage, edited_at: new Date().toISOString() }).eq('id', editingMsg.id);
+      setEditingMsg(null);
+      setNewMessage('');
+      if (currentChatUser) fetchMessages(currentChatUser);
+      return;
+    }
+
     setUploading(true); setUploadIndex(0);
     try {
       const imageFiles = mediaFiles.filter(f => f.type.startsWith('image'));
       const otherFiles = mediaFiles.filter(f => !f.type.startsWith('image'));
 
       if (imageFiles.length > 0) {
-        const imageUrls: string[] = [];
+        const urls: string[] = [];
         for (let i = 0; i < imageFiles.length; i++) {
           setUploadIndex(i);
-          const file = imageFiles[i];
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${user?.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-          const { error: uploadError } = await supabase.storage
-            .from('chat-media').upload(fileName, file, { cacheControl: '31536000', contentType: file.type });
-          if (uploadError) continue;
-          const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
-          imageUrls.push(publicUrl);
+          const f = imageFiles[i];
+          const ext = f.name.split('.').pop();
+          const name = `${user?.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
+          const { error } = await supabase.storage.from('chat-media').upload(name, f, { cacheControl: '31536000', contentType: f.type });
+          if (error) continue;
+          urls.push(supabase.storage.from('chat-media').getPublicUrl(name).data.publicUrl);
         }
-        if (imageUrls.length > 0) {
-          const mediaUrl = imageUrls.length === 1 ? imageUrls[0] : JSON.stringify(imageUrls);
-          const mediaType = imageUrls.length === 1 ? 'image' : 'images';
-          await sendMessage(currentChatUser, '', mediaUrl, mediaType);
+        if (urls.length > 0) {
+          await sendMessage(currentChatUser, '', urls.length === 1 ? urls[0] : JSON.stringify(urls), urls.length === 1 ? 'image' : 'images');
         }
       }
 
       for (let i = 0; i < otherFiles.length; i++) {
         setUploadIndex(imageFiles.length + i);
-        const file = otherFiles[i];
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user?.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('chat-media').upload(fileName, file, { cacheControl: '31536000', contentType: file.type });
-        if (uploadError) continue;
-        const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
-        const mediaType = file.type.startsWith('video') ? 'video' : 'document';
-        await sendMessage(currentChatUser, '', publicUrl, mediaType);
+        const f = otherFiles[i];
+        const ext = f.name.split('.').pop();
+        const name = `${user?.id}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
+        const { error } = await supabase.storage.from('chat-media').upload(name, f, { cacheControl: '31536000', contentType: f.type });
+        if (error) continue;
+        const url = supabase.storage.from('chat-media').getPublicUrl(name).data.publicUrl;
+        await sendMessage(currentChatUser, '', url, f.type.startsWith('video') ? 'video' : 'document');
       }
 
       if (newMessage.trim()) await sendMessage(currentChatUser, newMessage);
       setNewMessage('');
+      setReplyTo(null);
       clearAllMedia();
     } catch { toast.error('Failed to send'); }
-    finally { setUploading(false); setUploadIndex(0); }
+    finally { setUploading(false); }
   };
 
-  const handleReactToMessage = (messageId: string, emoji: string) => {
-    setMessageReactions(prev => {
-      const msgReactions = { ...(prev[messageId] || {}) };
-      msgReactions[emoji] = (msgReactions[emoji] || 0) + 1;
-      return { ...prev, [messageId]: msgReactions };
-    });
-  };
-
-  const togglePinMessage = (messageId: string) => {
-    setPinnedMessages(prev => {
-      const next = new Set(prev);
-      if (next.has(messageId)) next.delete(messageId);
-      else next.add(messageId);
-      return next;
-    });
-  };
-
-  // Voice Recording
+  // Voice recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
       audioChunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      mediaRecorder.onstop = () => {
-        setAudioBlob(new Blob(audioChunksRef.current, { type: 'audio/webm' }));
-        stream.getTracks().forEach(t => t.stop());
-      };
-      mediaRecorder.start();
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = () => { setAudioBlob(new Blob(audioChunksRef.current, { type: 'audio/webm' })); stream.getTracks().forEach(t => t.stop()); };
+      mr.start();
       setIsRecording(true); setRecordingTime(0);
       recordingIntervalRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000);
     } catch { toast.error('Microphone access denied'); }
@@ -406,11 +361,10 @@ export default function Chat() {
     if (!audioBlob || !currentChatUser || !user) return;
     setUploading(true);
     try {
-      const fileName = `${user.id}/${Date.now()}_voice.webm`;
-      const { error } = await supabase.storage.from('chat-media').upload(fileName, audioBlob, { contentType: 'audio/webm' });
+      const name = `${user.id}/${Date.now()}_voice.webm`;
+      const { error } = await supabase.storage.from('chat-media').upload(name, audioBlob, { contentType: 'audio/webm' });
       if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('chat-media').getPublicUrl(fileName);
-      await sendMessage(currentChatUser, '🎤 Voice message', publicUrl, 'audio');
+      await sendMessage(currentChatUser, '🎤 Voice message', supabase.storage.from('chat-media').getPublicUrl(name).data.publicUrl, 'audio');
       setAudioBlob(null); setRecordingTime(0);
     } catch { toast.error('Failed to send voice message'); }
     finally { setUploading(false); }
@@ -418,32 +372,72 @@ export default function Chat() {
 
   const formatRecordingTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
-  const handleSendSticker = async (sticker: string) => {
-    if (!currentChatUser) return;
-    await sendMessage(currentChatUser, sticker);
-    setShowStickers(false);
+  const handleReactToMessage = (messageId: string, emoji: string) => {
+    setMessageReactions(prev => {
+      const r = { ...(prev[messageId] || {}) };
+      r[emoji] = (r[emoji] || 0) + 1;
+      return { ...prev, [messageId]: r };
+    });
+  };
+
+  const togglePinMessage = (id: string) => {
+    setPinnedMessages(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const startNewChat = (targetUserId: string) => { setChatTab('main'); navigate(`/chat/${targetUserId}`); };
-  const handleBackToChats = () => navigate('/chat', { replace: true });
+  const startNewChat = (id: string) => { setChatTab('main'); navigate(`/chat/${id}`); };
+  const handleBackToChats = () => { setReplyTo(null); setEditingMsg(null); navigate('/chat', { replace: true }); };
 
+  const deleteForEveryone = async (msgId: string) => {
+    await supabase.from('messages').delete().eq('id', msgId);
+  };
+
+  const deleteForMe = (msgId: string) => {
+    // Just remove from local state
+    deleteMessage(msgId);
+  };
+
+  const deleteEntireChat = async (chatUserId: string) => {
+    if (!user) return;
+    await supabase.from('messages').delete()
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${chatUserId}),and(sender_id.eq.${chatUserId},receiver_id.eq.${user.id})`);
+    navigate('/chat');
+  };
+
+  const handlePrivateAccess = (chatUserId: string) => {
+    if (privateUnlocked) { navigate(`/chat/${chatUserId}`); return; }
+    setPendingPrivateChat(chatUserId);
+    setShowPrivateAuth(true);
+  };
+
+  const verifyPrivatePassword = (input: string) => {
+    const saved = localStorage.getItem('privateChatPassword');
+    if (!saved) {
+      localStorage.setItem('privateChatPassword', input);
+      setShowPrivateAuth(false); setPrivateUnlocked(true);
+      if (pendingPrivateChat) navigate(`/chat/${pendingPrivateChat}`);
+    } else if (input === saved) {
+      setShowPrivateAuth(false); setPrivateUnlocked(true);
+      if (pendingPrivateChat) navigate(`/chat/${pendingPrivateChat}`);
+    } else toast.error('Incorrect password');
+  };
+
+  // Derived
   const selectedConversation = conversations.find(c => c.user_id === currentChatUser);
-  const displayName = currentChatUser && chatNicknames[currentChatUser] 
-    ? chatNicknames[currentChatUser] 
-    : selectedConversation?.user_name;
-  
+  const displayName = currentChatUser && chatNicknames[currentChatUser] ? chatNicknames[currentChatUser] : selectedConversation?.user_name;
+  const pinnedMsgs = messages.filter(m => pinnedMessages.has(m.id));
+
   const filteredConversations = conversations.filter(conv => {
-    const matchesSearch = !searchQuery || conv.user_name.toLowerCase().includes(searchQuery.toLowerCase());
-    const isArchived = archivedChats.has(conv.user_id);
-    const isPrivate = privateChats.has(conv.user_id);
-    if (chatTab === 'archived') return matchesSearch && isArchived;
-    if (chatTab === 'private') return matchesSearch && isPrivate;
-    if (chatTab === 'main') return matchesSearch && !isArchived && !isPrivate;
-    return matchesSearch;
+    const match = !searchQuery || conv.user_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const isA = archivedChats.has(conv.user_id);
+    const isP = privateChats.has(conv.user_id);
+    if (chatTab === 'archived') return match && isA;
+    if (chatTab === 'private') return match && isP;
+    if (chatTab === 'main') return match && !isA && !isP;
+    return match;
   });
 
   const mediaMessages = messages.filter(m => m.media_url);
@@ -452,13 +446,6 @@ export default function Chat() {
   const audioMessages = mediaMessages.filter(m => m.media_type === 'audio');
   const fileMessages = mediaMessages.filter(m => m.media_type === 'document');
 
-  const pinnedMsgs = messages.filter(m => pinnedMessages.has(m.id));
-
-  const applyTheme = (themeId: string) => {
-    setChatTheme(themeId);
-    localStorage.setItem('chatTheme', themeId);
-  };
-
   // ─────── FULL SCREEN CHAT VIEW ───────
   if (currentChatUser) {
     return (
@@ -466,7 +453,7 @@ export default function Chat() {
         <WatermarkOverlay username={username} />
         {isBlurred && <BlurOverlay />}
 
-        {/* Chat Header */}
+        {/* Header */}
         <div className="px-3 py-2.5 border-b border-border/30 flex items-center gap-2.5 bg-card/60 backdrop-blur-md shrink-0 sticky top-0 z-30">
           <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full" onClick={handleBackToChats}>
             <ArrowLeft className="h-5 w-5" />
@@ -481,129 +468,27 @@ export default function Chat() {
               {chatNicknames[currentChatUser] && (
                 <span className="text-[9px] text-muted-foreground">({selectedConversation?.user_name})</span>
               )}
-              {ghostMode && (
-                <p className="text-[9px] text-orange-400 animate-pulse leading-tight">
-                  Ghost • {GHOST_MODES.find(g => g.value === ghostMode)?.label}
-                </p>
+              {ghostMode > 0 && (
+                <p className="text-[9px] text-orange-400 animate-pulse">Ghost</p>
               )}
-              {mutedChats.has(currentChatUser) && (
-                <BellOff className="w-2.5 h-2.5 text-muted-foreground" />
-              )}
+              {mutedChats.has(currentChatUser) && <BellOff className="w-2.5 h-2.5 text-muted-foreground" />}
             </div>
           </div>
           
           <div className="flex items-center gap-0.5">
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full"
-              onClick={() => toast.info('Voice call starting...')}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setCallState({ open: true, isVideo: false })}>
               <Phone className="w-[18px] h-[18px] text-emerald-500" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full"
-              onClick={() => toast.info('Video call starting...')}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setCallState({ open: true, isVideo: true })}>
               <VideoIcon className="w-[18px] h-[18px] text-blue-500" />
             </Button>
-            
-            {/* ── Messenger-style Three-dots Menu ── */}
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                  <MoreVertical className="w-[18px] h-[18px]" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 z-[100] bg-popover shadow-xl border-border rounded-2xl p-1.5 max-h-[70vh] overflow-y-auto">
-                
-                {/* ── Profile & Identity ── */}
-                <DropdownMenuLabel className="text-[10px] text-muted-foreground px-3 py-1">Profile</DropdownMenuLabel>
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => navigate(`/profile/${currentChatUser}`)}>
-                  <User className="w-4 h-4" />View Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => { setNicknameInput(chatNicknames[currentChatUser] || ''); setShowNicknameDialog(true); }}>
-                  <Edit3 className="w-4 h-4" />Nicknames
-                </DropdownMenuItem>
-                
-                <DropdownMenuSeparator className="my-1" />
-                
-                {/* ── Customization ── */}
-                <DropdownMenuLabel className="text-[10px] text-muted-foreground px-3 py-1">Customization</DropdownMenuLabel>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="rounded-xl py-2.5 px-3 gap-3"><Palette className="w-4 h-4 mr-2" />Chat Theme</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="rounded-xl z-[110] bg-popover">
-                    {CHAT_THEMES.map((theme) => (
-                      <DropdownMenuItem key={theme.id} onClick={() => applyTheme(theme.id)} className="rounded-lg gap-2">
-                        <div className={cn("w-4 h-4 rounded-full", theme.bubble)} />
-                        {theme.label}
-                        {chatTheme === theme.id && <span className="ml-auto text-primary text-xs">✓</span>}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="rounded-xl py-2.5 px-3 gap-3"><Smile className="w-4 h-4 mr-2" />Quick Reactions</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="rounded-xl z-[110] bg-popover">
-                    <div className="p-2 grid grid-cols-3 gap-1">
-                      {QUICK_REACTIONS.map(emoji => (
-                        <button key={emoji} className="text-2xl p-2 rounded-lg hover:bg-muted transition-colors" onClick={() => {
-                          if (messages.length > 0) handleReactToMessage(messages[messages.length - 1].id, emoji);
-                        }}>{emoji}</button>
-                      ))}
-                    </div>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => setShowMusicPlayer(true)}>
-                  <Music className="w-4 h-4" />Shared Sound
-                </DropdownMenuItem>
-                
-                <DropdownMenuSeparator className="my-1" />
-                
-                {/* ── Messages & Media ── */}
-                <DropdownMenuLabel className="text-[10px] text-muted-foreground px-3 py-1">Messages & Media</DropdownMenuLabel>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="rounded-xl py-2.5 px-3 gap-3"><Ghost className="w-4 h-4 mr-2" />Disappearing Messages</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="rounded-xl z-[110] bg-popover">
-                    {GHOST_MODES.map((mode) => (
-                      <DropdownMenuItem key={mode.value} onClick={() => setGhostMode(mode.value)} className="rounded-lg gap-2">
-                        <span>{mode.icon}</span>{mode.label}
-                        {ghostMode === mode.value && <span className="ml-auto text-primary text-xs">✓</span>}
-                      </DropdownMenuItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setGhostMode(null)} className="rounded-lg gap-2">
-                      Off {!ghostMode && <span className="ml-auto text-primary text-xs">✓</span>}
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => setShowMediaGallery(true)}>
-                  <Image className="w-4 h-4" />Media, Files & Links
-                </DropdownMenuItem>
-                
-                <DropdownMenuSeparator className="my-1" />
-                
-                {/* ── Notifications & Privacy ── */}
-                <DropdownMenuLabel className="text-[10px] text-muted-foreground px-3 py-1">Privacy</DropdownMenuLabel>
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => toggleMuteChat(currentChatUser)}>
-                  {mutedChats.has(currentChatUser) ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-                  {mutedChats.has(currentChatUser) ? 'Unmute Notifications' : 'Mute Notifications'}
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => toggleArchive(currentChatUser)}>
-                  <Archive className="w-4 h-4" />{archivedChats.has(currentChatUser) ? 'Unarchive' : 'Archive Chat'}
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => togglePrivate(currentChatUser)}>
-                  <Lock className="w-4 h-4" />{privateChats.has(currentChatUser) ? 'Remove from Private' : 'Add to Private'}
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => toast.info('Group creation coming soon!')}>
-                  <Users className="w-4 h-4" />Create Group Chat
-                </DropdownMenuItem>
-                
-                <DropdownMenuSeparator className="my-1" />
-                
-                <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer text-destructive focus:text-destructive" onClick={() => deleteEntireChat(currentChatUser)}>
-                  <Trash2 className="w-4 h-4" />Delete Conversation
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setShowSettings(true)}>
+              <MoreVertical className="w-[18px] h-[18px]" />
+            </Button>
           </div>
         </div>
 
-        {/* Pinned Messages */}
+        {/* Pinned */}
         {pinnedMsgs.length > 0 && (
           <div className="px-3 py-1.5 bg-primary/5 border-b border-border/30">
             <div className="flex items-center gap-2 text-xs">
@@ -614,17 +499,18 @@ export default function Chat() {
           </div>
         )}
 
-        {/* Messages Area */}
+        {/* Messages */}
         <ScrollArea className="flex-1 p-3">
           <div className="space-y-3 max-w-2xl mx-auto">
             {messages.map((msg) => {
               const isOwn = msg.sender_id === user?.id;
               const reactions = messageReactions[msg.id] || {};
               const isPinned = pinnedMessages.has(msg.id);
+              const isEdited = !!(msg as any).edited_at;
               
               return (
                 <div key={msg.id} className={cn("flex", isOwn ? 'justify-end' : 'justify-start')}>
-                  <div className={cn("max-w-[80%] relative group", isOwn ? 'order-2' : '')}>
+                  <div className={cn("max-w-[80%] relative group")}>
                     {msg.is_forwarded && (
                       <p className="text-[10px] text-muted-foreground/60 mb-0.5 flex items-center gap-1 italic">
                         <Forward className="w-2.5 h-2.5" /> Forwarded
@@ -638,64 +524,41 @@ export default function Chat() {
                         : cn('bg-muted', !msg.media_url && 'rounded-bl-md'),
                       isPinned && 'ring-1 ring-primary/30'
                     )}>
-                      {/* Multi-image grid */}
+                      {/* Multi-image */}
                       {msg.media_url && (msg.media_type === 'image' || msg.media_type === 'images') && (() => {
                         let urls: string[] = [];
-                        try {
-                          if (msg.media_type === 'images') urls = JSON.parse(msg.media_url!);
-                          else urls = [msg.media_url!];
-                        } catch { urls = [msg.media_url!]; }
+                        try { urls = msg.media_type === 'images' ? JSON.parse(msg.media_url!) : [msg.media_url!]; } catch { urls = [msg.media_url!]; }
                         return <ChatImageGrid urls={urls} isOwn={isOwn} />;
                       })()}
-                      {msg.media_url && msg.media_type === 'video' && (
-                        <ChatVideoPlayer src={msg.media_url} />
-                      )}
+                      {msg.media_url && msg.media_type === 'video' && <ChatVideoPlayer src={msg.media_url} />}
                       {msg.media_url && msg.media_type === 'audio' && (
-                        <div className="p-2">
-                          <audio src={msg.media_url} controls className="w-full max-w-[260px]" />
-                        </div>
+                        <div className="p-2"><audio src={msg.media_url} controls className="w-full max-w-[260px]" /></div>
                       )}
                       {msg.media_url && msg.media_type === 'document' && (
-                        <div className="p-3">
-                          <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm underline">
-                            <Paperclip className="w-4 h-4" /> View Document
-                          </a>
-                        </div>
+                        <div className="p-3"><a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm underline"><Paperclip className="w-4 h-4" /> View Document</a></div>
                       )}
-
                       {msg.content && isSharedPostMessage(msg.content) && (() => {
                         const postId = extractInternalPostId(msg.content);
                         return postId ? <SharedPostPreview postId={postId} className="m-1" /> : null;
                       })()}
-
                       {msg.content && !msg.content.startsWith('📎 ') && msg.content !== '🎤 Voice message' && msg.content.trim() !== '' && msg.content.trim() !== ' ' && !isSharedPostMessage(msg.content) && (
-                        <p className={cn(
-                          "text-sm break-words leading-relaxed",
-                          msg.media_url ? "px-3.5 py-2" : ""
-                        )}>{msg.content}</p>
+                        <p className={cn("text-sm break-words leading-relaxed", msg.media_url ? "px-3.5 py-2" : "")}>{msg.content}</p>
                       )}
-                      
-                      {msg.content && !isSharedPostMessage(msg.content) && extractUrls(msg.content).slice(0, 1).map((url) => (
+                      {msg.content && !isSharedPostMessage(msg.content) && extractUrls(msg.content).slice(0, 1).map(url => (
                         <LinkPreviewCard key={url} url={url} className="mt-1 mx-1 mb-1" />
                       ))}
-                      
-                      <EmojiReactionPicker 
-                        reactions={reactions}
-                        onReact={(emoji) => handleReactToMessage(msg.id, emoji)}
-                        isOwn={isOwn}
-                      />
+                      <EmojiReactionPicker reactions={reactions} onReact={emoji => handleReactToMessage(msg.id, emoji)} isOwn={isOwn} />
                     </div>
 
-                    {/* Message meta + actions */}
+                    {/* Meta */}
                     <div className="flex items-center gap-1.5 mt-1 px-1">
                       <p className="text-[10px] text-muted-foreground">
                         {formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}
                       </p>
-                      {isOwn && (
-                        msg.is_read 
-                          ? <CheckCheck className="w-3.5 h-3.5 text-primary" />
-                          : <Check className="w-3.5 h-3.5 text-muted-foreground" />
-                      )}
+                      {isEdited && <span className="text-[9px] text-muted-foreground italic">edited</span>}
+                      {isOwn && (msg.is_read ? <CheckCheck className="w-3.5 h-3.5 text-primary" /> : <Check className="w-3.5 h-3.5 text-muted-foreground" />)}
+                      
+                      {/* Message actions */}
                       <DropdownMenu modal={false}>
                         <DropdownMenuTrigger asChild>
                           <button className="p-1 rounded-full hover:bg-muted/50 ml-auto opacity-60 hover:opacity-100 transition-opacity">
@@ -703,7 +566,7 @@ export default function Chat() {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align={isOwn ? 'end' : 'start'} side="top" sideOffset={4} className="w-48 rounded-2xl shadow-xl border-border/40 p-1 z-[100] bg-popover">
-                          {/* Quick Reactions Row */}
+                          {/* Quick reactions */}
                           <div className="flex items-center justify-around px-2 py-1.5 border-b border-border/30 mb-1">
                             {QUICK_REACTIONS.map(emoji => (
                               <button key={emoji} className="text-lg hover:scale-125 transition-transform" onClick={() => handleReactToMessage(msg.id, emoji)}>
@@ -711,21 +574,32 @@ export default function Chat() {
                               </button>
                             ))}
                           </div>
+                          <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => {
+                            setReplyTo({ id: msg.id, content: msg.content || '', senderName: isOwn ? 'You' : displayName || '' });
+                          }}>
+                            <CornerUpLeft className="w-4 h-4" />Reply
+                          </DropdownMenuItem>
                           <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => togglePinMessage(msg.id)}>
                             <Pin className={cn("w-4 h-4", isPinned && "text-primary fill-primary")} />
                             {isPinned ? 'Unpin' : 'Pin'}
                           </DropdownMenuItem>
                           <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => navigator.clipboard.writeText(msg.content || '')}>
-                            <Reply className="w-4 h-4" />Copy Text
+                            <Reply className="w-4 h-4" />Copy
                           </DropdownMenuItem>
                           <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => setForwardMsg({ content: msg.content || '', mediaUrl: msg.media_url || undefined, mediaType: msg.media_type || undefined })}>
                             <Forward className="w-4 h-4" />Forward
                           </DropdownMenuItem>
                           {isOwn && (
                             <>
+                              <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer" onClick={() => { setEditingMsg({ id: msg.id, content: msg.content || '' }); setNewMessage(msg.content || ''); }}>
+                                <Pencil className="w-4 h-4" />Edit
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer text-destructive focus:text-destructive" onClick={() => deleteMessage(msg.id)}>
-                                <Trash2 className="w-4 h-4" />Delete
+                              <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer text-destructive focus:text-destructive" onClick={() => deleteForMe(msg.id)}>
+                                <Trash2 className="w-4 h-4" />Delete for me
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="rounded-xl py-2.5 px-3 gap-3 text-sm cursor-pointer text-destructive focus:text-destructive" onClick={() => deleteForEveryone(msg.id)}>
+                                <Trash2 className="w-4 h-4" />Delete for everyone
                               </DropdownMenuItem>
                             </>
                           )}
@@ -740,6 +614,20 @@ export default function Chat() {
           </div>
         </ScrollArea>
 
+        {/* Reply / Edit banner */}
+        {(replyTo || editingMsg) && (
+          <div className="px-3 py-2 border-t border-border/30 bg-card/60 flex items-center gap-2">
+            <div className="w-1 h-8 rounded-full bg-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-primary font-medium">{editingMsg ? 'Editing message' : `Replying to ${replyTo?.senderName}`}</p>
+              <p className="text-xs text-muted-foreground truncate">{editingMsg?.content || replyTo?.content}</p>
+            </div>
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full shrink-0" onClick={() => { setReplyTo(null); setEditingMsg(null); setNewMessage(''); }}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
         {/* Media Preview */}
         {mediaPreviews.length > 0 && (
           <div className="p-2.5 border-t border-border/20 bg-card/40 backdrop-blur-sm">
@@ -747,9 +635,7 @@ export default function Chat() {
               {mediaPreviews.map((preview, i) => (
                 <div key={i} className="relative shrink-0">
                   {mediaFiles[i]?.type.startsWith('video') ? (
-                    <div className="h-16 w-16 rounded-xl bg-muted flex items-center justify-center">
-                      <VideoIcon className="w-6 h-6 text-muted-foreground" />
-                    </div>
+                    <div className="h-16 w-16 rounded-xl bg-muted flex items-center justify-center"><VideoIcon className="w-6 h-6 text-muted-foreground" /></div>
                   ) : (
                     <img src={preview} alt="" className="h-16 w-16 object-cover rounded-xl" />
                   )}
@@ -759,16 +645,12 @@ export default function Chat() {
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1">{mediaFiles.length} file{mediaFiles.length > 1 ? 's' : ''}</p>
           </div>
         )}
 
-        {/* Upload Progress */}
-        {uploading && mediaFiles.length > 0 && (
-          <UploadProgressBar filesCount={mediaFiles.length} currentIndex={uploadIndex} />
-        )}
+        {uploading && mediaFiles.length > 0 && <UploadProgressBar filesCount={mediaFiles.length} currentIndex={uploadIndex} />}
 
-        {/* Voice Recording UI */}
+        {/* Voice Recording */}
         {(isRecording || audioBlob) && (
           <div className="p-3 border-t border-border/30 flex items-center gap-3 bg-destructive/5">
             <div className="flex-1 flex items-center gap-2">
@@ -786,7 +668,7 @@ export default function Chat() {
           </div>
         )}
 
-        {/* Input Area */}
+        {/* Input */}
         {!isRecording && !audioBlob && (
           <div className="p-2.5 border-t border-border/30 flex items-center gap-1.5 bg-card/60 backdrop-blur-md">
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" multiple onChange={handleFileSelect} />
@@ -799,14 +681,14 @@ export default function Chat() {
               </Button>
               {showStickers && (
                 <div className="absolute bottom-full left-0 mb-2 p-2 bg-card border border-border rounded-xl grid grid-cols-4 gap-1 z-10 shadow-lg">
-                  {STICKERS.map((s) => (
-                    <button key={s} className="text-xl p-1 hover:bg-muted rounded" onClick={() => handleSendSticker(s)}>{s}</button>
+                  {STICKERS.map(s => (
+                    <button key={s} className="text-xl p-1 hover:bg-muted rounded" onClick={() => { sendMessage(currentChatUser, s); setShowStickers(false); }}>{s}</button>
                   ))}
                 </div>
               )}
             </div>
-            <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyPress={handleKeyPress}
-              placeholder="Message..." className="flex-1 rounded-full h-9" disabled={uploading} />
+            <Input value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyPress={handleKeyPress}
+              placeholder={editingMsg ? "Edit message..." : "Message..."} className="flex-1 rounded-full h-9" disabled={uploading} />
             <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9 rounded-full" onClick={startRecording}>
               <Mic className="w-5 h-5" />
             </Button>
@@ -816,13 +698,11 @@ export default function Chat() {
           </div>
         )}
 
-        {/* Media Gallery Dialog - Enhanced with Files tab */}
+        {/* Media Gallery Dialog */}
         <Dialog open={showMediaGallery} onOpenChange={setShowMediaGallery}>
           <DialogContent className="max-w-lg max-h-[80vh]">
-            <DialogHeader>
-              <DialogTitle>Media, Files & Links</DialogTitle>
-            </DialogHeader>
-            <Tabs value={mediaGalleryTab} onValueChange={(v) => setMediaGalleryTab(v as any)}>
+            <DialogHeader><DialogTitle>Media, Files & Links</DialogTitle></DialogHeader>
+            <Tabs value={mediaGalleryTab} onValueChange={v => setMediaGalleryTab(v as any)}>
               <TabsList className="w-full grid grid-cols-4">
                 <TabsTrigger value="images" className="text-xs">Photos ({imageMessages.length})</TabsTrigger>
                 <TabsTrigger value="videos" className="text-xs">Videos ({videoMessages.length})</TabsTrigger>
@@ -832,7 +712,7 @@ export default function Chat() {
               <TabsContent value="images">
                 <ScrollArea className="h-[50vh]">
                   <div className="grid grid-cols-3 gap-2 p-1">
-                    {imageMessages.map((msg) => (
+                    {imageMessages.map(msg => (
                       <div key={msg.id} className="aspect-square rounded-lg overflow-hidden bg-muted">
                         <img src={msg.media_url || ''} alt="" className="w-full h-full object-cover" draggable={false} />
                       </div>
@@ -844,7 +724,7 @@ export default function Chat() {
               <TabsContent value="videos">
                 <ScrollArea className="h-[50vh]">
                   <div className="grid grid-cols-2 gap-2 p-1">
-                    {videoMessages.map((msg) => (
+                    {videoMessages.map(msg => (
                       <div key={msg.id} className="aspect-video rounded-lg overflow-hidden bg-muted">
                         <video src={msg.media_url || ''} className="w-full h-full object-cover" controls />
                       </div>
@@ -856,12 +736,10 @@ export default function Chat() {
               <TabsContent value="audio">
                 <ScrollArea className="h-[50vh]">
                   <div className="space-y-2 p-1">
-                    {audioMessages.map((msg) => (
+                    {audioMessages.map(msg => (
                       <div key={msg.id} className="p-3 rounded-lg bg-muted">
                         <audio src={msg.media_url || ''} controls className="w-full" />
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}
-                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-1">{formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}</p>
                       </div>
                     ))}
                   </div>
@@ -871,14 +749,12 @@ export default function Chat() {
               <TabsContent value="files">
                 <ScrollArea className="h-[50vh]">
                   <div className="space-y-2 p-1">
-                    {fileMessages.map((msg) => (
+                    {fileMessages.map(msg => (
                       <a key={msg.id} href={msg.media_url || ''} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors">
                         <Paperclip className="w-5 h-5 text-primary shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm truncate">Document</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}
-                          </p>
+                          <p className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(msg.created_at || ''), { addSuffix: true })}</p>
                         </div>
                       </a>
                     ))}
@@ -890,27 +766,38 @@ export default function Chat() {
           </DialogContent>
         </Dialog>
 
-        {/* Nickname Dialog */}
-        <Dialog open={showNicknameDialog} onOpenChange={setShowNicknameDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2"><Edit3 className="w-5 h-5" /> Set Nickname</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Set a nickname for {selectedConversation?.user_name}. Only you will see this.</p>
-              <Input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} placeholder="Enter nickname..." />
-              <div className="flex gap-2">
-                <Button onClick={saveNickname} className="flex-1">Save</Button>
-                {chatNicknames[currentChatUser] && (
-                  <Button variant="outline" onClick={() => { setNicknameInput(''); saveNickname(); }}>Remove</Button>
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Settings Sheet */}
+        <ChatSettingsSheet
+          open={showSettings}
+          onOpenChange={setShowSettings}
+          chatUserName={selectedConversation?.user_name || ''}
+          chatUserAvatar={selectedConversation?.user_avatar}
+          chatUserId={currentChatUser}
+          theme={chatTheme}
+          onThemeChange={saveChatTheme}
+          nickname={chatNicknames[currentChatUser] || ''}
+          onNicknameChange={saveNickname}
+          isMuted={mutedChats.has(currentChatUser)}
+          onMuteToggle={() => toggleInSet('mutedChats', currentChatUser, mutedChats, setMutedChats)}
+          isArchived={archivedChats.has(currentChatUser)}
+          onArchiveToggle={() => toggleInSet('archivedChats', currentChatUser, archivedChats, setArchivedChats)}
+          isPrivate={privateChats.has(currentChatUser)}
+          onPrivateToggle={() => toggleInSet('privateChats', currentChatUser, privateChats, setPrivateChats)}
+          ghostMode={ghostMode}
+          onGhostModeChange={saveChatGhostMode}
+          onViewProfile={() => { setShowSettings(false); navigate(`/profile/${currentChatUser}`); }}
+          onMediaGallery={() => { setShowSettings(false); setShowMediaGallery(true); }}
+          onMusicPlayer={() => { setShowSettings(false); setShowMusicPlayer(true); }}
+          onCreateGroup={() => toast.info('Group chat coming soon!')}
+          onDeleteChat={() => { setShowSettings(false); deleteEntireChat(currentChatUser); }}
+          onVoiceCall={() => { setShowSettings(false); setCallState({ open: true, isVideo: false }); }}
+          onVideoCall={() => { setShowSettings(false); setCallState({ open: true, isVideo: true }); }}
+          pinnedCount={pinnedMsgs.length}
+        />
 
         <SharedMusicPlayer isOpen={showMusicPlayer} onClose={() => setShowMusicPlayer(false)} partnerName={displayName || 'User'} />
-        <ForwardMessageDialog open={!!forwardMsg} onOpenChange={(open) => !open && setForwardMsg(null)} messageContent={forwardMsg?.content || ''} mediaUrl={forwardMsg?.mediaUrl} mediaType={forwardMsg?.mediaType} />
+        <ForwardMessageDialog open={!!forwardMsg} onOpenChange={open => !open && setForwardMsg(null)} messageContent={forwardMsg?.content || ''} mediaUrl={forwardMsg?.mediaUrl} mediaType={forwardMsg?.mediaType} />
+        <CallScreen open={callState.open} onClose={() => setCallState({ open: false, isVideo: false })} callerName={displayName || 'User'} callerAvatar={selectedConversation?.user_avatar} isVideo={callState.isVideo} />
       </div>
     );
   }
@@ -920,7 +807,7 @@ export default function Chat() {
     <div className="space-y-4 pb-20">
       <h1 className="text-xl font-bold flex items-center gap-2">💬 Messages</h1>
 
-      <Tabs value={chatTab} onValueChange={(v) => setChatTab(v as any)}>
+      <Tabs value={chatTab} onValueChange={v => setChatTab(v as any)}>
         <TabsList className="w-full grid grid-cols-4 h-auto p-0.5">
           <TabsTrigger value="main" className="text-[10px] py-1.5"><MessageCircle className="w-3 h-3 mr-0.5" />Main</TabsTrigger>
           <TabsTrigger value="find" className="text-[10px] py-1.5"><UserSearch className="w-3 h-3 mr-0.5" />Find</TabsTrigger>
@@ -931,7 +818,7 @@ export default function Chat() {
         <TabsContent value="main" className="mt-3 space-y-2">
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search chats..." className="pl-10" />
+            <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search chats..." className="pl-10" />
           </div>
           {filteredConversations.length === 0 ? (
             <Card className="glass-card">
@@ -941,49 +828,44 @@ export default function Chat() {
                 <Button variant="outline" size="sm" className="mt-3" onClick={() => setChatTab('find')}>Find People</Button>
               </CardContent>
             </Card>
-          ) : (
-            filteredConversations.map((conv) => (
-              <SwipeableChatCard key={conv.user_id} onSwipeLeft={() => toggleArchive(conv.user_id)} leftLabel="Archive">
-                <Card className="glass-card cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate(`/chat/${conv.user_id}`)}>
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={conv.user_avatar || undefined} />
-                      <AvatarFallback className="bg-primary/20">{conv.user_name?.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-semibold text-sm truncate">{chatNicknames[conv.user_id] || conv.user_name}</p>
-                          {mutedChats.has(conv.user_id) && <BellOff className="w-3 h-3 text-muted-foreground shrink-0" />}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground">{conv.last_message_time && formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: true })}</p>
+          ) : filteredConversations.map(conv => (
+            <SwipeableChatCard key={conv.user_id} onSwipeLeft={() => toggleInSet('archivedChats', conv.user_id, archivedChats, setArchivedChats)} leftLabel="Archive">
+              <Card className="glass-card cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => navigate(`/chat/${conv.user_id}`)}>
+                <CardContent className="p-3 flex items-center gap-3">
+                  <Avatar className="w-12 h-12">
+                    <AvatarImage src={conv.user_avatar || undefined} />
+                    <AvatarFallback className="bg-primary/20">{conv.user_name?.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-sm truncate">{chatNicknames[conv.user_id] || conv.user_name}</p>
+                        {mutedChats.has(conv.user_id) && <BellOff className="w-3 h-3 text-muted-foreground shrink-0" />}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
+                      <p className="text-[10px] text-muted-foreground">{conv.last_message_time && formatDistanceToNow(new Date(conv.last_message_time), { addSuffix: true })}</p>
                     </div>
-                    {conv.unread_count > 0 && <Badge variant="destructive" className="text-[10px] h-5 min-w-[20px] animate-scale-in">{conv.unread_count}</Badge>}
-                  </CardContent>
-                </Card>
-              </SwipeableChatCard>
-            ))
-          )}
+                    <p className="text-xs text-muted-foreground truncate">{conv.last_message}</p>
+                  </div>
+                  {conv.unread_count > 0 && <Badge variant="destructive" className="text-[10px] h-5 min-w-[20px] animate-scale-in">{conv.unread_count}</Badge>}
+                </CardContent>
+              </Card>
+            </SwipeableChatCard>
+          ))}
         </TabsContent>
 
         <TabsContent value="find" className="mt-3 space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} placeholder="Search by name or @username..." className="pl-10" />
+            <Input value={userSearchQuery} onChange={e => setUserSearchQuery(e.target.value)} placeholder="Search by name or @username..." className="pl-10" />
           </div>
           {searchResults.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Search Results</p>
-              {searchResults.map((u) => (
+              {searchResults.map(u => (
                 <Card key={u.id} className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => startNewChat(u.id)}>
                   <CardContent className="p-3 flex items-center gap-3">
                     <Avatar className="w-10 h-10"><AvatarImage src={u.avatar_url || undefined} /><AvatarFallback>{u.name?.[0]}</AvatarFallback></Avatar>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{u.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{u.username ? `@${u.username}` : u.country || 'Unknown'}</p>
-                    </div>
+                    <div className="flex-1"><p className="font-medium text-sm">{u.name}</p><p className="text-[10px] text-muted-foreground">{u.username ? `@${u.username}` : u.country || 'Unknown'}</p></div>
                     <MessageCircle className="w-4 h-4 text-primary" />
                   </CardContent>
                 </Card>
@@ -1003,7 +885,7 @@ export default function Chat() {
               {findSubTab === 'suggestions' && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">Regional & Popular Users</p>
-                  {suggestedUsers.map((u) => (
+                  {suggestedUsers.map(u => (
                     <Card key={u.id} className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => startNewChat(u.id)}>
                       <CardContent className="p-3 flex items-center gap-3">
                         <Avatar className="w-10 h-10"><AvatarImage src={u.avatar_url || undefined} /><AvatarFallback>{u.name?.[0]}</AvatarFallback></Avatar>
@@ -1018,7 +900,7 @@ export default function Chat() {
               {findSubTab === 'network' && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">Friends & Following</p>
-                  {networkUsers.map((u) => (
+                  {networkUsers.map(u => (
                     <Card key={u.id} className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => startNewChat(u.id)}>
                       <CardContent className="p-3 flex items-center gap-3">
                         <Avatar className="w-10 h-10"><AvatarImage src={u.avatar_url || undefined} /><AvatarFallback>{u.name?.[0]}</AvatarFallback></Avatar>
@@ -1040,8 +922,8 @@ export default function Chat() {
               <Archive className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
               <p className="text-muted-foreground">No archived chats</p>
             </CardContent></Card>
-          ) : filteredConversations.map((conv) => (
-            <SwipeableChatCard key={conv.user_id} onSwipeRight={() => toggleArchive(conv.user_id)} rightLabel="Unarchive">
+          ) : filteredConversations.map(conv => (
+            <SwipeableChatCard key={conv.user_id} onSwipeRight={() => toggleInSet('archivedChats', conv.user_id, archivedChats, setArchivedChats)} rightLabel="Unarchive">
               <Card className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => navigate(`/chat/${conv.user_id}`)}>
                 <CardContent className="p-3 flex items-center gap-3">
                   <Avatar className="w-12 h-12"><AvatarImage src={conv.user_avatar || undefined} /><AvatarFallback>{conv.user_name?.charAt(0)}</AvatarFallback></Avatar>
@@ -1057,24 +939,20 @@ export default function Chat() {
 
         <TabsContent value="private" className="mt-3 space-y-2">
           {!privateUnlocked && filteredConversations.length > 0 ? (
-            <Card className="glass-card">
-              <CardContent className="py-12 text-center">
-                <Lock className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground font-medium">Private Chats Locked</p>
-                <p className="text-xs text-muted-foreground mt-1">{filteredConversations.length} chat(s) protected</p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={() => { setPendingPrivateChat(null); setShowPrivateAuth(true); }}>
-                  Unlock
-                </Button>
-              </CardContent>
-            </Card>
+            <Card className="glass-card"><CardContent className="py-12 text-center">
+              <Lock className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+              <p className="text-muted-foreground font-medium">Private Chats Locked</p>
+              <p className="text-xs text-muted-foreground mt-1">{filteredConversations.length} chat(s) protected</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => { setPendingPrivateChat(null); setShowPrivateAuth(true); }}>Unlock</Button>
+            </CardContent></Card>
           ) : filteredConversations.length === 0 ? (
             <Card className="glass-card"><CardContent className="py-12 text-center">
               <Lock className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
               <p className="text-muted-foreground">No private chats</p>
               <p className="text-xs text-muted-foreground mt-1">Add chats from the ⋮ menu</p>
             </CardContent></Card>
-          ) : filteredConversations.map((conv) => (
-            <SwipeableChatCard key={conv.user_id} onSwipeRight={() => togglePrivate(conv.user_id)} rightLabel="Unprivate">
+          ) : filteredConversations.map(conv => (
+            <SwipeableChatCard key={conv.user_id} onSwipeRight={() => toggleInSet('privateChats', conv.user_id, privateChats, setPrivateChats)} rightLabel="Unprivate">
               <Card className="glass-card cursor-pointer hover:bg-muted/30" onClick={() => handlePrivateAccess(conv.user_id)}>
                 <CardContent className="p-3 flex items-center gap-3">
                   <Avatar className="w-12 h-12"><AvatarImage src={conv.user_avatar || undefined} /><AvatarFallback>{conv.user_name?.charAt(0)}</AvatarFallback></Avatar>
@@ -1099,17 +977,8 @@ export default function Chat() {
             <p className="text-sm text-muted-foreground">
               {localStorage.getItem('privateChatPassword') ? 'Enter password to unlock' : 'Set a password for private chats'}
             </p>
-            <Input
-              type="password"
-              placeholder="Password..."
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') verifyPrivatePassword((e.target as HTMLInputElement).value);
-              }}
-            />
-            <Button onClick={(e) => {
-              const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-              verifyPrivatePassword(input?.value || '');
-            }}>Confirm</Button>
+            <Input type="password" placeholder="Password..." onKeyDown={e => { if (e.key === 'Enter') verifyPrivatePassword((e.target as HTMLInputElement).value); }} />
+            <Button onClick={e => { const input = (e.currentTarget.previousElementSibling as HTMLInputElement); verifyPrivatePassword(input?.value || ''); }}>Confirm</Button>
           </div>
         </DialogContent>
       </Dialog>
