@@ -121,6 +121,11 @@ export default function Marketplace() {
     }
   };
 
+  const handleChat = (userId: string, listingId: string) => {
+    // Navigate to chat with the listing context
+    navigate(`/chat/${userId}?listing=${listingId}`);
+  };
+
   const renderListings = () => {
     if (loading) return Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />);
     if (listings.length === 0) return (
@@ -146,10 +151,10 @@ export default function Marketplace() {
         onSave={toggleSave}
         onComment={(id) => { setCommentListingId(id); setCommentOpen(true); }}
         onShare={handleShare}
-        onChat={(userId) => navigate(`/chat/${userId}`)}
+        onChat={handleChat}
         onDelete={deleteListing}
         onEdit={(listing) => { setEditListing(listing); setCreateOpen(true); }}
-        onViewProfile={(userId) => navigate(`/profile/${userId}`)}
+        onViewProfile={(userId) => navigate(`/marketplace/profile/${userId}`)}
       />
     ));
   };
@@ -167,7 +172,7 @@ export default function Marketplace() {
             className="pl-9 text-sm h-9"
           />
         </div>
-        <Button size="sm" onClick={() => { setEditListing(null); setCreateOpen(true); }} className="h-9 gap-1">
+        <Button size="sm" onClick={() => { setEditListing(null); setCreateOpen(true); }} className="h-9 gap-1 bg-gradient-to-r from-primary to-secondary hover:opacity-90">
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">Post</span>
         </Button>

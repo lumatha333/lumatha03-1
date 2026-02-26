@@ -41,7 +41,7 @@ interface Props {
   onSave: (id: string) => void;
   onComment: (id: string) => void;
   onShare: (id: string) => void;
-  onChat: (userId: string) => void;
+  onChat: (userId: string, listingId: string) => void;
   onDelete?: (id: string) => void;
   onEdit?: (listing: Listing) => void;
   onViewProfile: (userId: string) => void;
@@ -53,10 +53,22 @@ const typeIcons: Record<string, any> = {
   rent: HomeIcon,
 };
 
-const typeColors: Record<string, string> = {
-  sell: 'bg-emerald-500/20 text-emerald-400',
-  job: 'bg-purple-500/20 text-purple-400',
-  rent: 'bg-amber-500/20 text-amber-400',
+const typeGradients: Record<string, string> = {
+  sell: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/25',
+  job: 'from-violet-500/20 to-purple-500/10 border-violet-500/25',
+  rent: 'from-amber-500/20 to-orange-500/10 border-amber-500/25',
+};
+
+const typeBadgeColors: Record<string, string> = {
+  sell: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
+  job: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
+  rent: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+};
+
+const actionLabels: Record<string, string> = {
+  sell: 'Buy',
+  job: 'Apply',
+  rent: 'Contact',
 };
 
 export function MarketplaceListingCard({
@@ -70,19 +82,22 @@ export function MarketplaceListingCard({
   const media = listing.media_urls || [];
 
   return (
-    <Card className="glass-card border-border/40 overflow-hidden animate-fade-in">
+    <Card className={cn(
+      "border-0 overflow-hidden animate-fade-in backdrop-blur-sm",
+      "bg-gradient-to-br", typeGradients[listing.type] || 'from-card/80 to-card/40'
+    )}>
       {/* Header */}
       <div className="flex items-center gap-3 p-3 pb-2">
         <button onClick={() => onViewProfile(listing.user_id)}>
-          <Avatar className="w-9 h-9">
+          <Avatar className="w-9 h-9 ring-1 ring-border/50">
             <AvatarImage src={listing.profiles?.avatar_url || undefined} />
-            <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+            <AvatarFallback className="bg-gradient-to-br from-primary/30 to-secondary/30 text-foreground text-xs font-bold">
               {listing.profiles?.name?.[0]?.toUpperCase() || '?'}
             </AvatarFallback>
           </Avatar>
         </button>
         <div className="flex-1 min-w-0">
-          <button onClick={() => onViewProfile(listing.user_id)} className="font-semibold text-sm truncate block">
+          <button onClick={() => onViewProfile(listing.user_id)} className="font-semibold text-sm truncate block hover:text-primary transition-colors">
             {listing.profiles?.name || 'User'}
           </button>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -92,7 +107,7 @@ export function MarketplaceListingCard({
             )}
           </div>
         </div>
-        <Badge className={cn("text-[10px] px-2 py-0.5", typeColors[listing.type] || 'bg-primary/20 text-primary')}>
+        <Badge className={cn("text-[10px] px-2 py-0.5 border", typeBadgeColors[listing.type] || 'bg-primary/20 text-primary')}>
           <TypeIcon className="w-3 h-3 mr-1" />
           {listing.type === 'sell' ? 'Buy/Sell' : listing.type.charAt(0).toUpperCase() + listing.type.slice(1)}
         </Badge>
@@ -115,12 +130,12 @@ export function MarketplaceListingCard({
         {listing.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-3">{listing.description}</p>}
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           {listing.price != null && (
-            <Badge variant="outline" className="text-xs gap-1">
+            <Badge variant="outline" className="text-xs gap-1 border-primary/20 bg-primary/5">
               <DollarSign className="w-3 h-3" />
               {listing.currency || 'NPR'} {listing.price.toLocaleString()}
             </Badge>
           )}
-          {listing.salary_range && <Badge variant="outline" className="text-xs">{listing.salary_range}</Badge>}
+          {listing.salary_range && <Badge variant="outline" className="text-xs border-violet-500/20 bg-violet-500/5">{listing.salary_range}</Badge>}
           {listing.qualification && <Badge variant="secondary" className="text-[10px]">{listing.qualification}</Badge>}
           {listing.category && <Badge variant="secondary" className="text-[10px]">{listing.category}</Badge>}
         </div>
@@ -169,9 +184,14 @@ export function MarketplaceListingCard({
             <Bookmark className={cn("w-4 h-4", isSaved ? "fill-primary text-primary" : "")} />
           </Button>
           {!isOwner && (
-            <Button size="sm" onClick={() => onChat(listing.user_id)} className="h-8 text-xs gap-1 bg-primary/20 text-primary hover:bg-primary/30">
+            <Button size="sm" onClick={() => onChat(listing.user_id, listing.id)} className={cn(
+              "h-8 text-xs gap-1",
+              listing.type === 'sell' ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30" :
+              listing.type === 'job' ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30" :
+              "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+            )}>
               <MessageCircle className="w-3.5 h-3.5" />
-              {listing.type === 'job' ? 'Apply' : listing.type === 'rent' ? 'Contact' : 'Buy'}
+              {actionLabels[listing.type] || 'Chat'}
             </Button>
           )}
         </div>
