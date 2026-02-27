@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
 import { DailyDoseCard } from '@/components/feed/DailyDoseCard';
-import { SectionHeader } from '@/components/SectionHeader';
+
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -478,7 +478,6 @@ export default function MusicAdventure() {
   return (
     <div className="min-h-screen pb-24 overflow-y-auto scroll-smooth overscroll-behavior-y-contain">
       <div className="px-4 py-3">
-        <SectionHeader sectionName="Adventure" />
       </div>
 
       {/* Main Tabs */}

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, ShoppingBag, Briefcase, Home as HomeIcon, SlidersHorizontal, Sliders, SearchX } from 'lucide-react';
-import { SectionHeader } from '@/components/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -161,7 +160,7 @@ export default function Marketplace() {
 
   return (
     <div className="space-y-3 pb-20">
-      <SectionHeader sectionName="Marketplace" onRefresh={fetchListings} />
+
 
       {/* Search bar */}
       <div className="flex gap-2">

@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Globe, Lock, FileText, Video, Upload, Search, Loader2, FolderPlus, Folder, ArrowLeft, Trash2, Plus } from 'lucide-react';
+import { Globe, Lock, FileText, Video, Upload, Search, Loader2, FolderPlus, Folder, ArrowLeft, Trash2, Plus, Bookmark } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Database } from '@/integrations/supabase/types';
 import { EducationComments } from './EducationComments';
@@ -293,20 +293,34 @@ export function EducationModule() {
   return (
     <div className="space-y-4">
       {/* Tab pills */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
         {[
-          { id: 'explore', label: 'Explore', icon: <Globe className="w-3.5 h-3.5" /> },
-          { id: 'my_content', label: 'My Content', icon: <Lock className="w-3.5 h-3.5" /> },
-          { id: 'saved', label: 'Saved', icon: <FileText className="w-3.5 h-3.5" /> },
-          { id: 'create', label: 'Upload', icon: <Upload className="w-3.5 h-3.5" /> },
+          { id: 'explore', icon: <Globe className="w-4 h-4" />, title: 'Explore' },
+          { id: 'my_content', icon: <Lock className="w-4 h-4" />, title: 'My Content' },
+          { id: 'saved', icon: <Bookmark className="w-4 h-4" />, title: 'Saved' },
+          { id: 'create', icon: <Upload className="w-4 h-4" />, title: 'Upload' },
         ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-            className={cn("flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all shrink-0",
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} title={tab.title}
+            className={cn("flex items-center justify-center p-2 rounded-xl transition-all shrink-0",
               activeTab === tab.id ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
             )}>
-            {tab.icon}{tab.label}
+            {tab.icon}
           </button>
         ))}
+
+        {/* Docs/Videos toggle inline */}
+        {(activeTab === 'explore' || activeTab === 'my_content') && (
+          <div className="flex items-center gap-1 ml-auto">
+            <button onClick={() => setContentSubTab('docs')} title="Documents"
+              className={cn("p-2 rounded-xl transition-all", contentSubTab === 'docs' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground")}>
+              <FileText className="w-4 h-4" />
+            </button>
+            <button onClick={() => setContentSubTab('videos')} title="Videos"
+              className={cn("p-2 rounded-xl transition-all", contentSubTab === 'videos' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground")}>
+              <Video className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Search */}
@@ -317,13 +331,6 @@ export function EducationModule() {
         </div>
       )}
 
-      {/* Content type toggle */}
-      {(activeTab === 'explore' || activeTab === 'my_content') && (
-        <div className="flex gap-1">
-          <Button variant={contentSubTab === 'docs' ? 'default' : 'outline'} size="icon" className="h-8 w-8" onClick={() => setContentSubTab('docs')} title="Documents"><FileText className="w-4 h-4" /></Button>
-          <Button variant={contentSubTab === 'videos' ? 'default' : 'outline'} size="icon" className="h-8 w-8" onClick={() => setContentSubTab('videos')} title="Videos"><Video className="w-4 h-4" /></Button>
-        </div>
-      )}
 
       {/* Explore tab */}
       {activeTab === 'explore' && (
