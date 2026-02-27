@@ -319,9 +319,9 @@ export function EducationModule() {
 
       {/* Content type toggle */}
       {(activeTab === 'explore' || activeTab === 'my_content') && (
-        <div className="flex gap-2">
-          <Button variant={contentSubTab === 'docs' ? 'default' : 'outline'} size="sm" onClick={() => setContentSubTab('docs')}><FileText className="w-4 h-4 mr-1" />Docs</Button>
-          <Button variant={contentSubTab === 'videos' ? 'default' : 'outline'} size="sm" onClick={() => setContentSubTab('videos')}><Video className="w-4 h-4 mr-1" />Videos</Button>
+        <div className="flex gap-1">
+          <Button variant={contentSubTab === 'docs' ? 'default' : 'outline'} size="icon" className="h-8 w-8" onClick={() => setContentSubTab('docs')} title="Documents"><FileText className="w-4 h-4" /></Button>
+          <Button variant={contentSubTab === 'videos' ? 'default' : 'outline'} size="icon" className="h-8 w-8" onClick={() => setContentSubTab('videos')} title="Videos"><Video className="w-4 h-4" /></Button>
         </div>
       )}
 
@@ -424,9 +424,9 @@ export function EducationModule() {
       {/* Create/Upload tab */}
       {activeTab === 'create' && (
         <div className="space-y-4">
-          <div className="flex gap-2 mb-4">
-            <Button variant={uploadType === 'document' ? 'default' : 'outline'} size="sm" onClick={() => setUploadType('document')}><FileText className="w-4 h-4 mr-1" />Document</Button>
-            <Button variant={uploadType === 'video' ? 'default' : 'outline'} size="sm" onClick={() => setUploadType('video')}><Video className="w-4 h-4 mr-1" />Video</Button>
+          <div className="flex gap-1 mb-4">
+            <Button variant={uploadType === 'document' ? 'default' : 'outline'} size="icon" className="h-8 w-8" onClick={() => setUploadType('document')} title="Document"><FileText className="w-4 h-4" /></Button>
+            <Button variant={uploadType === 'video' ? 'default' : 'outline'} size="icon" className="h-8 w-8" onClick={() => setUploadType('video')} title="Video"><Video className="w-4 h-4" /></Button>
           </div>
           <div className="space-y-4">
             <div><Label className="text-sm mb-2 block">Title *</Label><Input placeholder="Enter title" value={uploadTitle} onChange={e => setUploadTitle(e.target.value)} /></div>
