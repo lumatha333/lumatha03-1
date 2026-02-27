@@ -5,7 +5,6 @@ import { NotesModule } from '@/components/productivity/NotesModule';
 import { EducationModule } from '@/components/productivity/EducationModule';
 import { ProductivityAnalytics } from '@/components/productivity/ProductivityAnalytics';
 import { SwipeableTabs } from '@/components/SwipeableTabs';
-import { SectionHeader } from '@/components/SectionHeader';
 
 const STORAGE_KEY = 'lumatha_productivity_tab';
 
@@ -29,7 +28,6 @@ export default function Education() {
   return (
     <div className="min-h-screen">
       <div className="max-w-2xl mx-auto px-3 py-4 pb-24">
-        <SectionHeader sectionName="Learn" />
         <SwipeableTabs tabs={TABS} activeTab={activeModule} onTabChange={setActiveModule}>
           <div><TodoModule /></div>
           <div><NotesModule /></div>

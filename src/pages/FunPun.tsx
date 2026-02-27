@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DailyDoseCard } from '@/components/feed/DailyDoseCard';
-import { SectionHeader } from '@/components/SectionHeader';
+
 import { 
   Gamepad2, Shuffle, Mic, Brain, Target, Paintbrush, Users, Calendar,
   Play, Pause, Check, X, Volume2, VolumeX, RefreshCw, Trophy, Star,
@@ -487,7 +487,7 @@ export default function FunPun() {
 
   return (
     <div className="space-y-4 pb-20">
-      <SectionHeader sectionName="FunPun" />
+      
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

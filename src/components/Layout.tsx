@@ -205,6 +205,26 @@ function LayoutContent({ children }: LayoutProps) {
   const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || location.pathname.startsWith('/profile/');
   const showSubNav = isHomeSection;
   const isSubSection = ['/create', '/private', '/notifications', '/search'].includes(location.pathname) || location.pathname.startsWith('/profile/');
+  const isSettingsPage = location.pathname === '/settings';
+
+  // Determine section name for non-home/non-settings pages
+  const getSectionName = () => {
+    if (location.pathname.startsWith('/education')) return 'Learn';
+    if (location.pathname === '/chat') return 'Messages';
+    if (location.pathname.startsWith('/random-connect')) return 'Random Connect';
+    if (location.pathname.startsWith('/music-adventure')) return 'Adventure';
+    if (location.pathname.startsWith('/funpun')) return 'FunPun';
+    if (location.pathname.startsWith('/marketplace')) return 'Marketplace';
+    return '';
+  };
+  const sectionName = getSectionName();
+  const showSectionHeader = !isHomeSection && !isSettingsPage && sectionName;
+
+  const handleLumathaClick = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Dispatch custom event for sections to handle refresh
+    window.dispatchEvent(new CustomEvent('lumatha-refresh'));
+  };
 
   if (isAuthPage) return <>{children}</>;
 
@@ -242,11 +262,23 @@ function LayoutContent({ children }: LayoutProps) {
                 <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
               ) : null}
             </div>
-            {/* Right: Navigation icons in same row */}
-            {showSubNav && (
+
+            {/* Center + Right: Section branding OR SubNav */}
+            {showSubNav ? (
               <div className="flex-1 min-w-0">
                 <SubNavigation visible={headerVisible} />
               </div>
+            ) : showSectionHeader ? (
+              <>
+                <div className="flex-1 flex justify-center">
+                  <button onClick={handleLumathaClick} className="text-base font-bold gradient-text tracking-tight hover:opacity-80 transition-opacity active:scale-95">
+                    Lumatha
+                  </button>
+                </div>
+                <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest shrink-0">{sectionName}</span>
+              </>
+            ) : (
+              <div className="flex-1" />
             )}
           </div>
         </header>
