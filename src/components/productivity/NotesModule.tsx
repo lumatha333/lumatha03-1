@@ -4,12 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Plus, Search, Folder, FolderPlus, StickyNote, Trash2, Edit2, Bookmark, BookmarkCheck, ArrowLeft, Pin, PinOff, MoreHorizontal, Clock } from 'lucide-react';
 import { RichTextEditor } from './RichTextEditor';
-import { NotesAnalytics } from './NotesAnalytics';
-import { EmptyNotes, EmptySaved, EmptyFolders } from '@/components/EmptyStates';
+import { EmptyNotes, EmptySaved } from '@/components/EmptyStates';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
@@ -39,7 +37,7 @@ const NOTE_COLORS = [
 
 export function NotesModule() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'all' | 'folders' | 'saved' | 'analytics'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
   const [notes, setNotes] = useState<Note[]>([]);
   const [folders, setFolders] = useState<NoteFolder[]>([]);
   const [search, setSearch] = useState('');
@@ -109,7 +107,7 @@ export function NotesModule() {
   const filteredNotes = notes.filter(n => {
     const matchesSearch = !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.content.toLowerCase().includes(search.toLowerCase());
     if (activeTab === 'saved') return matchesSearch && n.saved;
-    if (activeTab === 'folders' && selectedFolder) { const folder = folders.find(f => f.id === selectedFolder); return matchesSearch && n.folder === folder?.name; }
+    if (selectedFolder) { const folder = folders.find(f => f.id === selectedFolder); return matchesSearch && n.folder === folder?.name; }
     return matchesSearch;
   }).sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
@@ -183,143 +181,121 @@ export function NotesModule() {
         <Input placeholder="Search notes..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 rounded-xl h-10 bg-muted/30 border-border/40 focus:border-primary/50" />
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as any); setSelectedFolder(null); }}>
-        <TabsList className="grid w-full grid-cols-4 rounded-xl h-10">
-          <TabsTrigger value="all" className="rounded-lg gap-1.5 text-xs"><StickyNote className="w-3.5 h-3.5" />All</TabsTrigger>
-          <TabsTrigger value="folders" className="rounded-lg gap-1.5 text-xs"><Folder className="w-3.5 h-3.5" />Folders</TabsTrigger>
-          <TabsTrigger value="saved" className="rounded-lg gap-1.5 text-xs"><Bookmark className="w-3.5 h-3.5" />Saved</TabsTrigger>
-          <TabsTrigger value="analytics" className="rounded-lg gap-1.5 text-xs">📊 Stats</TabsTrigger>
-        </TabsList>
+      {/* Filter pills */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => { setActiveTab('all'); setSelectedFolder(null); }} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium transition-all", activeTab === 'all' && !selectedFolder ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground")}>
+          <StickyNote className="w-3.5 h-3.5 inline mr-1" />All
+        </button>
+        <button onClick={() => { setActiveTab('saved'); setSelectedFolder(null); }} className={cn("px-3 py-1.5 rounded-xl text-xs font-medium transition-all", activeTab === 'saved' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground")}>
+          <Bookmark className="w-3.5 h-3.5 inline mr-1" />Saved
+        </button>
+      </div>
 
-        <TabsContent value="all" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Button onClick={() => openNoteDialog()} className="gap-1.5 rounded-xl btn-cosmic text-sm h-9">
-              <Plus className="w-4 h-4" />New Note
-            </Button>
+      {/* Folders section - YouTube playlist style */}
+      {activeTab === 'all' && !selectedFolder && folders.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              {folders.length === 1 ? 'Folder' : 'Folders'}
+            </span>
           </div>
-          {filteredNotes.length === 0 ? <EmptyNotes /> : (
-            <div className="grid gap-2.5 sm:grid-cols-2 animate-stagger">
-              {filteredNotes.map(note => (
-                <Card
-                  key={note.id}
-                  className={cn(
-                    "cursor-pointer hover-lift rounded-2xl border group relative overflow-hidden",
-                    note.color || "hover:border-primary/40"
-                  )}
-                  onClick={() => setViewingNote(note)}
-                >
-                  {note.pinned && (
-                    <div className="absolute top-2 right-2">
-                      <Pin className="w-3 h-3 text-primary rotate-45" />
-                    </div>
-                  )}
-                  <CardHeader className="p-3 pb-1.5">
-                    <CardTitle className="text-sm line-clamp-1 pr-5">{note.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-3 pt-0 space-y-1.5">
-                    <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{getPreviewText(note.content) || 'No content'}</p>
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-[10px] text-muted-foreground/60">{getRelativeTime(note.updated_at)}</span>
-                      {note.folder && <span className="text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">{note.folder}</span>}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {folders.map(folder => {
+              const noteCount = notes.filter(n => n.folder === folder.name).length;
+              return (
+                <button key={folder.id} onClick={() => setSelectedFolder(folder.id)} className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border shrink-0 transition-all hover:border-primary/30", folder.color || 'accent-card-primary')}>
+                  <Folder className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">{folder.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{noteCount} {noteCount === 1 ? 'note' : 'notes'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-        <TabsContent value="folders" className="mt-4 space-y-4">
-          {!selectedFolder ? (
-            <>
-              <div className="flex justify-end">
-                <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
-                  <DialogTrigger asChild><Button size="sm" className="gap-1.5 rounded-xl"><FolderPlus className="w-4 h-4" />New Folder</Button></DialogTrigger>
-                  <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Create Folder</DialogTitle></DialogHeader>
-                    <div className="space-y-4 pt-4">
-                      <Input placeholder="Folder name" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createFolder()} className="rounded-xl" />
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-2 block">Color</label>
-                        <div className="flex gap-2 flex-wrap">
-                          {FOLDER_COLORS.map(c => (
-                            <button key={c.name} onClick={() => setNewFolderColor(c.class)} className={cn("w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center", newFolderColor === c.class ? 'border-primary scale-110' : 'border-transparent')}>
-                              <div className={cn("w-5 h-5 rounded-md", c.dot)} />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <Button onClick={createFolder} className="w-full rounded-xl">Create</Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+      {/* Selected folder header */}
+      {selectedFolder && (
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedFolder(null)} className="gap-1"><ArrowLeft className="w-4 h-4" />Back</Button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{folders.find(f => f.id === selectedFolder)?.name}</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="w-3.5 h-3.5" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem className="text-destructive" onClick={() => deleteFolder(selectedFolder)}>
+                  <Trash2 className="w-3.5 h-3.5 mr-2" />Delete Folder
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <Button size="sm" onClick={() => openNoteDialog()} className="gap-1 rounded-xl"><Plus className="w-4 h-4" />Add Note</Button>
+        </div>
+      )}
+
+      {/* New note + New folder buttons */}
+      {!selectedFolder && (
+        <div className="flex justify-end gap-2">
+          <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+            <DialogTrigger asChild><Button size="sm" variant="outline" className="gap-1.5 rounded-xl"><FolderPlus className="w-4 h-4" />New Folder</Button></DialogTrigger>
+            <DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Create Folder</DialogTitle></DialogHeader>
+              <div className="space-y-4 pt-4">
+                <Input placeholder="Folder name" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createFolder()} className="rounded-xl" />
+                <div>
+                  <label className="text-xs text-muted-foreground mb-2 block">Color</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {FOLDER_COLORS.map(c => (
+                      <button key={c.name} onClick={() => setNewFolderColor(c.class)} className={cn("w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center", newFolderColor === c.class ? 'border-primary scale-110' : 'border-transparent')}>
+                        <div className={cn("w-5 h-5 rounded-md", c.dot)} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Button onClick={createFolder} className="w-full rounded-xl">Create</Button>
               </div>
-              {folders.length === 0 ? <EmptyFolders /> : (
-                <div className="grid gap-2.5 sm:grid-cols-2 animate-stagger">
-                  {folders.map(folder => (
-                    <Card key={folder.id} className={cn("cursor-pointer hover-lift rounded-2xl border", folder.color || 'accent-card-primary')} onClick={() => setSelectedFolder(folder.id)}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-10 h-10 rounded-xl bg-background/40 backdrop-blur flex items-center justify-center">
-                              <Folder className="w-5 h-5 text-primary" />
-                            </div>
-                            <div>
-                              <span className="font-semibold text-sm">{folder.name}</span>
-                              <p className="text-[10px] text-muted-foreground">{notes.filter(n => n.folder === folder.name).length} notes</p>
-                            </div>
-                          </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="w-3.5 h-3.5" /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                              <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); deleteFolder(folder.id); }}>
-                                <Trash2 className="w-3.5 h-3.5 mr-2" />Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+            </DialogContent>
+          </Dialog>
+          <Button onClick={() => openNoteDialog()} className="gap-1.5 rounded-xl btn-cosmic text-sm h-9">
+            <Plus className="w-4 h-4" />New Note
+          </Button>
+        </div>
+      )}
+
+      {/* Notes grid */}
+      {filteredNotes.length === 0 ? (
+        activeTab === 'saved' ? <EmptySaved /> : <EmptyNotes />
+      ) : (
+        <div className="grid gap-2.5 sm:grid-cols-2 animate-stagger">
+          {filteredNotes.map(note => (
+            <Card
+              key={note.id}
+              className={cn(
+                "cursor-pointer hover-lift rounded-2xl border group relative overflow-hidden",
+                note.color || "hover:border-primary/40"
+              )}
+              onClick={() => setViewingNote(note)}
+            >
+              {note.pinned && (
+                <div className="absolute top-2 right-2">
+                  <Pin className="w-3 h-3 text-primary rotate-45" />
                 </div>
               )}
-            </>
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <Button variant="ghost" size="sm" onClick={() => setSelectedFolder(null)} className="gap-1"><ArrowLeft className="w-4 h-4" />Back</Button>
-                <Button size="sm" onClick={() => openNoteDialog()} className="gap-1 rounded-xl"><Plus className="w-4 h-4" />Add Note</Button>
-              </div>
-              <div className="grid gap-2.5 sm:grid-cols-2 animate-stagger">
-                {filteredNotes.map(note => (
-                  <Card key={note.id} className={cn("cursor-pointer hover-lift rounded-2xl", note.color)} onClick={() => setViewingNote(note)}>
-                    <CardHeader className="p-3"><CardTitle className="text-sm">{note.title}</CardTitle></CardHeader>
-                    <CardContent className="p-3 pt-0"><p className="text-xs text-muted-foreground line-clamp-2">{getPreviewText(note.content)}</p></CardContent>
-                  </Card>
-                ))}
-              </div>
-            </>
-          )}
-        </TabsContent>
-
-        <TabsContent value="saved" className="mt-4">
-          {filteredNotes.length === 0 ? <EmptySaved /> : (
-            <div className="grid gap-2.5 sm:grid-cols-2 animate-stagger">
-              {filteredNotes.map(note => (
-                <Card key={note.id} className={cn("cursor-pointer hover-lift rounded-2xl", note.color)} onClick={() => setViewingNote(note)}>
-                  <CardHeader className="p-3 pb-1"><CardTitle className="text-sm">{note.title}</CardTitle></CardHeader>
-                  <CardContent className="p-3 pt-0"><p className="text-xs text-muted-foreground line-clamp-2">{getPreviewText(note.content)}</p></CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="analytics" className="mt-4">
-          <NotesAnalytics />
-        </TabsContent>
-      </Tabs>
+              <CardHeader className="p-3 pb-1.5">
+                <CardTitle className="text-sm line-clamp-1 pr-5">{note.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-0 space-y-1.5">
+                <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{getPreviewText(note.content) || 'No content'}</p>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-muted-foreground/60">{getRelativeTime(note.updated_at)}</span>
+                  {note.folder && <span className="text-[10px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">{note.folder}</span>}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Note Editor Dialog */}
       <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
