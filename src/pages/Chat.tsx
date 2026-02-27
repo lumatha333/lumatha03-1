@@ -34,6 +34,7 @@ import { ForwardMessageDialog } from '@/components/chat/ForwardMessageDialog';
 import { SharedPostPreview, extractInternalPostId, isSharedPostMessage } from '@/components/chat/SharedPostPreview';
 import { ChatSettingsSheet } from '@/components/chat/ChatSettingsSheet';
 import { CallScreen } from '@/components/chat/CallScreen';
+import { SectionHeader } from '@/components/SectionHeader';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const STICKERS = ['😀', '😂', '🥰', '😍', '🤩', '😎', '🥳', '😭', '😤', '👍', '👎', '❤️', '🔥', '💯', '🎉', '👏'];
@@ -805,7 +806,7 @@ export default function Chat() {
   // ─────── CHAT LIST VIEW ───────
   return (
     <div className="space-y-4 pb-20">
-      <h1 className="text-xl font-bold flex items-center gap-2">💬 Messages</h1>
+      <SectionHeader sectionName="Messages" />
 
       <Tabs value={chatTab} onValueChange={v => setChatTab(v as any)}>
         <TabsList className="w-full grid grid-cols-4 h-auto p-0.5">

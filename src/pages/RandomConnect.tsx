@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useEffect, useState } from 'react';
 import { DailyDoseCard } from '@/components/feed/DailyDoseCard';
 import { useAuth } from '@/contexts/AuthContext';
+import { SectionHeader } from '@/components/SectionHeader';
 import { useRandomConnect } from '@/hooks/useRandomConnect';
 import { useRandomConnectMemories } from '@/hooks/useRandomConnectMemories';
 import { ModeSelector } from '@/components/randomconnect/ModeSelector';
@@ -108,6 +109,7 @@ const RandomConnect: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-20">
+      <SectionHeader sectionName="Random Connect" />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full max-w-md mx-auto grid grid-cols-2 mb-4">
           <TabsTrigger value="connect" className="gap-2">

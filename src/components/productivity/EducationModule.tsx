@@ -34,8 +34,8 @@ const FOLDERS_KEY = 'lumatha_edu_folders';
 
 export function EducationModule() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'public' | 'private' | 'saved' | 'create' | 'folders'>('public');
-  const [publicSubTab, setPublicSubTab] = useState<'docs' | 'videos'>('docs');
+  const [activeTab, setActiveTab] = useState<'explore' | 'my_content' | 'saved' | 'create'>('explore');
+  const [contentSubTab, setContentSubTab] = useState<'docs' | 'videos'>('docs');
   const [search, setSearch] = useState('');
   
   const [publicDocs, setPublicDocs] = useState<DocumentWithProfile[]>([]);
@@ -292,127 +292,138 @@ export function EducationModule() {
 
   return (
     <div className="space-y-4">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="public"><Globe className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">Public</span></TabsTrigger>
-          <TabsTrigger value="private"><Lock className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">Private</span></TabsTrigger>
-          <TabsTrigger value="folders"><Folder className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">Folders</span></TabsTrigger>
-          <TabsTrigger value="saved"><FileText className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">Saved</span></TabsTrigger>
-          <TabsTrigger value="create"><Upload className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">Create</span></TabsTrigger>
-        </TabsList>
+      {/* Tab pills */}
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'explore', label: 'Explore', icon: <Globe className="w-3.5 h-3.5" /> },
+          { id: 'my_content', label: 'My Content', icon: <Lock className="w-3.5 h-3.5" /> },
+          { id: 'saved', label: 'Saved', icon: <FileText className="w-3.5 h-3.5" /> },
+          { id: 'create', label: 'Upload', icon: <Upload className="w-3.5 h-3.5" /> },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+            className={cn("flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all shrink-0",
+              activeTab === tab.id ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+            )}>
+            {tab.icon}{tab.label}
+          </button>
+        ))}
+      </div>
 
-        {/* Public */}
-        <TabsContent value="public" className="mt-4 space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-          </div>
-          <div className="flex gap-2">
-            <Button variant={publicSubTab === 'docs' ? 'default' : 'outline'} size="sm" onClick={() => setPublicSubTab('docs')}><FileText className="w-4 h-4 mr-1" />Docs</Button>
-            <Button variant={publicSubTab === 'videos' ? 'default' : 'outline'} size="sm" onClick={() => setPublicSubTab('videos')}><Video className="w-4 h-4 mr-1" />Videos</Button>
-          </div>
-          {publicSubTab === 'docs' ? (
-            <div className="space-y-3">{filteredPublicDocs.length === 0 ? <EmptyDocuments /> : filteredPublicDocs.map(doc => renderDocCard(doc, doc.user_id === user?.id))}</div>
+      {/* Search */}
+      {activeTab !== 'create' && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+      )}
+
+      {/* Content type toggle */}
+      {(activeTab === 'explore' || activeTab === 'my_content') && (
+        <div className="flex gap-2">
+          <Button variant={contentSubTab === 'docs' ? 'default' : 'outline'} size="sm" onClick={() => setContentSubTab('docs')}><FileText className="w-4 h-4 mr-1" />Docs</Button>
+          <Button variant={contentSubTab === 'videos' ? 'default' : 'outline'} size="sm" onClick={() => setContentSubTab('videos')}><Video className="w-4 h-4 mr-1" />Videos</Button>
+        </div>
+      )}
+
+      {/* Explore tab */}
+      {activeTab === 'explore' && (
+        <div className="space-y-3">
+          {contentSubTab === 'docs' ? (
+            filteredPublicDocs.length === 0 ? <EmptyDocuments /> : filteredPublicDocs.map(doc => renderDocCard(doc, doc.user_id === user?.id))
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">{filteredPublicVideos.length === 0 ? <EmptyVideos /> : filteredPublicVideos.map(video => renderVideoCard(video, video.user_id === user?.id))}</div>
+            <div className="space-y-4">{filteredPublicVideos.length === 0 ? <EmptyVideos /> : filteredPublicVideos.map(video => renderVideoCard(video, video.user_id === user?.id))}</div>
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        {/* Private */}
-        <TabsContent value="private" className="mt-4 space-y-4">
-          <h3 className="font-medium">Your Documents</h3>
-          {privateDocs.length === 0 ? <p className="text-sm text-muted-foreground">No private documents</p> : (
-            <div className="space-y-3">{privateDocs.map(doc => renderDocCard(doc, true))}</div>
-          )}
-          <h3 className="font-medium mt-6">Your Videos</h3>
-          {privateVideos.length === 0 ? <p className="text-sm text-muted-foreground">No private videos</p> : (
-            <div className="grid gap-4 sm:grid-cols-2">{privateVideos.map(video => renderVideoCard(video, true))}</div>
-          )}
-        </TabsContent>
+      {/* My Content tab - merges private + folders */}
+      {activeTab === 'my_content' && (
+        <div className="space-y-4">
+          {/* Folders section */}
+          {!selectedFolder ? (
+            <>
+              {folders.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {folders.length === 1 ? 'Playlist' : 'Playlists'}
+                    </span>
+                    <Button size="sm" variant="outline" className="gap-1 h-7" onClick={() => setShowNewFolder(true)}>
+                      <FolderPlus className="w-3.5 h-3.5" />New
+                    </Button>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                    {folders.map(folder => (
+                      <button key={folder.id} onClick={() => setSelectedFolder(folder.id)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl border shrink-0 transition-all hover:border-primary/30 bg-muted/20">
+                        <Folder className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium">{folder.name}</span>
+                        <span className="text-[10px] text-muted-foreground">{folder.docIds.length}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {folders.length === 0 && (
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => setShowNewFolder(true)}>
+                    <FolderPlus className="w-4 h-4" />Create Playlist
+                  </Button>
+                </div>
+              )}
 
-        {/* Folders - YouTube playlist style */}
-        <TabsContent value="folders" className="mt-4 space-y-4">
-          {selectedFolder ? (
+              {contentSubTab === 'docs' ? (
+                privateDocs.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No documents yet. Upload one!</p> : (
+                  <div className="space-y-3">{privateDocs.map(doc => renderDocCard(doc, true))}</div>
+                )
+              ) : (
+                privateVideos.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No videos yet. Upload one!</p> : (
+                  <div className="space-y-4">{privateVideos.map(video => renderVideoCard(video, true))}</div>
+                )
+              )}
+            </>
+          ) : (
             <>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedFolder(null)}><ArrowLeft className="w-4 h-4" /></Button>
                 <h3 className="font-medium">{currentFolder?.name}</h3>
                 <span className="text-xs text-muted-foreground">({folderDocs.length} docs)</span>
+                <div className="flex-1" />
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteFolder(selectedFolder)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
               </div>
               {folderDocs.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Folder className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Empty folder</p>
+                  <p className="text-sm">Empty playlist</p>
                   <p className="text-xs mt-1">Use "Move to Folder" from doc menu</p>
                 </div>
               ) : (
                 <div className="space-y-3">{folderDocs.map(doc => renderDocCard(doc, true))}</div>
               )}
             </>
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium">Document Folders</h3>
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => setShowNewFolder(true)}>
-                  <FolderPlus className="w-4 h-4" />New
-                </Button>
-              </div>
-              {folders.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Folder className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No folders yet</p>
-                  <p className="text-xs mt-1">Create folders to organize your docs like playlists</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {folders.map(folder => (
-                    <Card key={folder.id} className="cursor-pointer hover:border-primary/30 transition-all group" onClick={() => setSelectedFolder(folder.id)}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-2">
-                            <Folder className="w-5 h-5 text-primary" />
-                          </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-destructive"
-                            onClick={e => { e.stopPropagation(); deleteFolder(folder.id); }}>
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                        <h4 className="font-medium text-sm truncate">{folder.name}</h4>
-                        <p className="text-xs text-muted-foreground">{folder.docIds.length} documents</p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {/* New folder dialog */}
-              <Dialog open={showNewFolder} onOpenChange={setShowNewFolder}>
-                <DialogContent className="rounded-2xl">
-                  <DialogHeader><DialogTitle>Create Folder</DialogTitle></DialogHeader>
-                  <div className="space-y-4">
-                    <Input placeholder="Folder name..." value={newFolderName} onChange={e => setNewFolderName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createFolder()} />
-                    <Button className="w-full" onClick={createFolder} disabled={!newFolderName.trim()}>Create</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </>
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        {/* Saved */}
-        <TabsContent value="saved" className="mt-4 space-y-4">
-          <h3 className="font-medium">Saved Documents</h3>
-          {savedDocs.length === 0 ? <p className="text-sm text-muted-foreground">No saved documents</p> : (
+      {/* Saved tab */}
+      {activeTab === 'saved' && (
+        <div className="space-y-4">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Saved Documents</h3>
+          {savedDocs.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No saved documents</p> : (
             <div className="space-y-3">{savedDocs.map(doc => renderDocCard(doc, doc.user_id === user?.id))}</div>
           )}
-          <h3 className="font-medium mt-6">Saved Videos</h3>
-          {savedVideos.length === 0 ? <p className="text-sm text-muted-foreground">No saved videos</p> : (
-            <div className="grid gap-4 sm:grid-cols-2">{savedVideos.map(video => renderVideoCard(video, video.user_id === user?.id))}</div>
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Saved Videos</h3>
+          {savedVideos.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No saved videos</p> : (
+            <div className="space-y-4">{savedVideos.map(video => renderVideoCard(video, video.user_id === user?.id))}</div>
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        {/* Create */}
-        <TabsContent value="create" className="mt-4 space-y-4">
+      {/* Create/Upload tab */}
+      {activeTab === 'create' && (
+        <div className="space-y-4">
           <div className="flex gap-2 mb-4">
             <Button variant={uploadType === 'document' ? 'default' : 'outline'} size="sm" onClick={() => setUploadType('document')}><FileText className="w-4 h-4 mr-1" />Document</Button>
             <Button variant={uploadType === 'video' ? 'default' : 'outline'} size="sm" onClick={() => setUploadType('video')}><Video className="w-4 h-4 mr-1" />Video</Button>
@@ -439,8 +450,8 @@ export function EducationModule() {
               {uploading ? <><Loader2 className="w-4 h-4 animate-spin" />Uploading...</> : <><Upload className="w-4 h-4" />Upload</>}
             </Button>
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       {/* Move to folder dialog */}
       <Dialog open={!!moveToFolderDocId} onOpenChange={() => setMoveToFolderDocId(null)}>
