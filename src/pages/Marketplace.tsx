@@ -4,7 +4,6 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SwipeableTabs } from '@/components/SwipeableTabs';
 import { MarketplaceListingCard } from '@/components/marketplace/MarketplaceListingCard';
 import { MarketplaceCreateDialog } from '@/components/marketplace/MarketplaceCreateDialog';
 import { MarketplaceCommentsDialog } from '@/components/marketplace/MarketplaceCommentsDialog';
@@ -12,6 +11,7 @@ import { MarketplaceController } from '@/components/marketplace/MarketplaceContr
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 const TABS = [
   { id: 'all', label: 'All', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
@@ -123,7 +123,6 @@ export default function Marketplace() {
   };
 
   const handleChat = (userId: string, listingId: string) => {
-    // Navigate to chat with the listing context
     navigate(`/chat/${userId}?listing=${listingId}`);
   };
 
@@ -162,7 +161,8 @@ export default function Marketplace() {
 
   return (
     <div className="space-y-3 pb-20">
-      <SectionHeader sectionName="Marketplace" />
+      <SectionHeader sectionName="Marketplace" onRefresh={fetchListings} />
+
       {/* Search bar */}
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -180,14 +180,33 @@ export default function Marketplace() {
         </Button>
       </div>
 
-      {/* Swipeable tabs */}
-      <SwipeableTabs tabs={TABS} activeTab={activeTab} onTabChange={(id) => { setActiveTab(id); }}>
-        <div className="space-y-3">{renderListings()}</div>
-        <div className="space-y-3">{renderListings()}</div>
-        <div className="space-y-3">{renderListings()}</div>
-        <div className="space-y-3">{renderListings()}</div>
-        <div><MarketplaceController /></div>
-      </SwipeableTabs>
+      {/* Simple tab bar - no SwipeableTabs to avoid event conflicts */}
+      <div className="flex items-center gap-0 p-1 rounded-2xl glass-card overflow-x-auto no-scrollbar">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200 whitespace-nowrap flex-1 justify-center text-xs font-medium",
+              activeTab === tab.id
+                ? "bg-primary/20 text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="space-y-3">
+        {activeTab === 'controller' ? (
+          <MarketplaceController />
+        ) : (
+          renderListings()
+        )}
+      </div>
 
       <MarketplaceCreateDialog
         open={createOpen}
