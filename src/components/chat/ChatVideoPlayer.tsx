@@ -16,7 +16,7 @@ export function ChatVideoPlayer({ src, className }: ChatVideoPlayerProps) {
   const [progress, setProgress] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [thumbnailReady, setThumbnailReady] = useState(false);
-  const hideTimer = useRef<NodeJS.Timeout>();
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Intersection observer for autoplay when visible
   useEffect(() => {
