@@ -82,6 +82,29 @@ export function TodoModule() {
 
   const [celebratingId, setCelebratingId] = useState<string | null>(null);
 
+  const saveToHistory = (category: string, taskText: string, completing: boolean) => {
+    if (!completing) return;
+    const HISTORY_KEY = 'lumatha_todo_history';
+    const saved = localStorage.getItem(HISTORY_KEY);
+    const history: Record<string, any> = saved ? JSON.parse(saved) : {};
+    const today = new Date().toDateString();
+    if (!history[today]) history[today] = {};
+    if (!history[today][category]) history[today][category] = { completed: 0, total: 0, items: [] };
+    if (typeof history[today][category] === 'number') {
+      history[today][category] = { completed: history[today][category], total: 0, items: [] };
+    }
+    history[today][category].completed += 1;
+    if (!history[today][category].items) history[today][category].items = [];
+    history[today][category].items.push(taskText);
+    // Keep 400 days
+    const keys = Object.keys(history);
+    if (keys.length > 400) {
+      keys.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+      keys.slice(0, keys.length - 400).forEach(k => delete history[k]);
+    }
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  };
+
   const toggleTodo = (category: TodoCategory, todoId: string) => {
     const updated = { ...todos };
     const idx = updated[category].findIndex(t => t.id === todoId);
@@ -90,7 +113,11 @@ export function TodoModule() {
     updated[category][idx].completed = !wasCompleted;
     setTodos(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    if (!wasCompleted) { setCelebratingId(todoId); setTimeout(() => setCelebratingId(null), 900); }
+    if (!wasCompleted) {
+      setCelebratingId(todoId);
+      setTimeout(() => setCelebratingId(null), 900);
+      saveToHistory(category, updated[category][idx].text, true);
+    }
   };
 
   const addTodo = () => {

@@ -1,21 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { 
   BarChart3, CheckSquare, Mountain, Trophy, Flame, Calendar, 
-  TrendingUp, Target, Award, Sparkles, ArrowUpRight, Clock
+  TrendingUp, Target, Award, Sparkles, StickyNote, FileText,
+  Video, Download, Eye, Globe, BookOpen, ChevronDown, ChevronUp, Star
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const TODO_KEY = 'lumatha_todos_v2';
+const CUSTOM_FOLDERS_KEY = 'lumatha_custom_folders_v2';
 const CHALLENGE_KEY = 'lumatha_adventure_data';
 const ANALYTICS_HISTORY_KEY = 'lumatha_productivity_history';
-
-interface DayRecord {
-  date: string;
-  todosCompleted: number;
-  challengesCompleted: number;
-  placesVisited: number;
-}
+const NOTES_KEY = 'lumatha_notes_v2';
+const STREAK_KEY = 'lumatha_streak';
 
 function getToday() { return new Date().toISOString().split('T')[0]; }
 function getLast7Days() {
@@ -25,171 +22,243 @@ function getLast7Days() {
 }
 function getDayLabel(d: string) { return new Date(d + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' }); }
 
+interface StatCard {
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+  sub?: string;
+  color: string;
+  bgColor: string;
+}
+
 export function ProductivityAnalytics() {
-  const [history, setHistory] = useState<Record<string, DayRecord>>({});
-  const [todayStats, setTodayStats] = useState({ todosCompleted: 0, challengesCompleted: 0, totalTodos: 0, totalChallenges: 0, placesVisited: 0 });
+  const [expandedSection, setExpandedSection] = useState<string | null>('tasks');
+  const [history, setHistory] = useState<Record<string, any>>({});
+
+  const toggleSection = (id: string) => setExpandedSection(prev => prev === id ? null : id);
 
   useEffect(() => {
-    // Load history
     const saved = localStorage.getItem(ANALYTICS_HISTORY_KEY);
     if (saved) setHistory(JSON.parse(saved));
-
-    // Calculate today's stats
-    const calcStats = () => {
-      let todosCompleted = 0, totalTodos = 0;
-      try {
-        const todosRaw = localStorage.getItem(TODO_KEY);
-        if (todosRaw) {
-          const todos = JSON.parse(todosRaw);
-          if (Array.isArray(todos)) {
-            totalTodos = todos.length;
-            todosCompleted = todos.filter((t: any) => t.completed).length;
-          } else if (typeof todos === 'object') {
-            Object.values(todos).forEach((cat: any) => {
-              if (Array.isArray(cat)) { totalTodos += cat.length; todosCompleted += cat.filter((t: any) => t.completed).length; }
-            });
-          }
-        }
-      } catch {}
-
-      let challengesCompleted = 0, totalChallenges = 0, placesVisited = 0;
-      try {
-        const advRaw = localStorage.getItem(CHALLENGE_KEY);
-        if (advRaw) {
-          const adv = JSON.parse(advRaw);
-          if (adv.completedChallenges) { challengesCompleted = Object.keys(adv.completedChallenges).length; }
-          if (adv.visitedPlaces) { placesVisited = Object.keys(adv.visitedPlaces).length; }
-          totalChallenges = 50; // approximate
-        }
-      } catch {}
-
-      setTodayStats({ todosCompleted, challengesCompleted, totalTodos, totalChallenges, placesVisited });
-
-      // Save today's record
-      const today = getToday();
-      const newHistory = { ...history };
-      newHistory[today] = { date: today, todosCompleted, challengesCompleted, placesVisited };
-      // Keep 30 days
-      const keys = Object.keys(newHistory).sort();
-      if (keys.length > 30) keys.slice(0, keys.length - 30).forEach(k => delete newHistory[k]);
-      localStorage.setItem(ANALYTICS_HISTORY_KEY, JSON.stringify(newHistory));
-      setHistory(newHistory);
-    };
-
-    calcStats();
-    const interval = setInterval(calcStats, 60000);
-    return () => clearInterval(interval);
   }, []);
 
+  // Task stats
+  const taskStats = useMemo(() => {
+    let totalCompleted = 0, totalTasks = 0;
+    const categoryStats: Record<string, { completed: number; total: number }> = {};
+    
+    try {
+      const todosRaw = localStorage.getItem(TODO_KEY);
+      if (todosRaw) {
+        const todos = JSON.parse(todosRaw);
+        if (typeof todos === 'object' && !Array.isArray(todos)) {
+          Object.entries(todos).forEach(([cat, items]: [string, any]) => {
+            if (Array.isArray(items)) {
+              const completed = items.filter((t: any) => t.completed).length;
+              categoryStats[cat] = { completed, total: items.length };
+              totalCompleted += completed;
+              totalTasks += items.length;
+            }
+          });
+        }
+      }
+    } catch {}
+
+    // Custom folders
+    try {
+      const foldersRaw = localStorage.getItem(CUSTOM_FOLDERS_KEY);
+      if (foldersRaw) {
+        const folders = JSON.parse(foldersRaw);
+        let cc = 0, ct = 0;
+        folders.forEach((f: any) => {
+          f.lists?.forEach((l: any) => {
+            l.tasks?.forEach((t: any) => {
+              ct++;
+              if (t.completed) cc++;
+            });
+          });
+        });
+        if (ct > 0) {
+          categoryStats['custom'] = { completed: cc, total: ct };
+          totalCompleted += cc;
+          totalTasks += ct;
+        }
+      }
+    } catch {}
+
+    return { totalCompleted, totalTasks, categoryStats, percentage: totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0 };
+  }, []);
+
+  // Notes stats
+  const notesStats = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(NOTES_KEY);
+      if (!raw) return { total: 0, pinned: 0, saved: 0, totalWords: 0 };
+      const notes = JSON.parse(raw);
+      const totalWords = notes.reduce((sum: number, n: any) => {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = n.content || '';
+        return sum + (tmp.textContent || '').trim().split(/\s+/).filter(Boolean).length;
+      }, 0);
+      return {
+        total: notes.length,
+        pinned: notes.filter((n: any) => n.pinned).length,
+        saved: notes.filter((n: any) => n.saved).length,
+        totalWords,
+      };
+    } catch { return { total: 0, pinned: 0, saved: 0, totalWords: 0 }; }
+  }, []);
+
+  // Adventure & Challenge stats
+  const adventureStats = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(CHALLENGE_KEY);
+      if (!raw) return { challengesCompleted: 0, placesVisited: 0, completedList: [] as string[], placesList: [] as string[] };
+      const data = JSON.parse(raw);
+      const completedList = data.completedChallenges ? Object.keys(data.completedChallenges) : [];
+      const placesList = data.visitedPlaces ? Object.keys(data.visitedPlaces) : [];
+      return {
+        challengesCompleted: completedList.length,
+        placesVisited: placesList.length,
+        completedList,
+        placesList,
+      };
+    } catch { return { challengesCompleted: 0, placesVisited: 0, completedList: [], placesList: [] }; }
+  }, []);
+
+  // Streak
+  const streak = useMemo(() => {
+    try {
+      const saved = localStorage.getItem(STREAK_KEY);
+      if (saved) return JSON.parse(saved).count || 0;
+    } catch {}
+    return 0;
+  }, []);
+
+  // 7-day chart
   const chartData = useMemo(() => {
     return getLast7Days().map(d => ({
       day: getDayLabel(d), date: d,
       todos: history[d]?.todosCompleted || 0,
       challenges: history[d]?.challengesCompleted || 0,
-      places: history[d]?.placesVisited || 0,
     }));
   }, [history]);
 
   const maxVal = Math.max(...chartData.map(d => d.todos + d.challenges), 1);
   const totalWeekTodos = chartData.reduce((s, d) => s + d.todos, 0);
-  const totalWeekChallenges = chartData.reduce((s, d) => s + d.challenges, 0);
-  const streak = useMemo(() => {
-    let count = 0;
-    const days = getLast7Days().reverse();
-    for (const d of days) {
-      if ((history[d]?.todosCompleted || 0) > 0) count++;
-      else break;
-    }
-    return count;
-  }, [history]);
 
-  const todoPercent = todayStats.totalTodos > 0 ? Math.round((todayStats.todosCompleted / todayStats.totalTodos) * 100) : 0;
+  // Docs stats (from localStorage saved docs)
+  const docsStats = useMemo(() => {
+    try {
+      const savedDocs = localStorage.getItem('lumatha_saved_docs');
+      const savedCount = savedDocs ? JSON.parse(savedDocs).length : 0;
+      return { savedCount };
+    } catch { return { savedCount: 0 }; }
+  }, []);
+
+  const sections = [
+    {
+      id: 'tasks',
+      title: 'Tasks & To-Do',
+      icon: <CheckSquare className="w-4 h-4" />,
+      color: 'text-emerald-400',
+      accent: 'from-emerald-500/20 to-emerald-500/5',
+      barColor: 'bg-emerald-500',
+      summary: `${taskStats.totalCompleted}/${taskStats.totalTasks} done (${taskStats.percentage}%)`,
+    },
+    {
+      id: 'notes',
+      title: 'Notes',
+      icon: <StickyNote className="w-4 h-4" />,
+      color: 'text-blue-400',
+      accent: 'from-blue-500/20 to-blue-500/5',
+      barColor: 'bg-blue-500',
+      summary: `${notesStats.total} notes · ${notesStats.totalWords.toLocaleString()} words`,
+    },
+    {
+      id: 'docs',
+      title: 'Docs & Videos',
+      icon: <FileText className="w-4 h-4" />,
+      color: 'text-violet-400',
+      accent: 'from-violet-500/20 to-violet-500/5',
+      barColor: 'bg-violet-500',
+      summary: `${docsStats.savedCount} saved docs`,
+    },
+    {
+      id: 'adventures',
+      title: 'Challenges & Adventures',
+      icon: <Trophy className="w-4 h-4" />,
+      color: 'text-amber-400',
+      accent: 'from-amber-500/20 to-amber-500/5',
+      barColor: 'bg-amber-500',
+      summary: `${adventureStats.challengesCompleted} challenges · ${adventureStats.placesVisited} places`,
+    },
+  ];
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      {/* Today's Overview */}
-      <Card className="glass-card border-border overflow-hidden">
+    <div className="space-y-3 animate-fade-in">
+      {/* Hero Stats */}
+      <Card className="overflow-hidden border-border">
         <div className="h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-violet-500" />
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center">
-                <Target className="w-4 h-4 text-emerald-400" />
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-blue-500/10 flex items-center justify-center">
+                <BarChart3 className="w-5 h-5 text-emerald-400" />
               </div>
               <div>
-                <h3 className="text-sm font-bold">Today's Progress</h3>
-                <p className="text-[10px] text-muted-foreground">{todoPercent}% tasks done</p>
+                <h3 className="text-sm font-bold">Your Stats</h3>
+                <p className="text-[10px] text-muted-foreground">All-time overview</p>
               </div>
             </div>
             {streak > 0 && (
-              <div className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400">
+              <div className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full bg-orange-500/10 text-orange-400">
                 <Flame className="w-3 h-3" />{streak} day streak
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="text-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/10">
-              <CheckSquare className="w-4 h-4 mx-auto text-emerald-400 mb-1" />
-              <p className="text-lg font-bold text-emerald-400">{todayStats.todosCompleted}</p>
-              <p className="text-[9px] text-muted-foreground">Tasks Done</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-violet-500/10 border border-violet-500/10">
-              <Trophy className="w-4 h-4 mx-auto text-violet-400 mb-1" />
-              <p className="text-lg font-bold text-violet-400">{todayStats.challengesCompleted}</p>
-              <p className="text-[9px] text-muted-foreground">Challenges</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-blue-500/10 border border-blue-500/10">
-              <Mountain className="w-4 h-4 mx-auto text-blue-400 mb-1" />
-              <p className="text-lg font-bold text-blue-400">{todayStats.placesVisited}</p>
-              <p className="text-[9px] text-muted-foreground">Places</p>
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          <div className="mt-3">
-            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-              <span>Overall</span>
-              <span>{todayStats.todosCompleted}/{todayStats.totalTodos} tasks</span>
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 rounded-full transition-all duration-500" style={{ width: `${todoPercent}%` }} />
-            </div>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { icon: <CheckSquare className="w-3.5 h-3.5" />, value: taskStats.totalCompleted, label: 'Tasks', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+              { icon: <StickyNote className="w-3.5 h-3.5" />, value: notesStats.total, label: 'Notes', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+              { icon: <Trophy className="w-3.5 h-3.5" />, value: adventureStats.challengesCompleted, label: 'Challenges', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+              { icon: <Mountain className="w-3.5 h-3.5" />, value: adventureStats.placesVisited, label: 'Places', color: 'text-violet-400', bg: 'bg-violet-500/10' },
+            ].map((s, i) => (
+              <div key={i} className={cn("text-center p-2 rounded-xl border border-border/30", s.bg)}>
+                <div className={cn("mx-auto mb-0.5", s.color)}>{s.icon}</div>
+                <p className={cn("text-lg font-black", s.color)}>{s.value}</p>
+                <p className="text-[8px] text-muted-foreground">{s.label}</p>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* 7-Day Activity Chart */}
-      <Card className="glass-card border-border overflow-hidden">
+      {/* 7-Day Chart */}
+      <Card className="border-border">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-bold">7-Day Activity</h3>
             </div>
-            <div className="flex items-center gap-3 text-[9px] text-muted-foreground">
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm bg-emerald-500" />Tasks</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm bg-violet-500" />Challenges</div>
-            </div>
+            <span className="text-[10px] text-muted-foreground">{totalWeekTodos} tasks this week</span>
           </div>
-
-          <div className="flex items-end gap-1.5 h-24">
+          <div className="flex items-end gap-1.5 h-20">
             {chartData.map((d, i) => {
               const total = d.todos + d.challenges;
               const height = maxVal > 0 ? Math.max((total / maxVal) * 100, 4) : 4;
               const isToday = d.date === getToday();
-              const todoHeight = total > 0 ? (d.todos / total) * height : 0;
-              const challengeHeight = total > 0 ? (d.challenges / total) * height : 0;
               return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[9px] font-medium text-muted-foreground">{total > 0 ? total : ''}</span>
-                  <div className="w-full flex flex-col justify-end" style={{ height: '72px' }}>
-                    <div className="w-full flex flex-col justify-end rounded-t-md overflow-hidden" style={{ height: `${height}%`, minHeight: '3px' }}>
-                      {challengeHeight > 0 && <div className={`w-full ${isToday ? 'bg-violet-500' : 'bg-violet-500/30'}`} style={{ height: `${(d.challenges / total) * 100}%` }} />}
-                      {todoHeight > 0 && <div className={`w-full ${isToday ? 'bg-emerald-500' : 'bg-emerald-500/30'}`} style={{ height: `${(d.todos / total) * 100}%` }} />}
-                    </div>
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                  <span className="text-[8px] font-bold text-muted-foreground">{total > 0 ? total : ''}</span>
+                  <div className="w-full flex flex-col justify-end" style={{ height: '56px' }}>
+                    <div className={cn("w-full rounded-t-md transition-all duration-500",
+                      isToday ? 'bg-gradient-to-t from-emerald-500 to-emerald-400' : 'bg-emerald-500/25'
+                    )} style={{ height: `${height}%`, minHeight: '3px' }} />
                   </div>
-                  <span className={`text-[9px] ${isToday ? 'text-primary font-bold' : 'text-muted-foreground'}`}>{d.day}</span>
+                  <span className={cn("text-[9px]", isToday ? 'text-primary font-bold' : 'text-muted-foreground')}>{d.day}</span>
                 </div>
               );
             })}
@@ -197,23 +266,147 @@ export function ProductivityAnalytics() {
         </CardContent>
       </Card>
 
-      {/* Weekly Summary */}
-      <div className="grid grid-cols-2 gap-2">
-        <Card className="glass-card border-border">
-          <CardContent className="p-3 text-center">
-            <Award className="w-5 h-5 mx-auto text-amber-400 mb-1" />
-            <p className="text-xl font-bold">{totalWeekTodos}</p>
-            <p className="text-[9px] text-muted-foreground">Tasks This Week</p>
+      {/* Expandable Sections */}
+      {sections.map(section => (
+        <Card key={section.id} className="border-border overflow-hidden">
+          <CardContent className="p-0">
+            <button onClick={() => toggleSection(section.id)}
+              className="w-full flex items-center justify-between p-3 text-left">
+              <div className="flex items-center gap-2.5">
+                <div className={cn("w-8 h-8 rounded-xl bg-gradient-to-br flex items-center justify-center", section.accent)}>
+                  <span className={section.color}>{section.icon}</span>
+                </div>
+                <div>
+                  <p className="text-xs font-bold">{section.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{section.summary}</p>
+                </div>
+              </div>
+              {expandedSection === section.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </button>
+
+            {expandedSection === section.id && (
+              <div className="px-3 pb-3 space-y-2.5 border-t border-border/30 pt-2 animate-fade-in">
+                {/* Tasks detail */}
+                {section.id === 'tasks' && (
+                  <>
+                    {/* Overall progress */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-muted-foreground">Overall completion</span>
+                        <span className="font-bold text-emerald-400">{taskStats.percentage}%</span>
+                      </div>
+                      <div className="h-2.5 bg-muted/30 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all relative"
+                          style={{ width: `${taskStats.percentage}%` }}>
+                          <div className="absolute inset-0 bg-white/15 animate-shimmer" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Category breakdown */}
+                    <div className="space-y-1.5">
+                      {Object.entries(taskStats.categoryStats).map(([cat, stat]) => {
+                        const pct = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : 0;
+                        const colors: Record<string, string> = {
+                          daily: 'bg-blue-500', weekly: 'bg-teal-500', monthly: 'bg-violet-500',
+                          yearly: 'bg-amber-500', lifetime: 'bg-rose-500', custom: 'bg-emerald-500'
+                        };
+                        return (
+                          <div key={cat} className="flex items-center gap-2">
+                            <div className={cn("w-2 h-2 rounded-full shrink-0", colors[cat] || 'bg-primary')} />
+                            <span className="text-[10px] font-medium flex-1 capitalize">{cat}</span>
+                            <div className="w-16 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                              <div className={cn("h-full rounded-full", colors[cat] || 'bg-primary')} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground w-12 text-right">{stat.completed}/{stat.total}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* Notes detail */}
+                {section.id === 'notes' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: 'Total Notes', value: notesStats.total, icon: <StickyNote className="w-3 h-3 text-blue-400" /> },
+                      { label: 'Total Words', value: notesStats.totalWords.toLocaleString(), icon: <BookOpen className="w-3 h-3 text-violet-400" /> },
+                      { label: 'Pinned', value: notesStats.pinned, icon: <Star className="w-3 h-3 text-amber-400" /> },
+                      { label: 'Saved', value: notesStats.saved, icon: <Award className="w-3 h-3 text-emerald-400" /> },
+                    ].map(s => (
+                      <div key={s.label} className="flex items-center gap-2 p-2 rounded-lg bg-muted/20">
+                        {s.icon}
+                        <div>
+                          <p className="text-xs font-bold">{s.value}</p>
+                          <p className="text-[9px] text-muted-foreground">{s.label}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Docs detail */}
+                {section.id === 'docs' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: 'Saved Docs', value: docsStats.savedCount, icon: <FileText className="w-3 h-3 text-violet-400" /> },
+                      { label: 'Bookmarked', value: docsStats.savedCount, icon: <Download className="w-3 h-3 text-blue-400" /> },
+                    ].map(s => (
+                      <div key={s.label} className="flex items-center gap-2 p-2 rounded-lg bg-muted/20">
+                        {s.icon}
+                        <div>
+                          <p className="text-xs font-bold">{s.value}</p>
+                          <p className="text-[9px] text-muted-foreground">{s.label}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Adventures detail */}
+                {section.id === 'adventures' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10">
+                        <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                        <div>
+                          <p className="text-xs font-bold text-amber-400">{adventureStats.challengesCompleted}</p>
+                          <p className="text-[9px] text-muted-foreground">Challenges Done</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-violet-500/10">
+                        <Mountain className="w-3.5 h-3.5 text-violet-400" />
+                        <div>
+                          <p className="text-xs font-bold text-violet-400">{adventureStats.placesVisited}</p>
+                          <p className="text-[9px] text-muted-foreground">Places Visited</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {adventureStats.completedList.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-medium">Completed Challenges:</p>
+                        <div className="max-h-28 overflow-y-auto space-y-0.5">
+                          {adventureStats.completedList.slice(0, 10).map((c, i) => (
+                            <p key={i} className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Trophy className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                              <span className="truncate capitalize">{c.replace(/-/g, ' ')}</span>
+                            </p>
+                          ))}
+                          {adventureStats.completedList.length > 10 && (
+                            <p className="text-[10px] text-muted-foreground/60">+{adventureStats.completedList.length - 10} more</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
-        <Card className="glass-card border-border">
-          <CardContent className="p-3 text-center">
-            <Sparkles className="w-5 h-5 mx-auto text-violet-400 mb-1" />
-            <p className="text-xl font-bold">{totalWeekChallenges}</p>
-            <p className="text-[9px] text-muted-foreground">Challenges This Week</p>
-          </CardContent>
-        </Card>
-      </div>
+      ))}
     </div>
   );
 }
