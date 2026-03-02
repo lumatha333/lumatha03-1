@@ -20,7 +20,7 @@ export function SplashScreen() {
     <div 
       className={`fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-300 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
       style={{ 
-        background: 'linear-gradient(135deg, #0a1628 0%, #1e3a5f 50%, #0a1628 100%)'
+        background: 'linear-gradient(135deg, hsl(220 60% 8%) 0%, hsl(220 50% 12%) 50%, hsl(220 60% 8%) 100%)'
       }}
     >
       {/* Golden glow behind logo */}
@@ -33,7 +33,7 @@ export function SplashScreen() {
 
       {/* Center content */}
       <div className="relative flex flex-col items-center gap-6">
-        {/* Circular Logo - transparent background, no extra blue */}
+        {/* Circular Logo */}
         <div className="relative">
           <img 
             src={lumathaLogo} 
