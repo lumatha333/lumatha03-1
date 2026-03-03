@@ -238,6 +238,24 @@ const WIKIMEDIA_IMAGES: Record<string, string> = {
   'Lisbon Belem Tower': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Belem_Tower_in_Lisbon_%28cropped%29.jpg/1280px-Belem_Tower_in_Lisbon_%28cropped%29.jpg',
   'Azores Islands': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Lagoa_das_Sete_Cidades_2.jpg/1280px-Lagoa_das_Sete_Cidades_2.jpg',
   'Madeira Island': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Funchal_Monte_001.jpg/1280px-Funchal_Monte_001.jpg',
+  
+  // ===== TURKEY =====
+  'Cappadocia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Cappadocia_ballance_1.jpg/1280px-Cappadocia_ballance_1.jpg',
+  'Hagia Sophia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Hagia_Sophia_Mars_2013.jpg/1280px-Hagia_Sophia_Mars_2013.jpg',
+  'Ephesus': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Ephesus_Celsus_Library_Fa%C3%A7ade.jpg/1280px-Ephesus_Celsus_Library_Fa%C3%A7ade.jpg',
+  'Blue Mosque': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Istanbul_-_Sultanahmet_Camii_%28Blue_Mosque%29_-_02.jpg/1280px-Istanbul_-_Sultanahmet_Camii_%28Blue_Mosque%29_-_02.jpg',
+  'Pamukkale': 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Pamukkale_13.jpg/1280px-Pamukkale_13.jpg',
+  
+  // ===== MOROCCO =====
+  'Chefchaouen Blue City': 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Chefchaouen2.jpg/1280px-Chefchaouen2.jpg',
+  'Ait Benhaddou': 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Ksar_of_Ait-Ben-Haddou.jpg/1280px-Ksar_of_Ait-Ben-Haddou.jpg',
+  
+  // ===== SOUTHEAST ASIA - MORE =====
+  'Historic Ayutthaya': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Ayutthaya_Thailand.jpg/1280px-Ayutthaya_Thailand.jpg',
+  'Komodo National Park': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Komodo_dragon_%28Varanus_komodoensis%29.jpg/1280px-Komodo_dragon_%28Varanus_komodoensis%29.jpg',
+  
+  // ===== SOUTH AMERICA - MORE =====
+  'Perito Moreno Glacier': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Perito_Moreno_Glacier_Patagonia_Argentina_Luca_Galuzzi_2005.JPG/1280px-Perito_Moreno_Glacier_Patagonia_Argentina_Luca_Galuzzi_2005.JPG',
 };
 
 // Regional fallback images - REAL verified Wikimedia Commons photos

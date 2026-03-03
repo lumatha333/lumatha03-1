@@ -4,11 +4,14 @@ import lumathaLogo from '@/assets/lumatha-logo.png';
 export function SplashScreen() {
   const [show, setShow] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
+  const [logoVisible, setLogoVisible] = useState(false);
 
   useEffect(() => {
-    const fadeTimer = setTimeout(() => setFadeOut(true), 2200);
-    const hideTimer = setTimeout(() => setShow(false), 2500);
+    const logoTimer = setTimeout(() => setLogoVisible(true), 200);
+    const fadeTimer = setTimeout(() => setFadeOut(true), 3200);
+    const hideTimer = setTimeout(() => setShow(false), 3800);
     return () => {
+      clearTimeout(logoTimer);
       clearTimeout(fadeTimer);
       clearTimeout(hideTimer);
     };
@@ -18,7 +21,7 @@ export function SplashScreen() {
 
   return (
     <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-300 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-500 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
       style={{ 
         background: 'linear-gradient(135deg, hsl(220 60% 8%) 0%, hsl(220 50% 12%) 50%, hsl(220 60% 8%) 100%)'
       }}
@@ -32,7 +35,7 @@ export function SplashScreen() {
       </div>
 
       {/* Center content */}
-      <div className="relative flex flex-col items-center gap-6">
+      <div className={`relative flex flex-col items-center gap-6 transition-all duration-1000 ${logoVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}>
         {/* Circular Logo */}
         <div className="relative">
           <img 
@@ -47,7 +50,7 @@ export function SplashScreen() {
 
         {/* Universe text */}
         <p 
-          className="text-lg sm:text-xl font-light tracking-[0.3em] uppercase"
+          className={`text-lg sm:text-xl font-light tracking-[0.3em] uppercase transition-all duration-700 delay-500 ${logoVisible ? 'opacity-90 translate-y-0' : 'opacity-0 translate-y-4'}`}
           style={{ color: 'rgba(255, 255, 255, 0.9)' }}
         >
           Universe
