@@ -5,13 +5,20 @@ export function SplashScreen() {
   const [show, setShow] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
   const [logoVisible, setLogoVisible] = useState(false);
+  const [textVisible, setTextVisible] = useState(false);
 
   useEffect(() => {
-    const logoTimer = setTimeout(() => setLogoVisible(true), 200);
-    const fadeTimer = setTimeout(() => setFadeOut(true), 3200);
-    const hideTimer = setTimeout(() => setShow(false), 3800);
+    // Logo fades in after 600ms (not instant)
+    const logoTimer = setTimeout(() => setLogoVisible(true), 600);
+    // Text appears after logo is visible
+    const textTimer = setTimeout(() => setTextVisible(true), 1400);
+    // Start fade out after 4 seconds total
+    const fadeTimer = setTimeout(() => setFadeOut(true), 4000);
+    // Remove from DOM after fade completes
+    const hideTimer = setTimeout(() => setShow(false), 4700);
     return () => {
       clearTimeout(logoTimer);
+      clearTimeout(textTimer);
       clearTimeout(fadeTimer);
       clearTimeout(hideTimer);
     };
@@ -21,21 +28,21 @@ export function SplashScreen() {
 
   return (
     <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-500 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-700 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
       style={{ 
-        background: 'linear-gradient(135deg, hsl(220 60% 8%) 0%, hsl(220 50% 12%) 50%, hsl(220 60% 8%) 100%)'
+        background: 'hsl(220 60% 4%)'
       }}
     >
       {/* Golden glow behind logo */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div 
-          className="w-80 h-80 rounded-full blur-3xl opacity-20"
+          className={`w-80 h-80 rounded-full blur-3xl transition-opacity duration-[2000ms] ${logoVisible ? 'opacity-20' : 'opacity-0'}`}
           style={{ background: 'radial-gradient(circle, #d4a843 0%, transparent 70%)' }}
         />
       </div>
 
       {/* Center content */}
-      <div className={`relative flex flex-col items-center gap-6 transition-all duration-1000 ${logoVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}>
+      <div className={`relative flex flex-col items-center gap-6 transition-all duration-[1200ms] ease-out ${logoVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}>
         {/* Circular Logo */}
         <div className="relative">
           <img 
@@ -50,7 +57,7 @@ export function SplashScreen() {
 
         {/* Universe text */}
         <p 
-          className={`text-lg sm:text-xl font-light tracking-[0.3em] uppercase transition-all duration-700 delay-500 ${logoVisible ? 'opacity-90 translate-y-0' : 'opacity-0 translate-y-4'}`}
+          className={`text-lg sm:text-xl font-light tracking-[0.3em] uppercase transition-all duration-700 ${textVisible ? 'opacity-90 translate-y-0' : 'opacity-0 translate-y-4'}`}
           style={{ color: 'rgba(255, 255, 255, 0.9)' }}
         >
           Universe
