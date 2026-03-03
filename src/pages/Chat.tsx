@@ -219,42 +219,66 @@ export default function Chat() {
   }, [userSearchQuery, user]);
 
   // Helpers
-  const saveSet = (key: string, set: Set<string>, setter: (s: Set<string>) => void) => {
+  const saveSet = useCallback((key: string, set: Set<string>, setter: (s: Set<string>) => void) => {
     localStorage.setItem(key, JSON.stringify([...set]));
-    setter(set);
-  };
+    setter(new Set(set));
+  }, []);
 
-  const toggleInSet = (key: string, id: string, set: Set<string>, setter: (s: Set<string>) => void) => {
+  const toggleInSet = useCallback((key: string, id: string, set: Set<string>, setter: (s: Set<string>) => void) => {
     const n = new Set(set);
-    if (n.has(id)) n.delete(id); else n.add(id);
-    saveSet(key, n, setter);
-  };
+    const wasInSet = n.has(id);
+    if (wasInSet) n.delete(id); else n.add(id);
+    localStorage.setItem(key, JSON.stringify([...n]));
+    setter(new Set(n));
+    // Persist to DB
+    if (user) {
+      const dbField: Record<string, string> = { mutedChats: 'is_muted', archivedChats: 'is_archived', privateChats: 'is_private' };
+      const field = dbField[key];
+      if (field) {
+        supabase.from('chat_settings').upsert({
+          user_id: user.id, chat_user_id: id, [field]: !wasInSet, updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,chat_user_id' }).then(() => {});
+      }
+    }
+  }, [user]);
 
-  const saveChatTheme = (theme: string) => {
+  const saveChatTheme = useCallback((theme: string) => {
     setChatTheme(theme);
-    if (currentChatUser) {
+    if (currentChatUser && user) {
       const themes = JSON.parse(localStorage.getItem('chatThemes') || '{}');
       themes[currentChatUser] = theme;
       localStorage.setItem('chatThemes', JSON.stringify(themes));
+      // Persist to DB
+      supabase.from('chat_settings').upsert({
+        user_id: user.id, chat_user_id: currentChatUser, theme_color: theme, updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,chat_user_id' }).then(() => {});
     }
-  };
+  }, [currentChatUser, user]);
 
-  const saveChatGhostMode = (mode: number) => {
+  const saveChatGhostMode = useCallback((mode: number) => {
     setGhostMode(mode);
-    if (currentChatUser) {
+    if (currentChatUser && user) {
       const modes = JSON.parse(localStorage.getItem('chatGhostModes') || '{}');
       modes[currentChatUser] = mode;
       localStorage.setItem('chatGhostModes', JSON.stringify(modes));
+      supabase.from('chat_settings').upsert({
+        user_id: user.id, chat_user_id: currentChatUser, disappear_timer: mode, updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,chat_user_id' }).then(() => {});
     }
-  };
+  }, [currentChatUser, user]);
 
-  const saveNickname = (name: string) => {
+  const saveNickname = useCallback((name: string) => {
     if (!currentChatUser) return;
     const updated = { ...chatNicknames, [currentChatUser]: name };
     if (!name) delete updated[currentChatUser];
     setChatNicknames(updated);
     localStorage.setItem('chatNicknames', JSON.stringify(updated));
-  };
+    if (user) {
+      supabase.from('chat_settings').upsert({
+        user_id: user.id, chat_user_id: currentChatUser, nickname: name || null, updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,chat_user_id' }).then(() => {});
+    }
+  }, [currentChatUser, chatNicknames, user]);
 
   // File handling
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
