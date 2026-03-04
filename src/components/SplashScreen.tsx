@@ -55,12 +55,12 @@ export function SplashScreen() {
           />
         </div>
 
-        {/* Universe text */}
+        {/* Lumatha text */}
         <p 
           className={`text-lg sm:text-xl font-light tracking-[0.3em] uppercase transition-all duration-700 ${textVisible ? 'opacity-90 translate-y-0' : 'opacity-0 translate-y-4'}`}
           style={{ color: 'rgba(255, 255, 255, 0.9)' }}
         >
-          Universe
+          Lumatha
         </p>
       </div>
     </div>

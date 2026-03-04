@@ -60,8 +60,10 @@ export function SymbolicHeart({
     lg: 'w-6 h-6'
   };
 
+  const Wrapper = onToggle ? 'button' : 'span';
+
   return (
-    <button
+    <Wrapper
       onClick={onToggle}
       className={cn(
         "transition-all duration-200 active:scale-125 flex items-center",
@@ -76,7 +78,7 @@ export function SymbolicHeart({
           isLiked ? palette.color : palette.unlit
         )} 
       />
-    </button>
+    </Wrapper>
   );
 }
 

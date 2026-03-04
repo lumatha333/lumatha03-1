@@ -11,16 +11,23 @@ export function useAutoTheme() {
   }, []);
 
   const applyTheme = useCallback((theme: 'light' | 'dark') => {
+    const root = document.documentElement;
+    const body = document.body;
     if (theme === 'light') {
-      document.documentElement.classList.add('light');
-      document.documentElement.classList.remove('dark');
-      document.body.classList.add('light');
-      document.body.classList.remove('dark');
+      root.classList.add('light');
+      root.classList.remove('dark');
+      body.classList.add('light');
+      body.classList.remove('dark');
+      // Force light background immediately to prevent black flash
+      root.style.backgroundColor = 'hsl(210, 40%, 98%)';
+      body.style.backgroundColor = 'hsl(210, 40%, 98%)';
     } else {
-      document.documentElement.classList.remove('light');
-      document.documentElement.classList.add('dark');
-      document.body.classList.remove('light');
-      document.body.classList.add('dark');
+      root.classList.remove('light');
+      root.classList.add('dark');
+      body.classList.remove('light');
+      body.classList.add('dark');
+      root.style.backgroundColor = '';
+      body.style.backgroundColor = '';
     }
   }, []);
 
