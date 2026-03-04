@@ -8,14 +8,14 @@ export function SplashScreen() {
   const [textVisible, setTextVisible] = useState(false);
 
   useEffect(() => {
-    // Logo fades in after 600ms (not instant)
-    const logoTimer = setTimeout(() => setLogoVisible(true), 600);
-    // Text appears after logo is visible
-    const textTimer = setTimeout(() => setTextVisible(true), 1400);
-    // Start fade out after 4 seconds total
-    const fadeTimer = setTimeout(() => setFadeOut(true), 4000);
+    // Logo fades in after 800ms (slow, premium entry)
+    const logoTimer = setTimeout(() => setLogoVisible(true), 800);
+    // Text appears after logo is fully visible
+    const textTimer = setTimeout(() => setTextVisible(true), 1800);
+    // Start fade out after 4.5 seconds total
+    const fadeTimer = setTimeout(() => setFadeOut(true), 4500);
     // Remove from DOM after fade completes
-    const hideTimer = setTimeout(() => setShow(false), 4700);
+    const hideTimer = setTimeout(() => setShow(false), 5300);
     return () => {
       clearTimeout(logoTimer);
       clearTimeout(textTimer);
@@ -28,9 +28,9 @@ export function SplashScreen() {
 
   return (
     <div 
-      className={`fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-700 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-800 ${fadeOut ? 'opacity-0' : 'opacity-100'}`}
       style={{ 
-        background: 'hsl(220 60% 4%)'
+        background: 'hsl(220 60% 8%)'
       }}
     >
       {/* Golden glow behind logo */}
