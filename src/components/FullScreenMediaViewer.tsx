@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X, ChevronLeft, ChevronRight, Heart, MessageCircle, Share2, MoreHorizontal, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -82,7 +82,8 @@ export function FullScreenMediaViewer({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-screen h-screen max-w-none max-h-none p-0 m-0 bg-black border-none rounded-none [&>button]:hidden fixed inset-0 translate-x-0 translate-y-0 top-0 left-0">
+      <DialogContent className="w-screen h-screen max-w-none max-h-none p-0 m-0 bg-black border-none rounded-none [&>button]:hidden fixed inset-0 translate-x-0 translate-y-0 top-0 left-0" aria-describedby={undefined}>
+        <DialogTitle className="sr-only">Media Viewer</DialogTitle>
         <div className="fixed inset-0 w-screen h-screen flex flex-col bg-black">
           {/* Top bar */}
           <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-3 bg-gradient-to-b from-black/70 to-transparent">

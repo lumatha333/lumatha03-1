@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FriendTick } from '@/components/lumatha/FriendTick';
 import { 
   ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
@@ -535,7 +535,8 @@ export default function Profile() {
 
       {/* Full Screen Avatar Dialog */}
       <Dialog open={avatarOpen} onOpenChange={setAvatarOpen}>
-        <DialogContent className="max-w-sm p-0 bg-black/95 border-none">
+        <DialogContent className="max-w-sm p-0 bg-black/95 border-none" aria-describedby={undefined}>
+          <DialogTitle className="sr-only">Profile Photo</DialogTitle>
           <img src={profile.avatar_url || '/placeholder.svg'} alt={profile.name} className="w-full h-auto" />
         </DialogContent>
       </Dialog>
