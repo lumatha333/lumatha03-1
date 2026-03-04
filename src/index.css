@@ -167,12 +167,15 @@ All colors MUST be HSL.
   }
 
   html.light {
-    background: hsl(0 0% 100%);
+    background: hsl(210 40% 98%) !important;
   }
 
+  html.light body,
   body.light {
-    background: radial-gradient(1200px at 10% -10%, hsl(210 60% 95%), hsl(0 0% 100%) 40%, hsl(210 40% 96%) 100%);
+    background: hsl(210 40% 98%) !important;
+    background-image: radial-gradient(1200px at 10% -10%, hsl(210 60% 95%), hsl(0 0% 100%) 40%, hsl(210 40% 96%) 100%) !important;
     background-attachment: fixed;
+    color: hsl(220 60% 15%);
   }
 }
 
