@@ -18,7 +18,6 @@ import Public from '@/pages/Public';
 import Private from '@/pages/Private';
 import Saved from '@/pages/Saved';
 import Create from '@/pages/Create';
-import FunPun from '@/pages/FunPun';
 import Notifications from '@/pages/Notifications';
 import Search from '@/pages/Search';
 import NotFound from '@/pages/NotFound';
@@ -32,25 +31,24 @@ export default function Index() {
           <ProtectionLayer />
           <Layout>
             <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<Home />} />
-              <Route path="/education" element={<Education />} />
-              <Route path="/learn" element={<Education />} />
-              <Route path="/music-adventure" element={<MusicAdventure />} />
-              <Route path="/random-connect" element={<RandomConnect />} />
-              <Route path="/marketplace" element={<Marketplace />} />
-              <Route path="/marketplace/profile/:userId" element={<MarketplaceProfile />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/profile/:userId" element={<Profile />} />
-              <Route path="/chat/:userId?" element={<Chat />} />
-              <Route path="/public" element={<Public />} />
-              <Route path="/private" element={<Private />} />
-              <Route path="/saved" element={<Saved />} />
-              <Route path="/create" element={<Create />} />
-              <Route path="/funpun" element={<FunPun />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/search" element={<Search />} />
-              <Route path="*" element={<NotFound />} />
+              <Route path=\"/auth\" element={<Auth />} />
+              <Route path=\"/\" element={<Home />} />
+              <Route path=\"/education\" element={<Education />} />
+              <Route path=\"/learn\" element={<Education />} />
+              <Route path=\"/music-adventure\" element={<MusicAdventure />} />
+              <Route path=\"/random-connect\" element={<RandomConnect />} />
+              <Route path=\"/marketplace\" element={<Marketplace />} />
+              <Route path=\"/marketplace/profile/:userId\" element={<MarketplaceProfile />} />
+              <Route path=\"/settings\" element={<Settings />} />
+              <Route path=\"/profile/:userId\" element={<Profile />} />
+              <Route path=\"/chat/:userId?\" element={<Chat />} />
+              <Route path=\"/public\" element={<Public />} />
+              <Route path=\"/private\" element={<Private />} />
+              <Route path=\"/saved\" element={<Saved />} />
+              <Route path=\"/create\" element={<Create />} />
+              <Route path=\"/notifications\" element={<Notifications />} />
+              <Route path=\"/search\" element={<Search />} />
+              <Route path=\"*\" element={<NotFound />} />
             </Routes>
           </Layout>
         </AuthProvider>
