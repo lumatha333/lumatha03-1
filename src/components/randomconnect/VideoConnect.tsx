@@ -1,0 +1,925 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { SkipForward, Eye, EyeOff, Camera, CameraOff, Mic, MicOff, Clock, Subtitles, Flag, Video, Volume2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useSecurityDetection } from '@/hooks/useSecurityDetection';
+import { useSignaling } from '@/hooks/useSignaling';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+import { ReportDialog } from './ReportDialog';
+import { ConnectionQualityIndicator } from './ConnectionQualityIndicator';
+import { TwoWayConnectionStatus } from './TwoWayConnectionStatus';
+import { WebRTCDebugPanel } from './WebRTCDebugPanel';
+import { getIceServers } from '@/lib/turnServers';
+interface VideoConnectProps {
+  myPseudoName: string;
+  partnerPseudoName: string;
+  conversationStarter: string;
+  onSkip: () => void;
+  onViolation?: (type: 'screenshot' | 'recording') => void;
+  onReport?: (reason: string) => void;
+  sessionId?: string;
+  partnerId?: string;
+}
+
+const MAX_VIDEO_DURATION = 15 * 60; // 15 minutes in seconds
+const MANDATORY_STAY_SECONDS = 20; // 20 seconds before skip is available
+
+// Use centralized TURN server configuration with fallback support
+const iceServers = getIceServers();
+
+export const VideoConnect: React.FC<VideoConnectProps> = ({
+  myPseudoName,
+  partnerPseudoName,
+  conversationStarter,
+  onSkip,
+  onViolation,
+  onReport,
+  sessionId,
+  partnerId
+}) => {
+  const { user } = useAuth();
+  const [blurEnabled, setBlurEnabled] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [canSkip, setCanSkip] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [timeWarningShown, setTimeWarningShown] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [currentCaption, setCurrentCaption] = useState('');
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [hasRemoteStream, setHasRemoteStream] = useState(false);
+  const [offerSent, setOfferSent] = useState(false);
+  const [answerReceived, setAnswerReceived] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(true);
+  
+  const myVideoRef = useRef<HTMLVideoElement>(null);
+  const partnerVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
+  const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
+  const hasCreatedOfferRef = useRef<boolean>(false);
+  const isInitiatorRef = useRef<boolean>(false);
+  const localStreamReadyRef = useRef<boolean>(false);
+  const signalingReadyRef = useRef<boolean>(false);
+  const peerPresentRef = useRef<boolean>(false);
+  const iceReconnectAttemptedRef = useRef<boolean>(false);
+  const iceFailedTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Avoid TS2448 by using stable refs for signaling senders (they are returned later by useSignaling)
+  const sendOfferRef = useRef<((sdp: RTCSessionDescriptionInit) => void) | null>(null);
+  const sendAnswerRef = useRef<((sdp: RTCSessionDescriptionInit) => void) | null>(null);
+  const sendIceCandidateRef = useRef<((candidate: RTCIceCandidateInit) => void) | null>(null);
+
+  // Security detection
+  useSecurityDetection({
+    enabled: true,
+    onScreenshotDetected: () => onViolation?.('screenshot'),
+    onRecordingDetected: () => onViolation?.('recording')
+  });
+
+  // Determine if this user should create the offer (based on ID comparison)
+  const shouldBeInitiator = useCallback(() => {
+    if (!user?.id || !partnerId) return false;
+    return user.id < partnerId;
+  }, [user?.id, partnerId]);
+
+  // Try to create offer when conditions are met - called from checkAndCreateOffer
+  const tryCreateOffer = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+
+    // All conditions must be met
+    if (!peerPresentRef.current) {
+      console.log('[tryCreateOffer] Peer not present yet');
+      return;
+    }
+
+    if (!pc) {
+      console.log('[tryCreateOffer] No peer connection');
+      return;
+    }
+    
+    if (!localStreamReadyRef.current) {
+      console.log('[tryCreateOffer] Local stream not ready');
+      return;
+    }
+    
+    if (hasCreatedOfferRef.current) {
+      console.log('[tryCreateOffer] Offer already created');
+      return;
+    }
+
+    if (!shouldBeInitiator()) {
+      console.log('[tryCreateOffer] Not initiator, waiting for offer from partner');
+      return;
+    }
+
+    // CRITICAL: Check that signaling functions are available
+    if (!sendOfferRef.current) {
+      console.log('[tryCreateOffer] sendOfferRef not ready yet, retrying in 100ms');
+      setTimeout(() => tryCreateOffer(), 100);
+      return;
+    }
+
+    hasCreatedOfferRef.current = true;
+    isInitiatorRef.current = true;
+
+    try {
+      console.log('[tryCreateOffer] Creating WebRTC offer as initiator...');
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      });
+      await pc.setLocalDescription(offer);
+      console.log('[tryCreateOffer] Sending offer to partner via signaling');
+      sendOfferRef.current(offer);
+      setOfferSent(true);
+    } catch (error) {
+      console.error('[tryCreateOffer] Error creating offer:', error);
+      hasCreatedOfferRef.current = false;
+    }
+  }, [shouldBeInitiator]);
+  
+  // Centralized function to check conditions and create offer
+  const checkAndCreateOffer = useCallback(() => {
+    console.log('[checkAndCreateOffer] Checking conditions:', {
+      peerPresent: peerPresentRef.current,
+      localStreamReady: localStreamReadyRef.current,
+      hasCreatedOffer: hasCreatedOfferRef.current,
+      hasPc: !!peerConnectionRef.current
+    });
+    
+    if (peerPresentRef.current && localStreamReadyRef.current && !hasCreatedOfferRef.current) {
+      // Small delay to ensure everything is settled
+      setTimeout(() => {
+        tryCreateOffer();
+      }, 100);
+    }
+  }, [tryCreateOffer]);
+
+  // ICE restart function for reconnection
+  const attemptIceRestart = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc || iceReconnectAttemptedRef.current) return;
+
+    iceReconnectAttemptedRef.current = true;
+    console.log('Attempting ICE restart...');
+    toast.info('Reconnecting...');
+
+    try {
+      // Create new offer with iceRestart flag
+      const offer = await pc.createOffer({ iceRestart: true });
+      await pc.setLocalDescription(offer);
+      sendOfferRef.current?.(offer);
+      setOfferSent(true);
+      console.log('ICE restart offer sent');
+    } catch (error) {
+      console.error('ICE restart failed:', error);
+      toast.error('Reconnection failed. Returning to lobby...');
+      onSkip();
+    }
+  }, [onSkip]);
+
+  // Create peer connection
+  const createPeerConnection = useCallback(() => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+
+    console.log('Creating new RTCPeerConnection...');
+    const pc = new RTCPeerConnection({
+      iceServers,
+      iceCandidatePoolSize: 10
+    });
+    peerConnectionRef.current = pc;
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log('Generated ICE candidate, sending to partner');
+        sendIceCandidateRef.current?.(event.candidate.toJSON());
+      }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      console.log('ICE gathering state:', pc.iceGatheringState);
+    };
+
+    // Handle remote stream - THIS IS WHERE WE SEE AND HEAR THE OTHER PERSON
+    pc.ontrack = (event) => {
+      console.log('Received remote track:', event.track.kind, event.track.readyState);
+
+      const [remoteStream] = event.streams;
+      if (!remoteStream) {
+        console.log('No remote stream in track event');
+        return;
+      }
+
+      remoteStreamRef.current = remoteStream;
+      setHasRemoteStream(true);
+
+      // Display partner's video - REAL FACE TO FACE
+      if (partnerVideoRef.current) {
+        console.log('Setting partner video source');
+        partnerVideoRef.current.srcObject = remoteStream;
+        partnerVideoRef.current.play().catch(e => console.log('Partner video play error:', e));
+      }
+
+      // Create separate audio element for clear audio playback - REAL VOICE EXCHANGE
+      if (!remoteAudioRef.current) {
+        console.log('Creating audio element for remote audio');
+        const audioElement = document.createElement('audio');
+        audioElement.autoplay = true;
+        audioElement.setAttribute('playsinline', 'true');
+        audioElement.volume = 1.0;
+        document.body.appendChild(audioElement);
+        remoteAudioRef.current = audioElement;
+      }
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch(e => console.log('Remote audio play error:', e));
+
+      setIsConnected(true);
+      setConnectionStatus('connected');
+      toast.success('Connected! You can now see and hear each other.');
+    };
+
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+      console.log('Connection state changed:', pc.connectionState);
+      switch (pc.connectionState) {
+        case 'connected':
+          setConnectionStatus('connected');
+          setIsConnected(true);
+          break;
+        case 'disconnected':
+          setConnectionStatus('disconnected');
+          setIsConnected(false);
+          toast.info('Connection interrupted. Trying to reconnect...');
+          break;
+        case 'failed':
+          setConnectionStatus('disconnected');
+          setIsConnected(false);
+          toast.error('Connection failed. Please try again.');
+          break;
+        case 'closed':
+          setConnectionStatus('disconnected');
+          setIsConnected(false);
+          break;
+        default:
+          setConnectionStatus('connecting');
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE connection state:', pc.iceConnectionState);
+
+      // Clear any pending reconnect timer
+      if (iceFailedTimerRef.current) {
+        clearTimeout(iceFailedTimerRef.current);
+        iceFailedTimerRef.current = null;
+      }
+
+      // Handle ICE failures with automatic reconnect after 5 seconds
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        console.log('ICE state is', pc.iceConnectionState, '- starting 5s reconnect timer');
+        iceFailedTimerRef.current = setTimeout(() => {
+          if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            attemptIceRestart();
+          }
+        }, 5000);
+      }
+
+      // Reset reconnect flag when connection is restored
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        iceReconnectAttemptedRef.current = false;
+      }
+    };
+
+    pc.onsignalingstatechange = () => {
+      console.log('Signaling state:', pc.signalingState);
+    };
+
+    return pc;
+  }, [attemptIceRestart]);
+
+  // Signaling handlers
+  const handlePeerJoined = useCallback((data: { userId: string; pseudoName: string }) => {
+    console.log('[handlePeerJoined] Peer joined video call:', data.pseudoName, 'userId:', data.userId);
+    peerPresentRef.current = true;
+
+    const pc = peerConnectionRef.current;
+    // If we already created an offer earlier, re-send it now that the peer is definitely present.
+    if (pc?.localDescription?.type === 'offer' && !answerReceived) {
+      console.log('[handlePeerJoined] Re-sending existing offer to newly joined peer');
+      sendOfferRef.current?.(pc.localDescription);
+      setOfferSent(true);
+      return;
+    }
+
+    // Check if we should create an offer now
+    checkAndCreateOffer();
+  }, [checkAndCreateOffer, answerReceived]);
+
+  const handleOffer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string; fromPseudoName: string }) => {
+    console.log('Received offer from:', data.fromPseudoName);
+    const pc = peerConnectionRef.current;
+    if (!pc) {
+      console.error('No peer connection when receiving offer');
+      return;
+    }
+
+    try {
+      console.log('Setting remote description from offer...');
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+
+      // Process queued ICE candidates
+      console.log('Processing', iceCandidatesQueue.current.length, 'queued ICE candidates');
+      while (iceCandidatesQueue.current.length > 0) {
+        const candidate = iceCandidatesQueue.current.shift();
+        if (candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      }
+
+      console.log('Creating answer...');
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      console.log('Sending answer to partner');
+      sendAnswerRef.current?.(answer);
+    } catch (error) {
+      console.error('Error handling offer:', error);
+    }
+  }, []);
+
+  const handleAnswer = useCallback(async (data: { sdp: RTCSessionDescriptionInit; fromUserId: string }) => {
+    console.log('Received answer from partner');
+    const pc = peerConnectionRef.current;
+    if (!pc) {
+      console.error('No peer connection when receiving answer');
+      return;
+    }
+    
+    try {
+      console.log('Setting remote description from answer...');
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      setAnswerReceived(true);
+      
+      // Process queued ICE candidates
+      console.log('Processing', iceCandidatesQueue.current.length, 'queued ICE candidates');
+      while (iceCandidatesQueue.current.length > 0) {
+        const candidate = iceCandidatesQueue.current.shift();
+        if (candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      }
+    } catch (error) {
+      console.error('Error handling answer:', error);
+    }
+  }, []);
+
+  const handleIceCandidate = useCallback(async (data: { candidate: RTCIceCandidateInit; fromUserId: string }) => {
+    const pc = peerConnectionRef.current;
+    if (!pc) {
+      console.log('Queuing ICE candidate - no peer connection yet');
+      iceCandidatesQueue.current.push(data.candidate);
+      return;
+    }
+    
+    try {
+      if (pc.remoteDescription && pc.remoteDescription.type) {
+        console.log('Adding ICE candidate');
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } else {
+        console.log('Queuing ICE candidate - no remote description yet');
+        iceCandidatesQueue.current.push(data.candidate);
+      }
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
+    }
+  }, []);
+
+  const handlePeerLeft = useCallback(() => {
+    console.log('Peer left video call - returning to lobby');
+    setConnectionStatus('disconnected');
+    setIsConnected(false);
+    setHasRemoteStream(false);
+    peerPresentRef.current = false;
+    toast.info('Partner left. Returning to lobby...');
+    // Partner skipped - automatically skip as well (both return to lobby)
+    onSkip();
+  }, [onSkip]);
+
+  // CRITICAL: Called when signaling joins, with list of existing participants
+  const handleSignalingConnected = useCallback((existingParticipants: Array<{ userId: string; pseudoName: string }>) => {
+    console.log('[handleSignalingConnected] Signaling connected, existing participants:', existingParticipants);
+    signalingReadyRef.current = true;
+    
+    // If there are existing participants, the partner is already in the room
+    if (existingParticipants.length > 0) {
+      console.log('[handleSignalingConnected] Partner already in session, marking peer as present');
+      peerPresentRef.current = true;
+      
+      // Check if we should create offer now
+      checkAndCreateOffer();
+    }
+  }, [checkAndCreateOffer]);
+
+  // Signaling for WebRTC connection
+  const { 
+    isConnected: signalingConnected, 
+    participantCount,
+    sendOffer, 
+    sendAnswer, 
+    sendIceCandidate 
+  } = useSignaling({
+    sessionId: sessionId || null,
+    userId: user?.id || '',
+    pseudoName: myPseudoName,
+    onSignalingConnected: handleSignalingConnected,
+    onPeerJoined: handlePeerJoined,
+    onOffer: handleOffer,
+    onAnswer: handleAnswer,
+    onIceCandidate: handleIceCandidate,
+    onPeerLeft: handlePeerLeft
+  });
+
+  // CRITICAL FIX: Sync refs IMMEDIATELY (not in useEffect) so they're available
+  // before any callbacks try to use them
+  sendOfferRef.current = sendOffer;
+  sendAnswerRef.current = sendAnswer;
+  sendIceCandidateRef.current = sendIceCandidate;
+
+  // Enable skip after mandatory stay (20 seconds)
+  useEffect(() => {
+    if (duration >= MANDATORY_STAY_SECONDS && !canSkip) {
+      setCanSkip(true);
+    }
+  }, [duration, canSkip]);
+
+  // Check for time limit - auto end at 15 mins
+  useEffect(() => {
+    if (duration >= MAX_VIDEO_DURATION - 60 && !timeWarningShown) {
+      setTimeWarningShown(true);
+      toast.warning('1 minute remaining in this video session');
+    }
+    
+    if (duration >= MAX_VIDEO_DURATION) {
+      toast.info('Video session limit reached (15 minutes)');
+      onSkip();
+    }
+  }, [duration, timeWarningShown, onSkip]);
+
+  // Initialize Live Captions (Speech Recognition)
+  useEffect(() => {
+    if (!captionsEnabled) {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+      setCurrentCaption('');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Live captions not supported in this browser');
+      setCaptionsEnabled(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0].transcript)
+        .join(' ');
+      setCurrentCaption(transcript.slice(-100));
+    };
+
+    recognition.onerror = () => {
+      setCurrentCaption('');
+    };
+
+    recognition.start();
+    speechRecognitionRef.current = recognition;
+
+    return () => {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+    };
+  }, [captionsEnabled]);
+
+  // Initialize WebRTC and camera - runs once on mount
+  useEffect(() => {
+    let mounted = true;
+    hasCreatedOfferRef.current = false;
+    iceCandidatesQueue.current = [];
+    localStreamReadyRef.current = false;
+    // Note: Don't reset peerPresentRef here - it may have been set by signaling already
+    
+    const initializeVideoCall = async () => {
+      try {
+        // Request camera and microphone with optimal settings for real-time communication
+        console.log('[initializeVideoCall] Requesting camera and microphone access...');
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: {
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
+            facingMode: 'user',
+            frameRate: { ideal: 30, min: 15 }
+          }, 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000,
+            channelCount: 1
+          }
+        });
+        
+        if (!mounted) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        
+        localStreamRef.current = stream;
+        console.log('[initializeVideoCall] Got local stream with', stream.getTracks().length, 'tracks:', 
+          stream.getTracks().map(t => `${t.kind}:${t.readyState}`).join(', '));
+        
+        // Set local video - THIS IS YOUR OWN FACE
+        if (myVideoRef.current) {
+          myVideoRef.current.srcObject = stream;
+          myVideoRef.current.muted = true; // Mute local playback to prevent echo
+          myVideoRef.current.play().catch(e => console.log('Local video play error:', e));
+        }
+
+        // Create RTCPeerConnection
+        const pc = createPeerConnection();
+
+        // Add local stream tracks to peer connection - CRITICAL FOR TWO-WAY COMMUNICATION
+        stream.getTracks().forEach(track => {
+          console.log('[initializeVideoCall] Adding track to peer connection:', track.kind, track.readyState);
+          pc.addTrack(track, stream);
+        });
+        
+        // Mark local stream as ready
+        localStreamReadyRef.current = true;
+        console.log('[initializeVideoCall] Local stream ready, will check if should create offer');
+        
+        // Check if we should create an offer now (peer might already be present)
+        // We need to call the ref-based check because this callback may have stale closure
+        if (peerPresentRef.current && !hasCreatedOfferRef.current) {
+          console.log('[initializeVideoCall] Peer already present, triggering offer check');
+          // Use a small timeout to ensure refs are synced
+          setTimeout(() => {
+            if (peerPresentRef.current && localStreamReadyRef.current && !hasCreatedOfferRef.current) {
+              tryCreateOffer();
+            }
+          }, 200);
+        }
+
+      } catch (err) {
+        console.error('[initializeVideoCall] Failed to initialize video call:', err);
+        toast.error('Camera and microphone access is required for video chat');
+      }
+    };
+    
+    initializeVideoCall();
+    
+    return () => {
+      mounted = false;
+      
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => {
+          track.stop();
+          console.log('Stopped track:', track.kind);
+        });
+        localStreamRef.current = null;
+      }
+      
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
+      }
+      
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null;
+        remoteAudioRef.current.remove();
+        remoteAudioRef.current = null;
+      }
+
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createPeerConnection]); // Only depend on createPeerConnection, not signaling state
+
+  // Duration timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDuration(d => d + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getRemainingTime = () => {
+    const remaining = MAX_VIDEO_DURATION - duration;
+    if (remaining <= 0) return '0:00';
+    return formatDuration(remaining);
+  };
+
+  const toggleCamera = useCallback(() => {
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsCameraOn(videoTrack.enabled);
+      }
+    }
+  }, []);
+
+  const toggleMic = useCallback(() => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMicOn(audioTrack.enabled);
+      }
+    }
+  }, []);
+
+  const handleReport = (reason: string) => {
+    onReport?.(reason);
+    setShowReportDialog(false);
+    toast.success('Report submitted. Thank you for keeping the community safe.');
+  };
+
+  return (
+    <div className="flex flex-col items-center min-h-[85vh] p-2 random-connect-protected">
+      {/* Two-Way Connection Status - Clear confirmation that BOTH can see/hear each other */}
+      <div className="w-full max-w-lg flex items-center justify-between mb-2 px-1">
+        <TwoWayConnectionStatus
+          mode="video"
+          isCameraOn={isCameraOn}
+          isMicOn={isMicOn}
+          hasRemoteVideo={hasRemoteStream}
+          hasRemoteAudio={hasRemoteStream}
+          isConnected={isConnected}
+          connectionStatus={connectionStatus}
+        />
+        <ConnectionQualityIndicator
+          peerConnection={peerConnectionRef.current}
+          isConnected={isConnected}
+          showDetails={false}
+        />
+      </div>
+
+      {/* Connection explanation for users */}
+      {connectionStatus === 'connected' && hasRemoteStream && (
+        <div className="glass-card px-3 py-1.5 rounded-lg mb-2 max-w-lg">
+          <p className="text-[11px] text-green-600 dark:text-green-400 text-center">
+            ✓ Face-to-face active • Both of you can see and hear each other clearly
+          </p>
+        </div>
+      )}
+
+      {/* Main Split Screen Video Container - TRUE FACE TO FACE - BOTH REAL FACES VISIBLE */}
+      <div className="relative flex-1 w-full max-w-lg rounded-2xl overflow-hidden bg-muted shadow-lg">
+        {/* Partner Video - Top Half (55%) - YOU SEE THEIR REAL FACE HERE */}
+        <div className="absolute top-0 left-0 right-0 h-[55%] bg-gradient-to-b from-card to-muted border-b-2 border-background">
+          <video
+            ref={partnerVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className={`w-full h-full object-cover ${blurEnabled ? 'blur-xl' : ''}`}
+          />
+          
+          {/* Partner placeholder when waiting for connection */}
+          {!hasRemoteStream && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-secondary/20 to-secondary/5">
+              <div className="w-20 h-20 rounded-full bg-secondary/20 flex items-center justify-center mb-3">
+                <Video className="w-8 h-8 text-secondary/60 animate-pulse" />
+              </div>
+              <p className="text-sm font-medium text-secondary">{partnerPseudoName}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {connectionStatus === 'connecting' ? 'Connecting camera...' : 'Waiting for partner\'s video...'}
+              </p>
+            </div>
+          )}
+          
+          {/* Partner connected badge - confirms you CAN see them */}
+          {hasRemoteStream && (
+            <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+              <Video className="w-3.5 h-3.5 text-green-500" />
+              <p className="text-xs font-medium text-secondary">{partnerPseudoName}</p>
+              <div className="flex items-center gap-0.5 ml-1">
+                <Volume2 className="w-3 h-3 text-green-500" />
+              </div>
+            </div>
+          )}
+
+          {/* Audio wave indicator - shows partner is talking */}
+          {hasRemoteStream && (
+            <div className="absolute bottom-3 right-3 flex items-center gap-0.5">
+              {[...Array(4)].map((_, i) => (
+                <div 
+                  key={i}
+                  className="w-1 bg-green-400 rounded-full animate-pulse"
+                  style={{ 
+                    height: `${6 + Math.random() * 12}px`,
+                    animationDelay: `${i * 0.1}s`
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* My Video - Bottom Half (45%) - MY REAL FACE */}
+        <div className="absolute bottom-0 left-0 right-0 h-[45%] bg-gradient-to-t from-card to-muted">
+          <video
+            ref={myVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className={`w-full h-full object-cover ${blurEnabled ? 'blur-lg' : ''}`}
+          />
+          
+          {/* Camera off state */}
+          {!isCameraOn && (
+            <div className="absolute inset-0 bg-muted flex flex-col items-center justify-center">
+              <CameraOff className="w-10 h-10 text-muted-foreground mb-2" />
+              <p className="text-xs text-muted-foreground">Camera Off</p>
+            </div>
+          )}
+          
+          {/* My name badge */}
+          <div className="absolute bottom-3 left-3 bg-background/80 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary" />
+            <p className="text-xs font-medium text-primary">You • {myPseudoName.split('-')[0]}</p>
+          </div>
+
+          {/* My audio indicator */}
+          {isMicOn && (
+            <div className="absolute bottom-3 right-3 flex items-center gap-0.5">
+              {[...Array(3)].map((_, i) => (
+                <div 
+                  key={i}
+                  className="w-1 bg-primary rounded-full animate-pulse"
+                  style={{ 
+                    height: `${5 + Math.random() * 10}px`,
+                    animationDelay: `${i * 0.1}s`
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Timer & Remaining Time - Top Center */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+          <div className="bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+            <p className="text-xs font-semibold text-foreground">{formatDuration(duration)}</p>
+            <span className="text-muted-foreground">|</span>
+            <Clock className="w-3 h-3 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">{getRemainingTime()}</p>
+          </div>
+        </div>
+
+        {/* Control Buttons - Right Side */}
+        <div className="absolute top-16 right-2 flex flex-col gap-2 z-20">
+          <button
+            onClick={() => setBlurEnabled(!blurEnabled)}
+            className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-background hover:scale-105 shadow-md"
+            title={blurEnabled ? 'Remove blur' : 'Add blur'}
+          >
+            {blurEnabled ? (
+              <EyeOff className="w-4 h-4 text-foreground" />
+            ) : (
+              <Eye className="w-4 h-4 text-foreground" />
+            )}
+          </button>
+          
+          <button
+            onClick={toggleCamera}
+            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 shadow-md ${
+              isCameraOn ? 'bg-background/90 hover:bg-background' : 'bg-red-500/90 hover:bg-red-500'
+            }`}
+            title={isCameraOn ? 'Turn off camera' : 'Turn on camera'}
+          >
+            {isCameraOn ? (
+              <Camera className="w-4 h-4 text-foreground" />
+            ) : (
+              <CameraOff className="w-4 h-4 text-white" />
+            )}
+          </button>
+          
+          <button
+            onClick={toggleMic}
+            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 shadow-md ${
+              isMicOn ? 'bg-background/90 hover:bg-background' : 'bg-red-500/90 hover:bg-red-500'
+            }`}
+            title={isMicOn ? 'Mute' : 'Unmute'}
+          >
+            {isMicOn ? (
+              <Mic className="w-4 h-4 text-foreground" />
+            ) : (
+              <MicOff className="w-4 h-4 text-white" />
+            )}
+          </button>
+
+          <button
+            onClick={() => setCaptionsEnabled(!captionsEnabled)}
+            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 shadow-md ${
+              captionsEnabled ? 'bg-primary/90 hover:bg-primary' : 'bg-background/90 hover:bg-background'
+            }`}
+            title={captionsEnabled ? 'Disable captions' : 'Enable live captions'}
+          >
+            <Subtitles className={`w-4 h-4 ${captionsEnabled ? 'text-white' : 'text-foreground'}`} />
+          </button>
+
+          <button
+            onClick={() => setShowReportDialog(true)}
+            className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-red-500/20 hover:scale-105 shadow-md"
+            title="Report user"
+          >
+            <Flag className="w-4 h-4 text-muted-foreground hover:text-red-500" />
+          </button>
+        </div>
+
+        {/* Live Captions Overlay */}
+        {captionsEnabled && currentCaption && (
+          <div className="absolute bottom-[46%] left-2 right-2 z-20">
+            <div className="bg-black/80 backdrop-blur-sm px-4 py-2 rounded-lg mx-auto max-w-xs">
+              <p className="text-white text-sm text-center leading-relaxed">{currentCaption}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Conversation Starter - Below video */}
+      {connectionStatus === 'connected' && (
+        <div className="glass-card px-4 py-2 rounded-xl text-center max-w-sm mt-3">
+          <p className="text-xs text-muted-foreground">💬 "{conversationStarter}"</p>
+        </div>
+      )}
+
+      {/* Skip Button Only - Available after 20 seconds */}
+      <div className="mt-4 w-full max-w-sm">
+        {!canSkip && (
+          <p className="text-center text-xs text-muted-foreground mb-2">
+            ⏱️ Skip available in {Math.max(0, MANDATORY_STAY_SECONDS - duration)}s
+          </p>
+        )}
+        
+        <Button
+          onClick={onSkip}
+          variant="outline"
+          disabled={!canSkip}
+          className="w-full gap-2 py-6 rounded-xl transition-all hover:scale-[1.02]"
+        >
+          <SkipForward className="w-5 h-5" />
+          {canSkip ? 'Skip to Next Person' : `Wait ${Math.max(0, MANDATORY_STAY_SECONDS - duration)}s...`}
+        </Button>
+      </div>
+
+      {/* Report Dialog */}
+      <ReportDialog 
+        open={showReportDialog} 
+        onClose={() => setShowReportDialog(false)} 
+        onReport={handleReport}
+      />
+
+      {/* WebRTC Debug Panel */}
+      {showDebugPanel && (
+        <WebRTCDebugPanel
+          signalingConnected={signalingConnected}
+          peerConnection={peerConnectionRef.current}
+          hasLocalStream={!!localStreamRef.current}
+          hasRemoteStream={hasRemoteStream}
+          hasRemoteAudio={hasRemoteStream}
+          hasRemoteVideo={hasRemoteStream}
+          offerSent={offerSent}
+          answerReceived={answerReceived}
+          participantCount={participantCount}
+        />
+      )}
+    </div>
+  );
+};

@@ -1,0 +1,718 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+
+<html data-theme="kathmandu" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Crown Of Creation</title>
+<style>
+        :root {
+            --bg: #0f0a1a; --bg-2: rgba(255,255,255,0.06); --text: #f7f2ff; --muted: #b9a9d6;
+            --accent: #ff7a18; --accent-2: #a163f5; --card: rgba(255,255,255,0.1); --border: rgba(255,255,255,0.18);
+            --shadow: rgba(0,0,0,0.35); --good: #35d49a; --bad: #ff5d6c; --warn: #ffd166;
+        }
+        html[data-theme="kathmandu"] { --bg: radial-gradient(1200px at 10% -10%, #3b1457 0%, #150c24 40%, #0a0812 100%), #0a0812; --accent: #ff7a18; --accent-2: #a163f5; }
+        html[data-theme="everest"] { --bg: radial-gradient(1000px at 80% -20%, #0d2340 0%, #071221 50%, #050b14 100%), #050b14; --accent: #7ad8ff; --accent-2: #c9f0ff; }
+        html[data-theme="neon"] { --bg: #06070a; --accent: #00e5ff; --accent-2: #ff00e6; }
+        html[data-theme="global"] { --bg: #f7f8fc; --bg-2: rgba(0,0,0,0.04); --text: #0b1020; --muted: #5a627a; --card: rgba(255,255,255,0.85); --border: rgba(0,0,0,0.08); --shadow: rgba(0,0,0,0.08); --accent: #2b7bff; --accent-2: #00b7ff; }
+        * { box-sizing: border-box; }
+        body { margin: 0; color: var(--text); background: var(--bg); font-family: system-ui, sans-serif; scroll-behavior: smooth; }
+        a, button { color: inherit; text-decoration: none; font: inherit; cursor: pointer; border: 0; background: transparent; }
+        input, select, textarea { font: inherit; color: var(--text); background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; outline: none; width: 100%; }
+        input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+        input::placeholder { color: var(--muted); opacity: 0.8; }
+        .splash-screen { position: fixed; inset: 0; background: radial-gradient(circle, #3b1457, #0a0812); z-index: 100; display: flex; align-items: center; justify-content: center; animation: fadeOut 0.5s ease-in-out forwards 4s; }
+        @keyframes fadeOut { to { opacity: 0; visibility: hidden; } }
+        .progress-bar { height: 4px; background: var(--accent); animation: grow 4s linear; }
+        @keyframes grow { 0% { width: 0; } 100% { width: 100%; } }
+        .topbar { position: fixed; top: 10px; left: 10px; right: 10px; z-index: 60; display: flex; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 6px; box-shadow: 0 8px 24px var(--shadow); backdrop-filter: blur(8px); }
+        .brand { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; cursor: pointer; transition: transform 0.2s; }
+        .brand:hover { transform: scale(1.05); }
+        .brand .crown { font-size: 16px; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 70%, transparent)); }
+        .top-actions { display: flex; gap: 4px; }
+        .icon-btn { height: 32px; width: 34px; display: grid; place-items: center; border-radius: 8px; background: linear-gradient(180deg, var(--bg-2), transparent); border: 1px solid var(--border); transition: transform 0.15s; }
+        .icon-btn:active { transform: scale(0.96); }
+        .sidebar { position: fixed; left: 10px; top: 70px; bottom: 10px; width: 300px; z-index: 50; border-radius: 18px; background: var(--card); border: 1px solid var(--border); backdrop-filter: blur(8px); box-shadow: 0 16px 48px var(--shadow); transition: transform 0.35s ease; }
+        .sidebar .header { padding: 10px 12px; border-bottom: 1px dashed var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .sidebar .title { font-size: 22px; font-weight: 900; }
+        .nav { padding: 6px; display: grid; gap: 5px; }
+        .nav-item { font-size: 20px; font-weight: 800; padding: 10px 12px; }
+/* Improve touch targets for sidebar and chips */
+.nav-item { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.nav-item, .nav-item span { cursor: pointer; user-select: none; }
+.chips .chip { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+        .nav-item[aria-current="page"] { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+        .nav-item:hover { background: var(--bg-2); }
+        .themes { padding: 6px; display: flex; gap: 6px; border-top: 1px dashed var(--border); }
+        .theme-dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); box-shadow: 0 3px 12px var(--shadow); display: grid; place-items: center; transition: transform 0.2s; }
+        .theme-dot:hover { transform: scale(1.1); }
+        .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); z-index: 49; display: none; opacity: 0; transition: opacity 0.35s; }
+        .sidebar-overlay[aria-hidden="false"] { display: block; opacity: 1; }
+        .sidebar[data-open="false"] { transform: translateX(-120%); }
+        @media (max-width: 920px) { 
+            .sidebar { left: 0; right: 20%; width: auto; border-radius: 0 18px 18px 0; top: 70px; } 
+            main { padding-left: 18px; } 
+            .sidebar .title { font-size: 22px; font-weight: 900; }
+            .nav-item { font-size: 20px; font-weight: 800; padding: 10px 12px; }
+        }
+        @media (max-width: 640px) { 
+            .sidebar { right: 10%; width: 200px; } 
+            .sidebar .title { font-size: 22px; font-weight: 900; }
+            .nav-item { font-size: 20px; font-weight: 800; padding: 10px 12px; }
+            .topbar { top: 8px; left: 8px; right: 8px; padding: 4px; border-radius: 14px; }
+            .brand { font-size: 13px; }
+            .icon-btn { height: 30px; width: 32px; }
+            .search { min-width: 200px; max-width: 100%; }
+            .search input { font-size: 14px; padding-left: 36px; }
+            .search:before { font-size: 16px; }
+        }
+        main { flex: 1; padding: 80px 18px 22px 290px; transition: padding 0.35s; }
+        @media (max-width: 1200px) { main { padding-left: 270px; } }
+        @media (max-width: 920px) { main { padding-left: 18px; } }
+        @media (max-width: 640px) { main { padding: 70px 12px 16px 12px; } }
+        section[hidden] { display: none; }
+        .section { display: grid; gap: 14px; animation: fadeSlide 0.35s ease; }
+        .h1 { font-size: 22px; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+        .muted { color: var(--muted); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); grid-template-rows: auto auto; gap: 16px; align-items: stretch; }
+        @media (max-width: 640px) { .grid { grid-template-columns: 1fr; grid-template-rows: auto; } }
+        .col-12 { grid-column: span 1; width: 100%; min-width: 100%; }
+        .col-auto { grid-column: auto; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 8px 24px var(--shadow); transition: box-shadow 0.2s; min-height: 300px; display: flex; flex-direction: column; }
+        .card:hover { box-shadow: 0 12px 32px var(--shadow); }
+        .card-inner { padding: 14px; flex-grow: 1; display: flex; flex-direction: column; gap: 6px; }
+        .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .between { justify-content: space-between; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border); background: linear-gradient(180deg, var(--bg-2), transparent); transition: transform 0.2s; font-size: 16px; font-weight: 700; }
+        .chip[data-active="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+        .chip:hover { transform: translateY(-2px); }
+        .btn { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: linear-gradient(180deg, var(--bg-2), transparent); box-shadow: 0 2px 8px var(--shadow); display: inline-flex; align-items: center; gap: 6px; transition: transform 0.2s; font-size: 13px; }
+        .btn:hover { transform: translateY(-2px); }
+        .btn.primary { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #0b0b0b; font-weight: 800; }
+        .btn.danger { background: linear-gradient(90deg, #ff5d6c, #ff8a8a); color: #0b0b0b; font-weight: 800; }
+        .search { position: relative; flex: 1; min-width: 300px; max-width: 600px; }
+        .search input { padding-left: 36px; transition: box-shadow 0.2s; font-size: 15px; }
+        .search input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+        .search:before { content: "🔎"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 17px; color: var(--muted); }
+        .post { display: grid; grid-template-rows: auto auto; min-height: 300px; }
+        .thumb { width: 100%; overflow: hidden; border-radius: 16px 16px 0 0; }
+        .thumb img { width: 100%; height: 240px; object-fit: cover; border-radius: 16px 16px 0 0; transition: transform 0.35s; }
+        .post:hover .thumb img { transform: scale(1.05); }
+        .tag { font-size: 11px; padding: 3px 7px; border-radius: 999px; border: 1px solid var(--border); }
+        .save { margin-left: auto; }
+        .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 80; opacity: 0; transition: opacity 0.35s; }
+        .lightbox[aria-hidden="false"] { display: flex; opacity: 1; }
+        .lightbox img { max-width: 90vw; max-height: 80vh; border-radius: 14px; box-shadow: 0 16px 48px #0008; transform: scale(0.9); transition: transform 0.35s; }
+        .lightbox[aria-hidden="false"] img { transform: scale(1); }
+        pre { background: #00000033; border: 1px solid var(--border); border-radius: 12px; padding: 10px; overflow: auto; font-size: 13px; }
+        .pill { border-radius: 999px; padding: 6px 10px; border: 1px solid var(--border); background: var(--bg-2); transition: transform 0.2s; font-size: 13px; }
+        .pill:hover { transform: translateY(-2px); }
+        .player { position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--border); backdrop-filter: blur(8px); padding: 8px; border-radius: 12px; box-shadow: 0 -8px 24px var(--shadow); }
+        .progress { height: 6px; border-radius: 999px; background: #ffffff22; margin: 6px 0; position: relative; }
+        .progress > span { position: absolute; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width 0.2s; }
+        .viz { height: 16px; display: flex; align-items: flex-end; gap: 2px; }
+        .viz i { width: 3px; height: 6px; background: currentColor; opacity: 0.6; border-radius: 2px; }
+        .viz.playing i { animation: bars 0.6s infinite ease-in-out; }
+        .viz.playing i:nth-child(2) { animation-delay: 0.1s; } .viz.playing i:nth-child(3) { animation-delay: 0.2s; } .viz.playing i:nth-child(4) { animation-delay: 0.3s; } .viz.playing i:nth-child(5) { animation-delay: 0.4s; }
+        .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 90; background: #0007; backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.35s; }
+        .modal[aria-hidden="false"] { display: flex; opacity: 1; }
+        .modal .box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: min(480px, 90vw); box-shadow: 0 16px 48px var(--shadow); transform: scale(0.9); transition: transform 0.35s; }
+        .modal[aria-hidden="false"] .box { transform: scale(1); }
+        .modal .box .head { padding: 12px 14px; border-bottom: 1px dashed var(--border); font-weight: 800; font-size: 14px; }
+        .modal .box .body { padding: 14px; }
+        .modal .box .foot { padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px dashed var(--border); }
+        .toast { position: fixed; bottom: 12px; right: 12px; z-index: 95; display: none; opacity: 0; transition: opacity 0.35s; }
+        .toast.show { display: block; opacity: 1; }
+        .toast .msg { background: var(--card); border: 1px solid var(--border); padding: 10px 12px; border-radius: 10px; box-shadow: 0 5px 16px var(--shadow); font-size: 13px; }
+        :focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 2px; border-radius: 6px; }
+        @keyframes fadeSlide { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+        @keyframes bars { 0% { height: 6px; } 50% { height: 16px; } 100% { height: 6px; } }
+        @keyframes sparkle { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+        .bg-ornaments { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.5; }
+        .bg-ornaments svg { position: absolute; transition: opacity 0.5s; }
+        .orn-ktm { left: -50px; bottom: -30px; width: 360px; }
+        .orn-ev { right: -70px; top: -50px; width: 460px; }
+        .orn-glob { left: 50%; transform: translateX(-50%); bottom: -100px; width: 640px; opacity: 0.25; }
+        [data-reduced-motion="true"] * { animation: none !important; transition: none !important; }
+    
+.logo-img {
+  height: 28px; 
+  width: auto; 
+  display: inline-block; 
+  vertical-align: middle;
+  transition: transform 0.3s ease;
+}
+.brand:hover .logo-img {
+  transform: scale(1.1);
+}
+.splash-logo {
+  max-width: 160px;
+  margin: 0 auto 20px auto;
+  display: block;
+  animation: fadeSlide 1s ease;
+}
+
+.logo-img {
+  height: 42px;
+  width: auto;
+  display: inline-block;
+  vertical-align: middle;
+  transition: transform 0.4s ease, filter 0.4s ease;
+}
+.brand:hover .logo-img {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 8px var(--accent));
+}
+
+.splash-logo {
+  max-width: 200px;
+  margin: 0 auto 20px auto;
+  display: block;
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0% { transform: scale(1); filter: drop-shadow(0 0 6px var(--accent)); }
+  50% { transform: scale(1.1); filter: drop-shadow(0 0 16px var(--accent-2)); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 6px var(--accent)); }
+}
+</style>
+</head>
+<body>
+<!-- Splash Screen -->
+<div class="splash-screen" id="splash-screen">
+<div class="text-center text-white">
+<img alt="Crown of Creation Logo" class="splash-logo" src="9dbf42f8-8a64-484d-a56f-d07f63984b49.png"/>
+<p class="text-base mb-3" id="splash-message">Crafting your cosmic journey...</p>
+<div class="w-56 bg-gray-300 rounded-full h-3">
+<div class="progress-bar rounded-full" id="progress-bar"></div>
+</div>
+</div>
+</div>
+<!-- Background Ornaments -->
+<div aria-hidden="true" class="bg-ornaments">
+<svg class="orn-ktm" fill="none" viewbox="0 0 300 200"><path d="M20 170h260v10H20z" fill="currentColor" opacity=".18"></path><path d="M60 160h180v10H60z" fill="currentColor" opacity=".15"></path><path d="M80 120h140l-20 40H100l-20-40z" fill="currentColor" opacity=".12"></path><path d="M120 80h60l-20 40h-20l-20-40z" fill="currentColor" opacity=".10"></path><circle cx="150" cy="70" fill="currentColor" opacity=".15" r="6"></circle></svg>
+<svg class="orn-ev" fill="none" viewbox="0 0 400 240"><path d="M0 180l60-40 40 20 40-60 40 40 40-80 40 60 40-20 40 40v60H0v-20z" fill="currentColor" opacity=".12"></path></svg>
+<svg class="orn-glob" fill="none" viewbox="0 0 600 600"><circle cx="300" cy="300" opacity=".12" r="280" stroke="currentColor" stroke-width="2"></circle><ellipse cx="300" cy="300" opacity=".10" rx="260" ry="120" stroke="currentColor" stroke-width="1"></ellipse><ellipse cx="300" cy="300" opacity=".10" rx="120" ry="260" stroke="currentColor" stroke-width="1"></ellipse></svg>
+</div>
+<!-- Top Bar -->
+<div aria-label="Topbar" class="topbar" role="toolbar">
+<div class="brand" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+<img alt="Logo" class="logo-img" src="9dbf42f8-8a64-484d-a56f-d07f63984b49.png"/>
+</div>
+<div class="top-actions">
+<button aria-label="Help" class="icon-btn" id="helpBtn">?</button>
+<button aria-label="Menu" class="icon-btn" id="menuBtn">⋮</button>
+</div>
+</div>
+<!-- Sidebar + Overlay -->
+<div aria-hidden="true" class="sidebar-overlay" id="sidebarOverlay"></div>
+<aside aria-label="Sidebar Navigation" class="sidebar" data-open="true" id="sidebar">
+<div class="header">
+<div class="title">
+<img alt="Logo" class="logo-img" src="9dbf42f8-8a64-484d-a56f-d07f63984b49.png"/>
+</div>
+<button aria-label="Close Sidebar" class="icon-btn" id="closeSidebar">✕</button>
+</div>
+<nav class="nav" id="nav" role="navigation">
+<button class="nav-item" data-route="home" role="button" tabindex="0"><span>🏠</span> Home</button>
+<button class="nav-item" data-route="public" role="button" tabindex="0"><span>🌐</span> Public</button>
+<button class="nav-item" data-route="private" role="button" tabindex="0"><span>🔒</span> Private</button>
+<button class="nav-item" data-route="saved" role="button" tabindex="0"><span>⭐</span> Saved</button>
+<button class="nav-item" data-route="create" role="button" tabindex="0"><span>✍️</span> Create Post</button>
+<button class="nav-item" data-route="analyze" role="button" tabindex="0"><span>🧪</span> Analyze</button>
+<button class="nav-item" data-route="music" role="button" tabindex="0"><span>🎵</span> Music</button>
+<button class="nav-item" data-route="settings" role="button" tabindex="0"><span>⚙️</span> Settings</button>
+</nav>
+<div aria-label="Themes" class="themes">
+<button class="theme-dot" data-theme="kathmandu" title="Kathmandu"><span>🏯</span></button>
+<button class="theme-dot" data-theme="everest" title="Everest"><span>❄️</span></button>
+<button class="theme-dot" data-theme="neon" title="Neon"><span>💡</span></button>
+<button class="theme-dot" data-theme="global" title="Global"><span>🌍</span></button>
+</div>
+</aside>
+<!-- Main Content -->
+<div class="layout">
+<main id="main" role="main">
+
+<section aria-labelledby="home-title" class="section" id="home">
+  <div class="h1" id="home-title">🏠 Home</div>
+  <div class="grid">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-inner">
+          <div class="h1">Welcome to Crown Of Creation</div>
+          <div class="muted">A cosmic diary for your thoughts, quotes, stories, music, and more.</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="card">
+        <div class="card-inner">
+          <div class="row between"><b>About Crown Of Creation</b></div>
+          <p class="muted">Crown Of Creation is your personal cosmic journal where you can explore public ideas, keep private reflections, save your favorite inspirations, and enjoy music while you create.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="card">
+        <div class="card-inner">
+          <div class="row between"><b>Tips</b><span class="muted">Quick start</span></div>
+          <ul>
+            <li>Use ⋮ in the topbar to toggle the sidebar.</li>
+            <li>Switch themes (Kathmandu, Everest, Neon, Global) from the sidebar bottom.</li>
+            <li>Save ☆ posts to build your ⭐ collection.</li>
+            <li>Explore sections: 🌐 Public, 🔒 Private, ⭐ Saved, ✍️ Create, 🧪 Analyze, 🎵 Music.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="public-title" class="section" hidden="" id="public">
+<div class="h1" id="public-title">🌐 Public</div>
+<div class="grid">
+<div class="col-12"><div class="row between"><div class="search"><input aria-label="Search public posts" id="publicSearch" placeholder="Search public posts…"/></div><div class="chips" id="publicChips"></div></div></div>
+<div class="col-12"><div class="grid" id="publicGrid"></div></div>
+</div>
+</section>
+<section aria-labelledby="private-title" class="section" hidden="" id="private">
+<div class="h1" id="private-title">🔒 Private</div>
+<div class="grid">
+<div class="col-12"><div class="row between"><div class="search"><input aria-label="Search private posts" id="privateSearch" placeholder="Search private posts…"/></div><div class="chips" id="privateChips"></div></div></div>
+<div class="col-12"><div class="grid" id="privateGrid"></div></div>
+</div>
+</section>
+
+<section aria-labelledby="saved-title" class="section" id="saved">
+  <div class="h1" id="saved-title">⭐ Saved</div>
+  <div class="grid">
+    <div class="col-12">
+      <div class="row between">
+        <div class="search"><input aria-label="Search saved posts" id="savedSearch" placeholder="Search saved posts…"/></div>
+        <div class="chips" id="savedChips"></div>
+      </div>
+    </div>
+    <div class="col-12"><div class="grid" id="savedGrid"></div></div>
+  </div>
+</section>
+
+<section aria-labelledby="create-title" class="section" hidden="" id="create">
+<div class="h1" id="create-title">✍️ Create Post</div>
+<div class="grid">
+<div class="col-12"><div class="card"><div class="card-inner"><div class="grid">
+<div class="col-12"><label>Author<input id="c-author" placeholder="Your name"/></label></div>
+<div class="col-12"><label>Visibility<select id="c-vis"><option value="public">Public</option><option value="private">Private</option></select></label></div>
+<div class="col-12"><label>Category<select id="c-cat"></select></label></div>
+<div class="col-12"><label>Image URL<input id="c-imgurl" placeholder="https://…"/></label></div>
+<div class="col-12"><label>Upload Image<input accept="image/*" id="c-file" type="file"/></label></div>
+<div class="col-12"><label>Content<textarea id="c-content" placeholder="Write your thoughts… (first line becomes title)" rows="5"></textarea></label></div>
+<div class="col-12 row" style="gap:6px"><button class="btn" id="c-preview">Preview Image</button><button class="btn primary" id="c-save">Save Post</button><button class="btn" id="c-clear">Clear</button></div>
+<div class="col-12"><img alt="Preview" id="c-preview-img" style="max-width:100%; max-height:200px; height:auto; object-fit:contain; display:none; border-radius:12px; border:1px solid var(--border)"/></div>
+</div></div></div></div>
+</div>
+</section>
+<section aria-labelledby="analyze-title" class="section" hidden="" id="analyze">
+<div class="h1" id="analyze-title">🧪 Analyze</div>
+<div class="grid">
+<div class="col-12"><textarea id="a-text" placeholder="Paste text to analyze…" rows="7"></textarea></div>
+<div class="col-12 row" style="gap:6px"><button class="pill" data-analysis="stats">Stats</button><button class="pill" data-analysis="keywords">Keywords</button><button class="pill" data-analysis="sentiment">Sentiment</button><button class="pill" id="a-speak">🔊 Read Aloud</button></div>
+<div class="col-12"><pre aria-live="polite" id="a-out"></pre></div>
+</div>
+</section>
+<section aria-labelledby="music-title" class="section" hidden="" id="music">
+<div class="h1" id="music-title">🎵 Music</div>
+<div class="grid">
+<div class="col-12"><div class="card"><div class="card-inner"><div class="row between"><b>Playlists</b><input id="pl-name" placeholder="Playlist name" style="max-width:240px"/></div><div class="row" style="gap:6px;margin-top:8px"><button class="btn" id="pl-add">+ Add Tracks</button><button class="btn primary" id="pl-save">Save Playlist</button><button class="btn" id="pl-clear">Clear Playlists</button><input accept="audio/*" hidden="" id="pl-files" multiple="" type="file"/></div><ol id="pl-list"></ol></div></div></div>
+<div class="col-12"><div class="card"><div class="card-inner"><div class="row between"><b>Now Playing</b><span class="muted" id="np-title">—</span></div><div class="player"><div class="row" style="gap:6px"><button class="btn" id="prev">⏮</button><button class="btn" id="play">⏯</button><button class="btn" id="next">⏭</button><input aria-label="Volume" id="volume" max="1" min="0" step="0.01" style="margin-left:auto; width:140px" type="range" value="0.8"/></div><div class="progress" id="seek"><span id="bar"></span></div><input aria-label="Seek" id="seekRange" max="100" min="0" style="width:100%" type="range" value="0"/><div class="viz" id="viz"><i></i><i></i><i></i><i></i><i></i></div><audio id="audio"></audio></div></div></div></div>
+</div>
+</section>
+<section aria-labelledby="settings-title" class="section" hidden="" id="settings">
+<div class="h1" id="settings-title">⚙️ Settings</div>
+<div class="grid">
+<div class="col-12"><div class="card"><div class="card-inner"><div class="row between"><b>Data</b><span class="muted">Export / Import</span></div><div class="row" style="gap:6px; margin-top:8px"><button class="btn" id="exportBtn">⬇️ Export JSON</button><button class="btn" id="importBtn">⬆️ Import JSON</button><input accept="application/json" hidden="" id="importFile" type="file"/></div><div class="muted" style="margin-top:12px">Create a backup of your posts, saved items, playlists, and theme.</div></div></div></div>
+<div class="col-12"><div class="card"><div class="card-inner"><div class="row between"><b>Danger Zone</b><span class="muted">Be careful</span></div><div class="row" style="gap:6px; margin-top:8px"><button class="btn danger" id="clearBtn">🗑️ Clear All Data</button></div><label class="row" style="gap:8px; margin-top:10px"><input id="reducedMotion" style="width:auto" type="checkbox"/> Reduce motion</label></div></div></div>
+</div>
+</section>
+</main>
+</div>
+<!-- Lightbox -->
+<div aria-hidden="true" aria-label="Image preview" class="lightbox" id="lightbox" role="dialog"><img alt="Preview"/></div>
+<!-- Modals -->
+<div aria-hidden="true" aria-label="Confirm Clear" class="modal" id="confirmClear" role="dialog">
+<div class="box"><div class="head">Confirm Clear</div><div class="body">This will remove all local data. You can undo within 10 seconds. Proceed?</div><div class="foot"><button class="btn" data-close="">Cancel</button><button class="btn danger" id="doClear">Yes, Clear</button></div></div>
+</div>
+<div class="toast" id="toast"><div class="msg" id="toastMsg">Saved!</div></div>
+<script>
+        (() => {
+            const APP_KEY = 'coc_state_v3';
+            const VERSION = '2.1.6-enhanced';
+            const $ = sel => document.querySelector(sel);
+            const $$ = sel => Array.from(document.querySelectorAll(sel));
+            const CATS = ['thoughts', 'quotes', 'love', 'news', 'trending', 'ideas', 'education', 'joke'];
+
+            // State
+            const defaultState = () => ({
+                posts: samplePosts(),
+                saved: [],
+                playlists: demoPlaylists(),
+                theme: localStorage.getItem('coc_theme') || 'kathmandu',
+                lastRoute: 'home',
+                reducedMotion: false
+            });
+            let state = loadState();
+
+            function loadState() {
+                try { const raw = localStorage.getItem(APP_KEY); return raw ? JSON.parse(raw) : defaultState(); } catch (e) { console.warn('State load failed', e); return defaultState(); }
+            }
+            function saveState() { localStorage.setItem(APP_KEY, JSON.stringify(state)); }
+
+            // Routing
+            function route(name) {
+                $$('#nav .nav-item').forEach(b => b.setAttribute('aria-current', b.dataset.route === name ? 'page' : 'false'));
+                $$('main > section').forEach(s => s.hidden = s.id !== name);
+                state.lastRoute = name; saveState();
+                if (name === 'home') renderHome();
+                if (name === 'public') renderPublic();
+                if (name === 'private') renderPrivate();
+                if (name === 'saved') renderSaved();
+            }
+            function initRoute() {
+                const h = 'home'; // Always default to 'home' on load
+                route(h);
+                if (!location.hash) location.hash = '#' + h;
+            }
+            window.addEventListener('hashchange', () => { route(location.hash.replace('#', '')); closeSidebar(); });
+
+            // Sidebar
+            const sidebar = $('#sidebar'), overlay = $('#sidebarOverlay');
+            function openSidebar() { sidebar.dataset.open = 'true'; overlay.setAttribute('aria-hidden', 'false'); }
+            function closeSidebar() { sidebar.dataset.open = 'false'; overlay.setAttribute('aria-hidden', 'true'); }
+            $('#menuBtn').addEventListener('click', () => sidebar.dataset.open === 'true' ? closeSidebar() : openSidebar());
+            $('#closeSidebar').addEventListener('click', closeSidebar);
+            overlay.addEventListener('click', closeSidebar);
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeSidebar(); closeLightbox(); } });
+
+            // Theme
+            function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); localStorage.setItem('coc_theme', t); state.theme = t; saveState(); }
+            applyTheme(state.theme);
+            $$('.theme-dot').forEach(b => b.addEventListener('click', () => applyTheme(b.dataset.theme)));
+
+            // Navigation
+            $$('#nav .nav-item, .btn.primary[data-route]').forEach(b => b.addEventListener('click', () => { const r = b.dataset.route; if (r) { location.hash = '#' + r; route(r); closeSidebar(); } }));
+
+            // Home
+            function renderHome() {
+                const area = $('#newToday'); 
+                area.innerHTML = ''; 
+                area.className = 'grid';
+                const recent = [...state.posts].sort((a, b) => b.ts - a.ts).slice(0, 10); // Limit to 10 for 2x5 grid
+                $('#newTodayCount').textContent = recent.length + ' posts';
+                recent.forEach(p => area.appendChild(postCard(p)));
+            }
+
+            // Categories & Chips
+            function chipRow(id, filterFn) {
+                const row = $(id); row.innerHTML = '';
+                const all = document.createElement('button'); all.className = 'chip'; all.textContent = 'All'; all.dataset.active = 'true'; row.appendChild(all);
+                CATS.forEach(c => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = c.charAt(0).toUpperCase() + c.slice(1); b.dataset.cat = c; row.appendChild(b); });
+                row.addEventListener('click', e => {
+                    if (!(e.target instanceof HTMLElement) || !e.target.classList.contains('chip')) return;
+                    $$(id + ' .chip').forEach(ch => ch.dataset.active = 'false'); e.target.dataset.active = 'true';
+                    filterFn(e.target.dataset.cat || 'all');
+                });
+            }
+
+            // Public
+            function renderPublic() { 
+                chipRow('#publicChips', cat => filterPublic(cat)); 
+                filterPublic('all'); 
+                const searchInput = $('#publicSearch');
+                searchInput.addEventListener('input', () => filterPublic(currentChip('#publicChips')));
+                searchInput.focus();
+            }
+            function filterPublic(cat) {
+                const q = $('#publicSearch').value.trim().toLowerCase();
+                const list = state.posts.filter(p => p.visibility === 'public');
+                renderGrid('#publicGrid', list, q, cat);
+            }
+
+            // Private
+            function renderPrivate() { 
+                chipRow('#privateChips', cat => filterPrivate(cat)); 
+                filterPrivate('all'); 
+                const searchInput = $('#privateSearch');
+                searchInput.addEventListener('input', () => filterPrivate(currentChip('#privateChips')));
+                searchInput.focus();
+            }
+            function filterPrivate(cat) {
+                const q = $('#privateSearch').value.trim().toLowerCase();
+                const list = state.posts.filter(p => p.visibility === 'private');
+                renderGrid('#privateGrid', list, q, cat);
+            }
+
+            // Saved
+            
+function renderSaved() { 
+    chipRow('#savedChips', cat => filterSaved(cat)); 
+    filterSaved('all'); 
+    const searchInput = $('#savedSearch');
+    searchInput.addEventListener('input', () => filterSaved(currentChip('#savedChips')));
+    searchInput.focus();
+}
+function filterSaved(cat) {
+    const q = $('#savedSearch').value.trim().toLowerCase();
+    const list = state.posts.filter(p => state.saved.includes(p.id));
+    renderGrid('#savedGrid', list, q, cat);
+}
+
+                function currentChip(sel) { return $$(sel + ' .chip').find(x => x.dataset.active === 'true')?.dataset.cat || 'all'; }
+            function emptyCard(msg) { const c = document.createElement('div'); c.className = 'col-12'; c.innerHTML = `<div class="card"><div class="card-inner">${msg}</div></div>`; return c; }
+            function renderGrid(sel, list, q, cat) {
+                const grid = $(sel); grid.innerHTML = ''; grid.className = 'grid';
+                const view = list.filter(p => (cat === 'all' || p.category === cat) && (!q || p.title.toLowerCase().includes(q) || p.text.toLowerCase().includes(q) || p.author.toLowerCase().includes(q))).slice(0, 10); // Limit to 10 for 2x5 grid
+                if (!view.length) grid.appendChild(emptyCard('No matching posts.')); else view.forEach(p => grid.appendChild(postCard(p)));
+            }
+
+            // Post Card
+            function postCard(p) {
+                const col = document.createElement('div'); col.className = 'col-auto';
+                const saved = state.saved.includes(p.id);
+                col.innerHTML = `<div class="card post" role="article" aria-label="${escapeHtml(p.title)}"><div class="thumb" role="button" aria-label="Open image"><img src="${escapeHtml(p.img || placeholder(p.category))}" alt="${escapeHtml(p.title)}" loading="lazy"/></div><div class="card-inner"><div class="row"><span class="tag">${p.category}</span><span class="muted" style="margin-left:6px">${p.visibility}</span><button class="btn save" aria-pressed="${saved}" title="Save">${saved ? '★ Saved' : '☆ Save'}</button></div><div style="margin-top:6px; font-weight:800">${escapeHtml(p.title)}</div><div class="muted" style="font-size:11px">by ${escapeHtml(p.author)} • ${timeAgo(p.ts)}</div><div style="margin-top:6px">${escapeHtml(p.text.slice(0, 80))}…</div></div></div>`;
+                col.querySelector('.thumb').addEventListener('click', () => openLightbox(p.img || placeholder(p.category)));
+                const saveBtn = col.querySelector('.save'); saveBtn.addEventListener('click', () => toggleSave(p.id, saveBtn));
+                return col;
+            }
+
+            function toggleSave(id, btn) {
+                const i = state.saved.indexOf(id); const adding = i === -1;
+                if (adding) state.saved.push(id); else state.saved.splice(i, 1);
+                saveState(); if (btn) { btn.textContent = adding ? '★ Saved' : '☆ Save'; btn.setAttribute('aria-pressed', adding); sparkle(btn); }
+                renderSaved();
+            }
+
+            function sparkle(btn) {
+                const s = document.createElement('span'); s.style.position = 'absolute'; s.style.inset = '0'; s.style.pointerEvents = 'none'; s.style.border = '2px solid'; s.style.borderRadius = '10px'; s.style.animation = 'sparkle .45s ease forwards'; btn.style.position = 'relative'; btn.appendChild(s); setTimeout(() => s.remove(), 500);
+            }
+
+            // Lightbox
+            const lb = $('#lightbox');
+            function openLightbox(src) { lb.querySelector('img').src = src; lb.setAttribute('aria-hidden', 'false'); }
+            function closeLightbox() { lb.setAttribute('aria-hidden', 'true'); }
+            lb.addEventListener('click', closeLightbox);
+
+            // Create Post
+            const c = { author: $('#c-author'), vis: $('#c-vis'), cat: $('#c-cat'), imgurl: $('#c-imgurl'), file: $('#c-file'), content: $('#c-content'), preview: $('#c-preview'), save: $('#c-save'), clear: $('#c-clear'), previewImg: $('#c-preview-img') };
+            CATS.forEach(x => { const o = document.createElement('option'); o.value = x; o.textContent = x.charAt(0).toUpperCase() + x.slice(1); c.cat.appendChild(o); });
+            c.preview.addEventListener('click', async () => {
+                const src = await getImageSrc(); if (!src) { toast('No image chosen'); return; }
+                c.previewImg.src = src; c.previewImg.style.display = 'block';
+            });
+            c.clear.addEventListener('click', () => { c.author.value = ''; c.imgurl.value = ''; c.file.value = ''; c.content.value = ''; c.previewImg.style.display = 'none'; localStorage.removeItem('coc_draft'); });
+            c.save.addEventListener('click', async () => {
+                const text = c.content.value.trim(); if (!text) { toast('Write some content first'); return; }
+                const title = text.split(/\n+/)[0].slice(0, 80) || 'Untitled';
+                const img = await getImageSrc();
+                const post = { id: uid(), title, text, img, author: (c.author.value || 'Anonymous').trim(), category: c.cat.value, visibility: c.vis.value, ts: Date.now() };
+                state.posts.push(post); saveState(); toast('Post Added!'); location.hash = '#' + post.visibility; route(post.visibility); c.clear.click();
+            });
+            async function getImageSrc() { if (c.file.files && c.file.files[0]) return await fileToDataURL(c.file.files[0]); return c.imgurl.value.trim() || ''; }
+            function fileToDataURL(file) { return new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file); }); }
+            ['input', 'change'].forEach(ev => c.content.addEventListener(ev, () => localStorage.setItem('coc_draft', c.content.value)));
+            const draft = localStorage.getItem('coc_draft'); if (draft) c.content.value = draft;
+
+            // Analyze
+            $$('#analyze .pill[data-analysis]').forEach(b => b.addEventListener('click', () => analyze(b.dataset.analysis)));
+            $('#a-speak').addEventListener('click', () => speak($('#a-text').value));
+            function analyze(kind) {
+                const t = $('#a-text').value; const out = $('#a-out');
+                if (!t.trim()) { out.textContent = 'Paste text first.'; return; }
+                if (kind === 'stats') {
+                    const words = t.trim().split(/\s+/).filter(Boolean).length;
+                    const chars = t.length; const sentences = (t.match(/[.!?]+\s|$/g) || []).length;
+                    showJSON({ words, chars, sentences });
+                }
+                if (kind === 'keywords') {
+                    const words = t.toLowerCase().match(/[a-zA-Z\u0900-\u097F]{4,}/g) || [];
+                    const freq = {}; words.forEach(w => freq[w] = (freq[w] || 0) + 1);
+                    const top = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 20);
+                    showJSON(Object.fromEntries(top));
+                }
+                if (kind === 'sentiment') {
+                    const pos = ['good', 'great', 'happy', 'love', 'peace', 'win', 'bright', 'joy', 'calm', 'beautiful'];
+                    const neg = ['bad', 'sad', 'angry', 'hate', 'pain', 'lose', 'dark', 'fear', 'ugly'];
+                    const low = t.toLowerCase();
+                    const score = sum(pos.map(x => count(low, x))) - sum(neg.map(x => count(low, x)));
+                    const mood = score > 1 ? 'positive 😊' : score < -1 ? 'negative 😞' : 'neutral 😐';
+                    showJSON({ score, mood });
+                }
+                function showJSON(obj) { out.textContent = JSON.stringify(obj, null, 2); }
+                function sum(a) { return a.reduce((x, y) => x + y, 0); }
+                function count(s, k) { return (s.match(new RegExp('\\b' + k + '\\b', 'g')) || []).length; }
+            }
+            function speak(text) {
+                if (!('speechSynthesis' in window)) { toast('Speech not supported'); return; }
+                const u = new SpeechSynthesisUtterance(text); u.rate = 1; u.pitch = 1; speechSynthesis.speak(u);
+            }
+
+            // Music
+            const audio = $('#audio'), bar = $('#bar'), seekRange = $('#seekRange'), viz = $('#viz');
+            let tracks = [], cur = 0;
+            function demoPlaylists() { return { Demo: [{ title: 'Cosmic Ping', url: 'data:audio/wav;base64,UklGRl4AAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YRAAAAAAAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8AAP8A' }] }; }
+            function loadPlaylist(name) {
+                const list = state.playlists[name]; if (!list) { toast('Playlist not found'); return; }
+                tracks = list; cur = 0; updateNowPlaying();
+            }
+            function updateNowPlaying() {
+                const t = tracks[cur]; $('#np-title').textContent = t ? t.title : '—'; audio.src = t ? t.url : '';
+                if (!t) { audio.pause(); viz.classList.remove('playing'); return; }
+                audio.play().then(() => { $('#play').textContent = '⏸'; viz.classList.add('playing'); }).catch(() => {});
+            }
+            $('#play').addEventListener('click', () => { if (audio.paused) { audio.play(); $('#play').textContent = '⏸'; viz.classList.add('playing'); } else { audio.pause(); $('#play').textContent = '⏯'; viz.classList.remove('playing'); } });
+            $('#prev').addEventListener('click', () => { cur = (cur - 1 + tracks.length) % tracks.length; updateNowPlaying(); });
+            $('#next').addEventListener('click', () => { cur = (cur + 1) % tracks.length; updateNowPlaying(); });
+            $('#volume').addEventListener('input', e => audio.volume = +e.target.value);
+            audio.addEventListener('timeupdate', () => { if (!audio.duration) return; const pct = (audio.currentTime / audio.duration) * 100; bar.style.width = pct + '%'; seekRange.value = pct | 0; });
+            seekRange.addEventListener('input', () => { if (!audio.duration) return; audio.currentTime = (seekRange.value / 100) * audio.duration; });
+            const plFiles = $('#pl-files');
+            $('#pl-add').addEventListener('click', () => plFiles.click());
+            $('#pl-save').addEventListener('click', () => {
+                const name = $('#pl-name').value.trim() || 'My Playlist';
+                if (!tracks.length) { toast('Add tracks first'); return; }
+                state.playlists[name] = tracks; saveState(); toast('Playlist saved'); renderPlaylistNames();
+            });
+            $('#pl-clear').addEventListener('click', () => { state.playlists = demoPlaylists(); saveState(); renderPlaylistNames(); toast('Playlists cleared'); });
+            plFiles.addEventListener('change', () => {
+                const newTracks = Array.from(plFiles.files || []).map(f => ({ title: f.name.replace(/\.[^/.]+$/, ''), url: URL.createObjectURL(f) }));
+                tracks = [...tracks, ...newTracks];
+                renderTracks(); updateNowPlaying();
+            });
+            function renderTracks() {
+                const ol = $('#pl-list'); ol.innerHTML = '';
+                tracks.forEach((t, i) => { const li = document.createElement('li'); li.textContent = t.title; li.style.cursor = 'pointer'; li.addEventListener('click', () => { cur = i; updateNowPlaying(); }); ol.appendChild(li); });
+            }
+            function renderPlaylistNames() {
+                const ol = $('#pl-list'); ol.innerHTML = '';
+                Object.keys(state.playlists).forEach(name => {
+                    const li = document.createElement('li'); li.innerHTML = `<b>${name}</b>`; li.style.cursor = 'pointer'; li.addEventListener('click', () => { tracks = state.playlists[name]; cur = 0; renderTracks(); updateNowPlaying(); }); ol.appendChild(li);
+                });
+            }
+
+            // Settings
+            $('#exportBtn').addEventListener('click', () => {
+                const data = { version: VERSION, exportDate: new Date().toISOString(), state };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'crown-of-creation-backup.json'; a.click(); URL.revokeObjectURL(a.href);
+            });
+            $('#importBtn').addEventListener('click', () => $('#importFile').click());
+            $('#importFile').addEventListener('change', async () => {
+                const file = $('#importFile').files[0]; if (!file) return; const text = await file.text();
+                try { const json = JSON.parse(text); if (json.state) { state = Object.assign(defaultState(), json.state); saveState(); toast('Import successful'); location.reload(); } else { toast('Invalid file'); } } catch (e) { toast('Import failed'); }
+            });
+            $('#clearBtn').addEventListener('click', () => $('#confirmClear').setAttribute('aria-hidden', 'false'));
+            $$('#confirmClear [data-close]').forEach(b => b.addEventListener('click', () => $('#confirmClear').setAttribute('aria-hidden', 'true')));
+            $('#doClear').addEventListener('click', () => {
+                $('#confirmClear').setAttribute('aria-hidden', 'true');
+                const backup = JSON.stringify(state);
+                state = defaultState(); localStorage.removeItem(APP_KEY); saveState(); toast('Data cleared — undo available for 10s');
+                const undo = setTimeout(() => {}, 10000);
+                const t = $('#toastMsg'); const old = t.innerHTML; t.innerHTML = old + ' <button class="btn" id="undoBtn" style="margin-left:6px">Undo</button>';
+                $('#toast').classList.add('show');
+                const undoBtn = $('#undoBtn'); if (undoBtn) undoBtn.addEventListener('click', () => { clearTimeout(undo); state = JSON.parse(backup); saveState(); toast('Restored'); });
+            });
+            $('#reducedMotion').checked = !!state.reducedMotion; document.documentElement.setAttribute('data-reduced-motion', state.reducedMotion ? 'true' : 'false');
+            $('#reducedMotion').addEventListener('change', e => { state.reducedMotion = !!e.target.checked; saveState(); document.documentElement.setAttribute('data-reduced-motion', state.reducedMotion ? 'true' : 'false'); });
+
+            // Help
+            $('#helpBtn').addEventListener('click', () => alert('Crown Of Creation\n\n• Navigate via sidebar.\n• Create posts in ✍️ Create.\n• Save ☆ posts to ⭐ Saved.\n• Export/Import in ⚙️ Settings.\n• Play music in 🎵 Music.'));
+
+            // Utils
+            function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+            function timeAgo(ts) { const s = Math.floor((Date.now() - ts) / 1000); if (s < 60) return s + 's ago'; const m = s / 60 | 0; if (m < 60) return m + 'm ago'; const h = m / 60 | 0; if (h < 24) return h + 'h ago'; return (h / 24 | 0) + 'd ago'; }
+            function escapeHtml(s = '') { return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[c]); }
+            function placeholder(cat) { const map = { thoughts: 'https://picsum.photos/seed/th/600/400', quotes: 'https://picsum.photos/seed/qu/600/400', love: 'https://picsum.photos/seed/lo/600/400', news: 'https://picsum.photos/seed/ne/600/400', trending: 'https://picsum.photos/seed/tr/600/400', ideas: 'https://picsum.photos/seed/id/600/400', education: 'https://picsum.photos/seed/ed/600/400', joke: 'https://picsum.photos/seed/jo/600/400' }; return map[cat] || 'https://picsum.photos/seed/coc/600/400'; }
+            function samplePosts() {
+                const now = Date.now();
+                return [
+                    { title: 'Morning calm over Dang', text: 'The hills breathe slowly. I count my blessings and begin again.', img: '', author: 'Pratik', category: 'thoughts', visibility: 'public', ts: now - 3600000 },
+                    { title: 'Quote — Life purpose', text: '“The purpose of life is a life of purpose.” — Robert Byrne', img: '', author: 'Nova', category: 'quotes', visibility: 'public', ts: now - 7200000 },
+                    { title: 'NPL buzz', text: 'Nepal Premier League expanding fan base, players getting new contracts and exposure.', img: '', author: 'SportsBeat', category: 'news', visibility: 'public', ts: now - 5400000 },
+                    { title: 'App idea: Local Stories', text: 'A hyperlocal story map where elders record folk tales tied to places.', img: '', author: 'Aarav', category: 'ideas', visibility: 'public', ts: now - 1800000 },
+                    { title: 'Keep going!', text: 'You don\'t have to be extreme, just consistent — tiny steps shape destiny.', img: '', author: 'Mira', category: 'love', visibility: 'public', ts: now - 9000 },
+                    { title: 'Trend: Micro-rituals', text: 'Small daily rituals that anchor your day — chai, breath, stretch.', img: '', author: 'Zen', category: 'trending', visibility: 'public', ts: now - 2600000 },
+                    { title: 'Private reflection', text: 'Today I felt overwhelmed, but naming it gave me power over it.', img: '', author: 'Pratik', category: 'thoughts', visibility: 'private', ts: now - 6400000 },
+                    { title: 'Goal stack', text: 'Three priorities for the week: study deep, create daily, rest well.', img: '', author: 'Pratik', category: 'ideas', visibility: 'private', ts: now - 3400000 },
+                    { title: 'Why so serious?', text: 'Why did the scarecrow become a motivational speaker? Because he was outstanding in his field!', img: '', author: 'Joker', category: 'joke', visibility: 'public', ts: now - 1200000 },
+                    { title: 'Learn daily', text: 'Every day is a chance to learn something new. Keep curious!', img: '', author: 'Suman', category: 'education', visibility: 'public', ts: now - 2400000 }
+                ].map(p => ({ id: uid(), ...p }));
+            }
+
+            // Toast
+            let toastTimer = null;
+            function toast(msg) { const t = $('#toast'); $('#toastMsg').innerHTML = escapeHtml(msg); t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600); }
+
+            // Splash Screen
+            window.onload = () => {
+                loadState();
+                const messages = [
+                    'Crafting your cosmic journey...',
+                    'Weaving thoughts into eternity...',
+                    'Sparking inspiration across the stars...',
+                    'Your creative universe awaits!'
+                ];
+                let i = 0;
+                const messageEl = $('#splash-message');
+                const interval = setInterval(() => {
+                    if (i < messages.length) { messageEl.textContent = messages[i++]; } else {
+                        clearInterval(interval);
+                        $('#splash-screen').remove();
+                        initRoute();
+                    }
+                }, 1000);
+            };
+        })();
+    </script>
+</body>
+</html>

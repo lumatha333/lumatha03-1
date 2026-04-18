@@ -1,0 +1,735 @@
+{
+	"name": "phptools-vscode",
+	"displayName": "PHP Tools",
+	"description": "PHP IntelliSense, Debug (Xdebug), Code Actions, Linting, Refactoring, Formatter, PHPUnit tests debugging, Server, and more.",
+	"icon": "icons/phptools-icon.png",
+	"version": "1.12.10049",
+	"qna": "https://community.devsense.com/",
+	"publisher": "DEVSENSE",
+	"preview": false,
+	"license": "LicenseRef-LICENSE",
+	"galleryBanner": {
+		"color": "#b9dcf4",
+		"theme": "light"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/DEVSENSE/phptools-docs"
+	},
+	"homepage": "https://www.devsense.com/",
+	"engines": {
+		"vscode": "^1.63.1",
+		"node": "^8.11.0"
+	},
+	"categories": [
+		"Programming Languages",
+		"Debuggers",
+		"Snippets",
+		"Linters",
+		"Formatters",
+		"Testing"
+	],
+	"keywords": [
+		"php",
+		"debug",
+		"autocomplete",
+		"refactoring",
+		"testing",
+		"completion",
+		"codeactions",
+		"format",
+		"IntelliSense",
+		"Xdebug",
+		"test",
+		"phpunit"
+	],
+	"activationEvents": [
+		"onDebugResolve:php",
+		"onDebugDynamicConfigurations:php",
+		"onLanguage:php",
+		"workspaceContains:**/*.php",
+		"workspaceContains:phpunit.*",
+		"onCommand:phptools.activate",
+		"onCommand:phptools.debug.startWithStopOnEntry",
+		"onCommand:phptools.debug.startListen",
+		"onCommand:phptools.debug.startScript"
+	],
+	"main": "./out/src/extension",
+	"contributes": {
+		"languages": [
+			{
+				"id": "phpx",
+				"aliases": [
+					"PHPX",
+					"phpx"
+				],
+				"configuration": "./syntaxes/phpx.configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "phpx",
+				"scopeName": "source.phpx",
+				"path": "./syntaxes/phpx.json"
+			}
+		],
+		"breakpoints": [
+			{
+				"language": "php"
+			}
+		],
+		"configuration": {
+			"type": "object",
+			"title": "PHP",
+			"properties": {
+				"php.executablePath": {
+					"description": "Default path to the 'php' executable.",
+					"type": [
+						"string",
+						"array",
+						"null"
+					],
+					"scope": "application"
+				},
+				"php.format.codeStyle": {
+					"description": "Code formatting profile.",
+					"type": [
+						"string"
+					],
+					"enum": [
+						"PSR-2",
+						"PHP Tools",
+						"Off"
+					],
+					"default": "PSR-2",
+					"scope": "window"
+				},
+				"php.format.autoimport": {
+					"markdownDescription": "Completion of types, functions, and constants outside of the current namespace scope.",
+					"type": "string",
+					"default": "auto-import",
+					"enum": [
+						"auto-import",
+						"fqn",
+						"none",
+						"hide"
+					],
+					"markdownEnumDescriptions": [
+						"Add corresponding `use` alias upon completion.",
+						"Fully qualifies the name upon completion.",
+						"Inserts the name as it is, without importing the alias.",
+						"Do not show inaccessible symbols in code completion."
+					],
+					"scope": "window"
+				},
+				"php.format.autoimport-docblock": {
+					"markdownDescription": "Completion of type names outside of the current namespace scope, when completing inside a PHP doc block (e.g. in `@param` tag).",
+					"type": "string",
+					"default": "fqn",
+					"enum": [
+						"fqn",
+						"auto-import",
+						"none",
+						"hide",
+						"default"
+					],
+					"markdownEnumDescriptions": [
+						"Fully qualifies the name upon completion.",
+						"Add corresponding `use` alias upon completion.",
+						"Inserts the name as it is, without importing the alias.",
+						"Do not show inaccessible types in code completion.",
+						"Use the setting from `php.format.autoimport` option."
+					],
+					"scope": "window"
+				},
+				"php.linkedEditing.variables": {
+					"markdownDescription": "When `\"editor.linkedEditing\"` setting is enabled, this option specifies whether to apply linked edits to local variable names.",
+					"default": false,
+					"type": "boolean",
+					"scope": "window"
+				},
+				"php.workspace.includePath": {
+					"description": "Paths containing additional PHP declarations. Separated with semi-colon.",
+					"type": [
+						"string",
+						"array"
+					],
+					"scope": "window"
+				},
+				"php.executables": {
+					"markdownDescription": "Defines PHP profiles as a user defined name and a `php` binary path.\nExample: `\"php.executables\": { \"v7.4\": \"/usr/bin/php7.4\" }`",
+					"type": "object",
+					"scope": "application"
+				},
+				"php.version": {
+					"markdownDescription": "A PHP version or a profile name defined in `\"php.executables\"`.",
+					"type": "string",
+					"scope": "window"
+				},
+				"php.codeLens.enabled": {
+					"description": "Enable/disable code lenses in PHP files.",
+					"type": "boolean",
+					"default": true,
+					"scope": "application"
+				},
+				"php.problems.scope": {
+					"description": "Which workspace folders gets analysed. Default is \"user\" which excludes \"vendor\" folder.",
+					"type": "string",
+					"enum": [
+						"none",
+						"user",
+						"all"
+					],
+					"scope": "window",
+					"enumDescriptions": [
+						"Workspace won't be analysed.",
+						"Workspace will be analysed excluding \"vendor\" folder.",
+						"Entire workspace will be analysed."
+					]
+				},
+				"php.problems.exclude": {
+					"description": "Path patterns to be ignored from reporting problems. Value can be set to `true` to ignore all problems or a comma separated list of specific problem codes.",
+					"type": [
+						"object",
+						"null"
+					],
+					"default": null,
+					"scope": "window"
+				},
+				"php.problems.workspaceAnalysis": {
+					"description": "Deprecated. Enable full workspace-wide analysis. Enabled by default.",
+					"type": [
+						"boolean"
+					],
+					"enum": [
+						true,
+						false
+					],
+					"default": true,
+					"scope": "window",
+					"deprecationMessage": "Use \"php.problems.scope\" instead."
+				},
+				"php.stubs": {
+					"markdownDescription": "Array of extension names to be included in the built-in IntelliSense, the localized manual, and code analysis. By default all the standard PHP extensions are included.\n\nExamples:\n\n```json\n{\n  \"php.stubs\": [\"*\", \"com\"]\n}\n```\n\nList of possible values:\n\n- `\"*\"` includes the standard set of extensions.\n- `\"all\"` includes all the available extensions.\n- `com`\n- `zip`\n- `zlib`\n- ...",
+					"default": [
+						"*"
+					],
+					"type": "array",
+					"scope": "window",
+					"examples": [
+						"[\"*\", \"com\"]",
+						"[\"all\"]"
+					]
+				},
+				"php.debug.port": {
+					"description": "Default Xdebug port or array of ports. This value is used when `port` is not specified in `launch.json` settings. Usually 9000 or 9003.",
+					"default": [
+						9003,
+						9000
+					],
+					"type": [
+						"array",
+						"integer"
+					],
+					"scope": "window"
+				},
+				"phpTools.license": {
+					"description": "The license fingerprint. (deprecated)",
+					"type": [
+						"string",
+						"null"
+					],
+					"scope": "application",
+					"deprecationMessage": "This is no longer used. You may delete this setting."
+				},
+				"phpTools.language": {
+					"description": "Language of PHP Tools IntelliSense.",
+					"type": [
+						"string",
+						null
+					],
+					"enum": [
+						"en",
+						"de",
+						"es",
+						"fr",
+						"ja",
+						"pt",
+						"ru",
+						"zh",
+						null
+					],
+					"default": null,
+					"scope": "application"
+				},
+				"phpunit.phpunit": {
+					"description": "Path to PHPUnit binary to be used to run and debug the tests. It can be either full path or path relative to the workspace root.",
+					"type": "string",
+					"default": null,
+					"scope": "window"
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "phptools.activate",
+				"title": "PHP Tools: Activate License",
+				"icon": "",
+				"enablement": "!isWeb"
+			},
+			{
+				"command": "phptools.debug.startWithStopOnEntry",
+				"title": "PHP: Start Debugging and Stop on Entry",
+				"category": "Debug",
+				"icon": "$(debug-alt-small)",
+				"enablement": "debuggersAvailable && !inDebugMode"
+			},
+			{
+				"command": "phptools.selectPhpVersion",
+				"title": "Select PHP version",
+				"category": "PHP",
+				"enablement": "editorLangId==php && !isWeb",
+				"icon": "$(versions)"
+			},
+			{
+				"command": "phptools.debug.startListen",
+				"title": "Start Listening for Xdebug (PHP)",
+				"shortTitle": "Listen for Xdebug",
+				"category": "Debug",
+				"icon": "$(debug-alt-small)",
+				"enablement": "debuggersAvailable && !inDebugMode"
+			},
+			{
+				"command": "phptools.debug.startScript",
+				"title": "Launch current script in console and debug (PHP)",
+				"shortTitle": "Launch current script",
+				"category": "Debug",
+				"enablement": "editorLangId==php && debuggersAvailable && !inDebugMode",
+				"icon": "$(debug-console)"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "phptools.debug.startWithStopOnEntry",
+				"key": "F10",
+				"mac": "F10",
+				"when": "!inDebugMode && debugConfigurationType=='php'"
+			},
+			{
+				"command": "phptools.debug.startWithStopOnEntry",
+				"key": "F11",
+				"mac": "F11",
+				"when": "!inDebugMode && debugConfigurationType=='php'"
+			}
+		],
+		"debuggers": [
+			{
+				"type": "php",
+				"label": "PHP (Xdebug)",
+				"enableBreakpointsFor": {
+					"languageIds": [
+						"php"
+					]
+				},
+				"configurationAttributes": {
+					"launch": {
+						"required": [],
+						"properties": {
+							"program": {
+								"type": "string",
+								"description": "Absolute path to the program."
+							},
+							"stopOnEntry": {
+								"type": "boolean",
+								"description": "Automatically stop program after launch.",
+								"default": false
+							},
+							"externalConsole": {
+								"type": "boolean",
+								"description": "Launch debug target in external console.",
+								"default": false
+							},
+							"args": {
+								"type": "array",
+								"description": "Command line arguments passed to the program.",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"cwd": {
+								"type": "string",
+								"description": "Absolute path to the working directory of the program being debugged. Default is the current workspace.",
+								"default": "${workspaceRoot}"
+							},
+							"phpVersion": {
+								"type": "string",
+								"description": "PHP version or profile name defined in 'php.executables'"
+							},
+							"runtimeExecutable": {
+								"type": "string",
+								"description": "Absolute path to the runtime executable to be used. Default is the runtime executable on the PATH.",
+								"default": "php"
+							},
+							"runtimeArgs": {
+								"type": "array",
+								"description": "Optional arguments passed to the runtime executable.",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"env": {
+								"type": "object",
+								"additionalProperties": {
+									"type": "string"
+								},
+								"description": "Environment variables passed to the program.",
+								"default": {}
+							},
+							"port": {
+								"type": [
+									"integer",
+									"array"
+								],
+								"description": "Port on which to listen for Xdebug"
+							},
+							"serverSourceRoot": {
+								"type": "string",
+								"description": "Deprecated: The source root when debugging a remote host",
+								"deprecationMessage": "Property serverSourceRoot is deprecated, please use pathMappings to define a server root."
+							},
+							"localSourceRoot": {
+								"type": "string",
+								"description": "Deprecated: The source root on this machine that is the equivalent to the serverSourceRoot on the server.",
+								"deprecationMessage": "Property localSourceRoot is deprecated, please use pathMappings to define a local root."
+							},
+							"pathMappings": {
+								"type": "object",
+								"default": {},
+								"description": "A mapping of server paths to local paths."
+							},
+							"exclude": {
+								"type": "array",
+								"items": "string",
+								"description": "Glob patterns that the debugger won't debug.",
+								"default": [
+									"**/vendor/**/*.php"
+								]
+							},
+							"log": {
+								"type": "boolean",
+								"description": "If true, will log all communication between VS Code and the adapter"
+							},
+							"dbgpProxy": {
+								"type": "object",
+								"properties": {
+									"enable": {
+										"type": "boolean",
+										"description": "If True, will connect to DBGp proxy configured in this section",
+										"default": false
+									},
+									"host": {
+										"type": "string",
+										"description": "The host address where the proxy is located. It's usually same as web server, but it's doesn't have to be.",
+										"default": "127.0.0.1"
+									},
+									"port": {
+										"type": "number",
+										"description": "The port where the proxy server is listening.",
+										"default": 9001
+									},
+									"ideKey": {
+										"type": "string",
+										"description": "The Xdebug IDE Key used to register the VS CODE. If not set, the current user name is used instead."
+									}
+								}
+							}
+						}
+					}
+				},
+				"languages": [
+					"php"
+				],
+				"configurationSnippets": [
+					{
+						"label": "PHP: Launch built-in server",
+						"description": "Launches PHP's built-in development server and starts debugging.",
+						"body": {
+							"name": "Launch built-in server",
+							"type": "php",
+							"request": "launch",
+							"runtimeArgs": [
+								"-S",
+								"localhost:8000",
+								"-t",
+								"."
+							],
+							"port": 9003,
+							"serverReadyAction": {
+								"action": "openExternally"
+							}
+						}
+					},
+					{
+						"label": "PHP: Launch current script in console",
+						"description": "Launches currently opened PHP document as a console application.",
+						"body": {
+							"name": "Launch current script in console",
+							"type": "php",
+							"request": "launch",
+							"program": "^\"\\${file}\"",
+							"cwd": "^\"\\${fileDirname}\"",
+							"externalConsole": false,
+							"port": 9003
+						}
+					},
+					{
+						"label": "PHP: Listen for Xdebug",
+						"description": "Starts debugging by waiting for an incoming Xdebug connection from a remote server.",
+						"body": {
+							"name": "Listen for Xdebug",
+							"type": "php",
+							"request": "launch",
+							"port": [
+								9003,
+								9000
+							]
+						}
+					}
+				],
+				"initialConfigurations": [
+					{
+						"name": "Launch built-in server and debug",
+						"type": "php",
+						"request": "launch",
+						"runtimeArgs": [
+							"-S",
+							"localhost:8000",
+							"-t",
+							"."
+						],
+						"port": 9003,
+						"serverReadyAction": {
+							"action": "openExternally"
+						}
+					},
+					{
+						"name": "Debug current script in console",
+						"type": "php",
+						"request": "launch",
+						"program": "${file}",
+						"cwd": "${fileDirname}",
+						"externalConsole": false,
+						"port": 9003
+					},
+					{
+						"name": "Listen for Xdebug",
+						"type": "php",
+						"request": "launch",
+						"port": 9003
+					}
+				]
+			}
+		],
+		"walkthroughs": [
+			{
+				"id": "phptools.introduction",
+				"title": "Get Started with PHP Tools",
+				"description": "How to use PHP Tools, and what they do?",
+				"when": "false",
+				"featuredFor": [
+					"**/*.php"
+				],
+				"steps": [
+					{
+						"id": "openworkspace",
+						"title": "Open a Folder or a Workspace",
+						"description": "First **Open a Folder** with a ``.php`` file, so you can take advantage of advanced IntelliSense, configurable debugger, tests explorer, or to fine-tune your workspace settings.\n\n[Open Folder](command:vscode.openFolder)",
+						"media": {
+							"markdown": "walkthroughs\\introduction\\workspace.md"
+						},
+						"completionEvents": [
+							"workspaceContains:**/*.php"
+						]
+					},
+					{
+						"id": "intellisense",
+						"title": "Discover IntelliSense.",
+						"description": "There is many features you would like to try.\n\nPlease see [the documentation](https://docs.devsense.com/en/vscode/editor/completion?from=vscode) for more information.",
+						"media": {
+							"markdown": "walkthroughs\\introduction\\intellisense.md"
+						},
+						"completionEvents": [
+							"onLanguage:php"
+						]
+					},
+					{
+						"id": "debug",
+						"title": "Debug PHP Code",
+						"description": "Install [Xdebug](https://xdebug.org/) and take advantage of Visual Studio Code debugging.\n\n - **``F5``** to start debugging.\n - **``F9``** to put a breakpoint.\n\nSee more at [the documentation page](https://docs.devsense.com/en/vscode/debug?from=vscode).",
+						"media": {
+							"markdown": "walkthroughs\\introduction\\debug.md"
+						},
+						"completionEvents": [
+							"onDebugResolve:php"
+						]
+					},
+					{
+						"id": "activate",
+						"title": "Register your copy of PHP Tools",
+						"description": "Get the most of the extension and advanced features by registering **PHP Tools**. \n\n  **[Features](https://www.devsense.com/features#vscode)** | **[Purchase](https://www.devsense.com/purchase?from=vscode) | **[Documentation](https://docs.devsense.com/vscode?from=vscode)**\n\n[Activate](command:phptools.activate)",
+						"media": {
+							"markdown": "walkthroughs\\introduction\\activate.md"
+						},
+						"completionEvents": [
+							"onCommand:phptools.activate"
+						]
+					}
+				]
+			},
+			{
+				"id": "phpDebug",
+				"title": "Get started with PHP debugging",
+				"description": "How to install PHP and Xdebug and debug a PHP in VS Code.",
+				"when": "false",
+				"steps": [
+					{
+						"id": "php.installPhpWindows",
+						"title": "Install PHP and Xdebug",
+						"description": "To debug you will need to install PHP and Xdebug. You can do it through the terminal.\n[Open Terminal](command:workbench.action.terminal.new)\n",
+						"media": {
+							"markdown": "walkthroughs\\debug\\install-php-windows.md"
+						},
+						"when": "workspacePlatform == windows",
+						"command": "workbench.action.terminal.new"
+					},
+					{
+						"id": "php.installPhpLinux",
+						"title": "Install PHP",
+						"description": "To debug you will need to install PHP and Xdebug. You can do it through the terminal.\n[Open Terminal](command:workbench.action.terminal.new)\n",
+						"media": {
+							"markdown": "walkthroughs\\debug\\install-php-linux.md"
+						},
+						"when": "workspacePlatform == linux",
+						"command": "workbench.action.terminal.new"
+					},
+					{
+						"id": "php.installPhpMacos",
+						"title": "Install PHP",
+						"description": "To debug you will need to install PHP and Xdebug. You can do it through the terminal.\n[Open Terminal](command:workbench.action.terminal.new)\n",
+						"media": {
+							"markdown": "walkthroughs\\debug\\install-php-macos.md"
+						},
+						"when": "false",
+						"command": "workbench.action.terminal.new"
+					},
+					{
+						"id": "php.CreatePHPfile",
+						"title": "Create a PHP file",
+						"description": "[Open](command:toSide:workbench.action.files.openFile) or [create](command:toSide:workbench.action.files.newUntitledFile?%7B%22languageId%22%3A%22php%22%7D) a PHP file - make sure to save it as \".php\".\n[Create PHP File](command:toSide:workbench.action.files.newUntitledFile?%7B%22languageId%22%3A%22php%22%7D)",
+						"media": {
+							"image": "walkthroughs\\debug\\createfile.png",
+							"altText": "Open a PHP file or a folder with a PHP project."
+						},
+						"when": ""
+					},
+					{
+						"id": "php.runAndDebug",
+						"title": "Run and debug your PHP file",
+						"description": "Open a PHP file, set a breakpoint using F9 and then press F5. Choose ``Launch current script in console``. \n[Learn more](https://docs.devsense.com/vscode/debug#launching-debug-in-vscode?from=vscode)",
+						"media": {
+							"image": "walkthroughs\\debug\\rundebug.png",
+							"altText": "How to run and debug in VS Code with F5"
+						},
+						"when": ""
+					},
+					{
+						"id": "php.learnMore",
+						"title": "Learn more",
+						"description": "There are many more ways how to use the PHP debugger.\n You can start by exploring [Launch Profiles](https://docs.devsense.com/en/vscode/debug/launch-json?from=vscode)",
+						"media": {
+							"markdown": "walkthrough\\debug\\empty.md"
+						},
+						"when": ""
+					}
+				]
+			}
+		]
+	},
+	"capabilities": {
+		"virtualWorkspaces": {
+			"supported": "limited",
+			"description": "In virtual workspaces, not all files might be loaded and resolving and finding references might be limited."
+		},
+		"untrustedWorkspaces": {
+			"supported": true
+		}
+	},
+	"badges": [
+		{
+			"url": "https://badgen.net/badge/@php4vs/twitter/blue?icon=twitter",
+			"href": "https://twitter.com/php4vs",
+			"description": "PHP Tools on Twitter"
+		},
+		{
+			"url": "https://img.shields.io/badge/platform-MacOS%20%7C%20Linux%20%7C%20Win-green.svg",
+			"href": "https://www.devsense.com/download#vscode",
+			"description": "PHP Tools Download"
+		},
+		{
+			"url": "https://img.shields.io/badge/php-5.4%20--%205.6%20%7C%207.0%20--%208.1-8892BF.svg?logo=php",
+			"href": "https://docs.devsense.com/en/vscode/configuration",
+			"description": "Supported PHP Versions"
+		},
+		{
+			"url": "https://img.shields.io/badge/-changelog-green",
+			"href": "https://www.devsense.com/en/download/vscode",
+			"description": "PHP Tools for VS Code Changelog"
+		}
+	],
+	"scripts": {
+		"vscode:prepublish": "powershell ./prepublish.ps1 & npm run -S esbuild-base -- --minify & powershell ./minify.ps1",
+		"esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/src/extension.js --external:vscode --format=cjs --platform=node",
+		"compile": "dotnet publish ../Devsense.PHP.LanguageServer --ignore-failed-sources --output out/server & npm run -S esbuild-base -- --sourcemap",
+		"postinstall": "",
+		"vscode:uninstall": "node ./out/src/uninstall"
+	},
+	"dependencies": {
+		"applicationinsights": "^1.8.10",
+		"escape-string-regexp": "^1.0.5",
+		"iconv-lite": "^0.4.15",
+		"jsencrypt": "^3.2.1",
+		"minimatch": "^3.0.4",
+		"moment": "^2.17.1",
+		"node-rsa": "^1.0.7",
+		"open": "^8.4.0",
+		"recursive-readdir-sync": "^1.0.6",
+		"string-hash": "^1.1.3",
+		"urlencode": "^1.1.0",
+		"uuid": "^7",
+		"vsce": "^2.7.0",
+		"@vscode/debugprotocol": "^1.54.0",
+		"@vscode/debugadapter": "^1.54.0",
+		"vscode-languageclient": "^7.0.0",
+		"vscode-languageserver": "^7.0.0",
+		"vscode-languageserver-protocol-foldingprovider": "^2.0.1",
+		"vscode-nls": "^3.2.2",
+		"xmldom": "^0.6.0",
+		"xmlhttprequest": "^1.8.0"
+	},
+	"devDependencies": {
+		"@types/mocha": "^5.2.7",
+		"@types/node": "^10.17.60",
+		"@types/vscode": "^1.63.1",
+		"esbuild": "^0.14.48",
+		"mocha": "^9.2.2",
+		"typescript": "^4.7.4",
+		"uglify-js": "^3.16.1"
+	},
+	"__metadata": {
+		"installedTimestamp": 1773067617349,
+		"targetPlatform": "win32-x64",
+		"size": 23034607
+	}
+}

@@ -1,0 +1,225 @@
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Search, ShoppingBag, Briefcase, Home as HomeIcon, SlidersHorizontal, Sliders, SearchX } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { MarketplaceListingCard } from '@/components/marketplace/MarketplaceListingCard';
+import { MarketplaceCreateDialog } from '@/components/marketplace/MarketplaceCreateDialog';
+import { MarketplaceCommentsDialog } from '@/components/marketplace/MarketplaceCommentsDialog';
+import { MarketplaceController } from '@/components/marketplace/MarketplaceController';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+
+const TABS = [
+  { id: 'all', label: 'All', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+  { id: 'sell', label: 'Buy/Sell', icon: <ShoppingBag className="w-3.5 h-3.5" /> },
+  { id: 'job', label: 'Jobs', icon: <Briefcase className="w-3.5 h-3.5" /> },
+  { id: 'rent', label: 'Rent', icon: <HomeIcon className="w-3.5 h-3.5" /> },
+  { id: 'controller', label: 'Me', icon: <Sliders className="w-3.5 h-3.5" /> },
+];
+
+export default function Marketplace() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('all');
+  const [listings, setListings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
+  const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editListing, setEditListing] = useState<any>(null);
+  const [commentListingId, setCommentListingId] = useState('');
+  const [commentOpen, setCommentOpen] = useState(false);
+
+  const fetchListings = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+
+    let query = supabase.from('marketplace_listings').select('*').eq('status', 'active').order('created_at', { ascending: false });
+
+    if (activeTab !== 'all' && activeTab !== 'controller') {
+      query = query.eq('type', activeTab);
+    }
+
+    if (searchQuery.trim()) {
+      query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,location.ilike.%${searchQuery}%,category.ilike.%${searchQuery}%`);
+    }
+
+    const { data } = await query.limit(50);
+
+    if (data) {
+      const userIds = [...new Set(data.map(d => d.user_id))];
+      const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, username').in('id', userIds);
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
+      const enriched = data.map(d => ({ ...d, profiles: profileMap[d.user_id] }));
+      setListings(enriched);
+
+      const ids = data.map(d => d.id);
+      const { data: myLikes } = await supabase.from('marketplace_likes').select('listing_id').eq('user_id', user.id).in('listing_id', ids);
+      setLikedSet(new Set((myLikes || []).map(l => l.listing_id)));
+
+      const { data: mySaved } = await supabase.from('marketplace_saved').select('listing_id').eq('user_id', user.id).in('listing_id', ids);
+      setSavedSet(new Set((mySaved || []).map(s => s.listing_id)));
+
+      const counts: Record<string, number> = {};
+      const cCounts: Record<string, number> = {};
+      for (const d of data) {
+        counts[d.id] = d.likes_count || 0;
+        cCounts[d.id] = d.comments_count || 0;
+      }
+      setLikeCounts(counts);
+      setCommentCounts(cCounts);
+    }
+
+    setLoading(false);
+  }, [user, activeTab, searchQuery]);
+
+  useEffect(() => { fetchListings(); }, [fetchListings]);
+
+  const toggleLike = async (id: string) => {
+    if (!user) return;
+    const liked = likedSet.has(id);
+    if (liked) {
+      await supabase.from('marketplace_likes').delete().eq('user_id', user.id).eq('listing_id', id);
+      setLikedSet(prev => { const n = new Set(prev); n.delete(id); return n; });
+      setLikeCounts(prev => ({ ...prev, [id]: Math.max(0, (prev[id] || 0) - 1) }));
+    } else {
+      await supabase.from('marketplace_likes').insert({ user_id: user.id, listing_id: id });
+      setLikedSet(prev => new Set(prev).add(id));
+      setLikeCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+    }
+  };
+
+  const toggleSave = async (id: string) => {
+    if (!user) return;
+    const saved = savedSet.has(id);
+    if (saved) {
+      await supabase.from('marketplace_saved').delete().eq('user_id', user.id).eq('listing_id', id);
+      setSavedSet(prev => { const n = new Set(prev); n.delete(id); return n; });
+    } else {
+      await supabase.from('marketplace_saved').insert({ user_id: user.id, listing_id: id });
+      setSavedSet(prev => new Set(prev).add(id));
+    }
+  };
+
+  const deleteListing = async (id: string) => {
+    await supabase.from('marketplace_listings').delete().eq('id', id);
+    setListings(prev => prev.filter(l => l.id !== id));
+  };
+
+  const handleShare = async (id: string) => {
+    const url = `${window.location.origin}/marketplace?listing=${id}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Check out this listing', url }); } catch {}
+    } else {
+      await navigator.clipboard.writeText(url);
+    }
+  };
+
+  const handleChat = (userId: string, listingId: string) => {
+    navigate(`/chat/${userId}?listing=${listingId}`);
+  };
+
+  const renderListings = () => {
+    if (loading) return Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />);
+    if (listings.length === 0) return (
+      <div className="text-center py-16">
+        <SearchX className="w-14 h-14 mx-auto text-muted-foreground/20 mb-4" />
+        <p className="text-sm font-medium text-muted-foreground mb-1">No results found</p>
+        <p className="text-xs text-muted-foreground/60 mb-4">Try a different search or category</p>
+        <Button size="sm" onClick={() => { setEditListing(null); setCreateOpen(true); }} className="gap-1">
+          <Plus className="w-4 h-4" />Post something new
+        </Button>
+      </div>
+    );
+    return listings.map(l => (
+      <MarketplaceListingCard
+        key={l.id}
+        listing={l}
+        isLiked={likedSet.has(l.id)}
+        isSaved={savedSet.has(l.id)}
+        likesCount={likeCounts[l.id] || 0}
+        commentsCount={commentCounts[l.id] || 0}
+        currentUserId={user?.id || ''}
+        onLike={toggleLike}
+        onSave={toggleSave}
+        onComment={(id) => { setCommentListingId(id); setCommentOpen(true); }}
+        onShare={handleShare}
+        onChat={handleChat}
+        onDelete={deleteListing}
+        onEdit={(listing) => { setEditListing(listing); setCreateOpen(true); }}
+        onViewProfile={(userId) => navigate(`/marketplace/profile/${userId}`)}
+      />
+    ));
+  };
+
+  return (
+    <div className="space-y-3 pb-20">
+
+
+      {/* Search bar */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search listings, locations, categories..."
+            className="pl-9 text-sm h-9"
+          />
+        </div>
+        <Button size="sm" onClick={() => { setEditListing(null); setCreateOpen(true); }} className="h-9 gap-1 bg-gradient-to-r from-primary to-secondary hover:opacity-90">
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Post</span>
+        </Button>
+      </div>
+
+      {/* Simple tab bar - no SwipeableTabs to avoid event conflicts */}
+      <div className="flex items-center gap-0 p-1 rounded-2xl glass-card overflow-x-auto no-scrollbar">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200 whitespace-nowrap flex-1 justify-center text-xs font-medium",
+              activeTab === tab.id
+                ? "bg-primary/20 text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="space-y-3">
+        {activeTab === 'controller' ? (
+          <MarketplaceController />
+        ) : (
+          renderListings()
+        )}
+      </div>
+
+      <MarketplaceCreateDialog
+        open={createOpen}
+        onOpenChange={(o) => { setCreateOpen(o); if (!o) setEditListing(null); }}
+        editListing={editListing}
+        onSuccess={fetchListings}
+      />
+
+      <MarketplaceCommentsDialog
+        open={commentOpen}
+        onOpenChange={setCommentOpen}
+        listingId={commentListingId}
+        onCountChange={(count) => setCommentCounts(prev => ({ ...prev, [commentListingId]: count }))}
+      />
+    </div>
+  );
+}
