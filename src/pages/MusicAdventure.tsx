@@ -1,1399 +1,864 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react';
-import { DailyDoseCard } from '@/components/feed/DailyDoseCard';
-
+import { useState, useEffect, useCallback, useMemo, useDeferredValue, useTransition, lazy, Suspense, useRef, memo } from 'react';
+import React from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { toast } from 'sonner';
-import { 
-  MapPin, Star, Heart, Target, Compass, Globe, 
-  Plus, Check, Share2, MessageCircle, Footprints, 
-  Award, Plane, Sparkles, Filter, Clock, Search,
-  RefreshCw, Users, ExternalLink, Image, Video, Map, Flag, List, 
-  Shuffle, Leaf, Coffee, Eye
+import {
+  Trophy, Target, MapPin, Plane, ChevronRight, Sparkles,
+  Search, Globe, Heart, MessageCircle, Bookmark, Plus,
+  UserCircle2, Compass, Map as MapIcon, Share2, MoreVertical,
+  Flag, UserPlus, EyeOff, Copy, Pencil, Trash2, MinusCircle, ChevronUp,
+ Edit3, Crown, Zap, Smile, GraduationCap, ChevronDown, LayoutGrid, Lock, Settings2,
+ Clock, CheckCircle2, MoreHorizontal, ListTodo, Notebook, Bell, BarChart3, Home,
+ Cpu, FileText, Play, ShoppingBag, GripHorizontal, RotateCcw, Info, MoreVertical as Dots4,
+ ArrowLeft, Camera, Send, X, Image as ImageIcon, UserCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { AdventureCommentsDialog } from '@/components/AdventureCommentsDialog';
-import { ShareDialog } from '@/components/ShareDialog';
-import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
-import { TruncatedText } from '@/components/adventure/TruncatedText';
-import LazyBlurImage from '@/components/LazyBlurImage';
-import { cn } from '@/lib/utils';
-
-// Lazy load map component
-const DiscoverMapView = lazy(() => import('@/components/adventure/DiscoverMapView').then(m => ({ default: m.DiscoverMapView })));
-
-// ============= CHALLENGE CATEGORIES =============
-const CHALLENGE_CATEGORIES = [
-  { name: 'Health', icon: '💚' },
-  { name: 'Fitness', icon: '🏃' },
-  { name: 'Mind', icon: '🧠' },
-  { name: 'Learning', icon: '📚' },
-  { name: 'Lifestyle', icon: '🌟' },
-  { name: 'Travel', icon: '✈️' }
-];
-
-// Ranking categories with icons (like home feed)
-const RANKING_CATEGORIES = [
-  { id: 'challenges', icon: Target, label: 'Challenges', color: 'text-orange-500' },
-  { id: 'discover', icon: Compass, label: 'Discover', color: 'text-blue-500' },
-  { id: 'travel', icon: Plane, label: 'Travel', color: 'text-purple-500' },
-];
-
-// Import from data files
+import { Progress } from '@/components/ui/progress';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { toast } from 'sonner';
+import { motion, AnimatePresence, useScroll, useMotionValueEvent, Reorder } from 'framer-motion';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import { AdventureRanks } from '@/components/adventure/AdventureRanks';
+import { TravelStoriesFeed } from '@/components/adventure/TravelStoriesFeed';
+import { PlaceDetailSheet } from '@/components/adventure/PlaceDetailSheet';
+import { StoryCreationSheet } from '@/components/adventure/StoryCreationSheet';
+import { StoryReader } from '@/components/adventure/StoryReader';      
+import { CommentsDialog } from '@/components/CommentsDialog';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SYSTEM_CHALLENGES } from '@/data/adventureChallenges';
-import { ADVENTURE_PLACES, getAllCountries } from '@/data/adventurePlaces';
+import { NotesSection } from './NotesSection';
 
-// ============= COMPONENT =============
-export default function MusicAdventure() {
-  const { user, profile } = useAuth();
-  const [activeTab, setActiveTab] = useState('challenges');
-  
-  // Accordion filter states
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [timeFilter, setTimeFilter] = useState('all');
-  
-  // Search states
-  const [discoverSearch, setDiscoverSearch] = useState('');
-  const [travelSearch, setTravelSearch] = useState('');
-  
-  // Discover explore mode
-  const [exploreMode, setExploreMode] = useState<'all' | 'my_country' | 'random_country' | 'hidden_gems'>('all');
-  const [randomCountry, setRandomCountry] = useState<string | null>(null);
-  const [exploreCount, setExploreCount] = useState(0);
-  const [showSoftStop, setShowSoftStop] = useState(false);
-  const [discoverTypeFilter, setDiscoverTypeFilter] = useState<'all' | 'unesco' | 'hidden'>('all');
-  
-  // Challenge states
-  const [customChallenges, setCustomChallenges] = useState<any[]>([]);
-  const [completedChallenges, setCompletedChallenges] = useState<Set<string>>(new Set());
-  const [likedChallenges, setLikedChallenges] = useState<Set<string>>(new Set());
-  
-  // Place states
-  const [visitedPlaces, setVisitedPlaces] = useState<Set<string>>(new Set());
-  const [lovedPlaces, setLovedPlaces] = useState<Set<string>>(new Set());
-  const [userRatings, setUserRatings] = useState<Record<string, number>>({});
-  const [discoverViewMode, setDiscoverViewMode] = useState<'list' | 'map'>('list');
-  
-  // Travel stories states
-  const [travelStories, setTravelStories] = useState<any[]>([]);
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [showCreateStory, setShowCreateStory] = useState(false);
-  const [newStory, setNewStory] = useState({ 
-    title: '', 
-    content: '', 
-    image: '', 
-    video: '',
-    location: '',
-    mediaType: 'image' as 'image' | 'video'
-  });
-  const [travelFilter, setTravelFilter] = useState<'global' | 'regional'>('global');
-  
-  // Dialog states
-  const [showCreateChallenge, setShowCreateChallenge] = useState(false);
-  const [newChallenge, setNewChallenge] = useState({ 
-    title: '', 
-    description: '', 
-    duration: 'daily', 
-    category: 'lifestyle' 
-  });
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [selectedPostId, setSelectedPostId] = useState('');
-  const [selectedPostTitle, setSelectedPostTitle] = useState('');
-  const [shareOpen, setShareOpen] = useState(false);
-  const [shareContent, setShareContent] = useState({ id: '', title: '', content: '' });
-  
-  // Ranking states
-  const [rankingFilter, setRankingFilter] = useState<'global' | 'regional'>('global');
-  const [rankingCategory, setRankingCategory] = useState<'challenges' | 'discover' | 'travel'>('challenges');
-  
-  // Media viewer state
-  const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
-  const [mediaViewerData, setMediaViewerData] = useState<{
-    urls: string[];
-    types: string[];
-    title: string;
-    id: string;
-    isLiked: boolean;
-  }>({ urls: [], types: [], title: '', id: '', isLiked: false });
+const FALLBACK_PLACE_IMAGE = 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&q=80&w=800';
 
-  // Open media viewer function
-  const openMediaViewer = (mediaUrl: string, mediaType: string, title: string, id: string, isLiked: boolean) => {
-    setMediaViewerData({
-      urls: [mediaUrl],
-      types: [mediaType],
-      title,
-      id,
-      isLiked
-    });
-    setMediaViewerOpen(true);
-  };
+type LayoutType = 'layout1' | 'layout2' | 'layout3';
 
-  // Load data from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('adventure_zone_v2');
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        setCustomChallenges(data.customChallenges || []);
-        setCompletedChallenges(new Set(data.completedChallenges || []));
-        setLikedChallenges(new Set(data.likedChallenges || []));
-        setVisitedPlaces(new Set(data.visitedPlaces || []));
-        setLovedPlaces(new Set(data.lovedPlaces || []));
-        setUserRatings(data.userRatings || {});
-        setTravelStories(data.travelStories || []);
-        setLikedPosts(new Set(data.likedPosts || []));
-      } catch (e) {}
+interface Subsection {
+  id: string;
+  label: string;
+  icon: any;
+}
+
+interface MainCategory {
+  id: string;
+  label: string;
+  icon: any;
+  subsections: Subsection[];
+}
+
+const LAYOUTS: Record<LayoutType, MainCategory[]> = {
+  layout1: [
+    {
+      id: 'default',
+      label: 'Lumatha',
+      icon: Sparkles,
+      subsections: [
+        { id: 'ranks', label: 'Quests', icon: Trophy },
+        { id: 'explore', label: 'Explore', icon: Compass },
+        { id: 'feed', label: 'Stories', icon: MapIcon },
+        { id: 'docs', label: 'Docs', icon: FileText },
+        { id: 'marketplace', label: 'Market', icon: ShoppingBag },
+        { id: 'profile', label: 'Profile', icon: UserCircle2 },
+        { id: 'private_zone', label: 'Private', icon: Lock },
+      ]
     }
-    checkChallengeResets();
-  }, []);
+  ],
+  layout2: [
+    {
+      id: 'private',
+      label: 'Private',
+      icon: Lock,
+      subsections: [
+        { id: 'private_zone', label: 'Private Zone', icon: Lock },
+        { id: 'todo', label: 'To-do', icon: ListTodo },
+        { id: 'notes', label: 'Notes', icon: Notebook },
+        { id: 'quests', label: 'Quests', icon: Target },
+        { id: 'messages', label: 'Messages', icon: MessageCircle },
+        { id: 'funpun', label: 'FunPun', icon: Sparkles },
+      ]
+    },
+    {
+      id: 'neutral',
+      label: 'Neutral',
+      icon: Zap,
+      subsections: [
+        { id: 'explore', label: 'Explore', icon: Compass },
+        { id: 'connect', label: 'Connect', icon: UserPlus },
+        { id: 'notify', label: 'Notify', icon: Bell },
+        { id: 'stats', label: 'Stats', icon: BarChart3 },
+        { id: 'ranking', label: 'Ranking', icon: Crown },
+      ]
+    },
+    {
+      id: 'public',
+      label: 'Public',
+      icon: Globe,
+      subsections: [
+        { id: 'feed', label: 'Feed', icon: Home },
+        { id: 'docs', label: 'Docs', icon: FileText },
+        { id: 'stories', label: 'Stories', icon: Play },
+        { id: 'marketplace', label: 'Market', icon: ShoppingBag },
+        { id: 'profile', label: 'Profile', icon: UserCircle2 },
+      ]
+    }
+  ],
+  layout3: [
+    {
+      id: 'social',
+      label: 'Social',
+      icon: UserPlus,
+      subsections: [
+        { id: 'feed', label: 'Feed', icon: Home },
+        { id: 'quests', label: 'Quest', icon: Target },
+        { id: 'explore', label: 'Explore', icon: Compass },
+        { id: 'connect', label: 'Connect', icon: UserPlus },
+        { id: 'marketplace', label: 'Market', icon: ShoppingBag },
+        { id: 'profile', label: 'Profile', icon: UserCircle2 },
+      ]
+    },
+    {
+      id: 'education',
+      label: 'Education',
+      icon: GraduationCap,
+      subsections: [
+        { id: 'private_zone', label: 'Private Zone', icon: Lock },
+        { id: 'todo', label: 'To-do', icon: ListTodo },
+        { id: 'notes', label: 'Notes', icon: Notebook },
+        { id: 'docs', label: 'Docs', icon: FileText },
+        { id: 'messages', label: 'Messages', icon: MessageCircle },
+      ]
+    },
+    {
+      id: 'neutral',
+      label: 'Neutral',
+      icon: Zap,
+      subsections: [
+        { id: 'stories', label: 'Stories', icon: Play },
+        { id: 'funpun', label: 'FunPun', icon: Sparkles },
+        { id: 'notify', label: 'Notify', icon: Bell },
+        { id: 'stats', label: 'Stats', icon: BarChart3 },
+        { id: 'ranking', label: 'Ranking', icon: Crown },
+      ]
+    }
+  ]
+};
 
-  // Save data to localStorage
-  const saveData = useCallback(() => {
-    localStorage.setItem('adventure_zone_v2', JSON.stringify({
-      customChallenges,
-      completedChallenges: [...completedChallenges],
-      likedChallenges: [...likedChallenges],
-      visitedPlaces: [...visitedPlaces],
-      lovedPlaces: [...lovedPlaces],
-      userRatings,
-      travelStories,
-      likedPosts: [...likedPosts],
-      lastResetCheck: new Date().toISOString()
-    }));
-  }, [customChallenges, completedChallenges, likedChallenges, visitedPlaces, lovedPlaces, userRatings, travelStories, likedPosts]);
+const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
 
-  useEffect(() => { saveData(); }, [saveData]);
+// --- New Components for Chat, Docs, Profile ---
 
-  // Challenge reset logic
-  const checkChallengeResets = () => {
-    const saved = localStorage.getItem('adventure_zone_v2');
-    if (!saved) return;
-    
-    const data = JSON.parse(saved);
-    const lastCheck = data.lastResetCheck ? new Date(data.lastResetCheck) : new Date(0);
-    const now = new Date();
-    
-    const resetNeeded = {
-      daily: lastCheck.toDateString() !== now.toDateString(),
-      weekly: Math.floor((now.getTime() - lastCheck.getTime()) / (7 * 24 * 60 * 60 * 1000)) >= 1,
-      monthly: lastCheck.getMonth() !== now.getMonth() || lastCheck.getFullYear() !== now.getFullYear(),
-      yearly: lastCheck.getFullYear() !== now.getFullYear()
-    };
-    
-    if (resetNeeded.daily || resetNeeded.weekly || resetNeeded.monthly || resetNeeded.yearly) {
-      const newCompleted = new Set(completedChallenges);
-      const durationsToReset: string[] = [];
-      
-      if (resetNeeded.daily) durationsToReset.push('daily');
-      if (resetNeeded.weekly) durationsToReset.push('weekly');
-      if (resetNeeded.monthly) durationsToReset.push('monthly');
-      if (resetNeeded.yearly) durationsToReset.push('yearly');
-      
-      SYSTEM_CHALLENGES.forEach(c => {
-        if (durationsToReset.includes(c.duration) && newCompleted.has(c.id)) {
-          newCompleted.delete(c.id);
-        }
+function MessagesSection() {
+  const [messages, setMessages] = useState<any[]>(() => {
+    const saved = localStorage.getItem('chat_messages_v1');
+    return saved ? JSON.parse(saved) : [
+      { id: '1', text: 'Hey there! Ready for the next adventure? 🏔️', sender: 'ai', timestamp: Date.now() - 3600000 },
+      { id: '2', text: 'I found a great spot in the Himalayas!', sender: 'user', timestamp: Date.now() - 1800000 },
+    ];
+  });
+  const [input, setInput] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior
       });
-      
-      setCompletedChallenges(newCompleted);
-      
-      if (durationsToReset.length > 0) {
-        toast.info(`${durationsToReset.join(', ')} challenges have been reset! 🔄`);
-      }
     }
   };
 
-  // Filter challenges
-  const filteredChallenges = useMemo(() => {
-    let challenges = sourceFilter === 'custom' ? customChallenges : 
-                     sourceFilter === 'system' ? SYSTEM_CHALLENGES : 
-                     [...SYSTEM_CHALLENGES, ...customChallenges];
-    
-    if (timeFilter !== 'all') {
-      challenges = challenges.filter(c => c.duration === timeFilter);
-    }
-    
-    return challenges.slice(0, 50);
-  }, [sourceFilter, timeFilter, customChallenges]);
-
-  // Pick random country
-  const pickRandomCountry = useCallback(() => {
-    const countries = getAllCountries();
-    const rand = countries[Math.floor(Math.random() * countries.length)];
-    setRandomCountry(rand.name);
-    setExploreCount(prev => {
-      const next = prev + 1;
-      if (next >= 10 && next % 10 === 0) setShowSoftStop(true);
-      return next;
-    });
+  useEffect(() => {
+    scrollToBottom('auto');
   }, []);
 
-  // Filter places with explore modes
-  const filteredPlaces = useMemo(() => {
-    let places = [...ADVENTURE_PLACES];
-    
-    // Type filter
-    if (discoverTypeFilter === 'unesco') places = places.filter(p => p.type === 'unesco');
-    else if (discoverTypeFilter === 'hidden') places = places.filter(p => p.type === 'hidden');
-    
-    // Mode filter
-    if (exploreMode === 'my_country' && profile?.country) {
-      places = places.filter(p => p.country.toLowerCase() === profile.country.toLowerCase());
-    } else if (exploreMode === 'random_country' && randomCountry) {
-      places = places.filter(p => p.country === randomCountry);
-    } else if (exploreMode === 'hidden_gems') {
-      places = places.filter(p => p.type === 'hidden');
-    }
-    
-    // Search filter
-    if (discoverSearch.trim()) {
-      const search = discoverSearch.toLowerCase();
-      places = places.filter(p => 
-        p.name.toLowerCase().includes(search) || 
-        p.country.toLowerCase().includes(search)
-      );
-    }
-    
-    return places.slice(0, 100);
-  }, [discoverSearch, exploreMode, randomCountry, profile?.country, discoverTypeFilter]);
+  useEffect(() => {
+    scrollToBottom();
+    localStorage.setItem('chat_messages_v1', JSON.stringify(messages));
+  }, [messages]);
 
-  // Filter travel stories with Global/Regional
-  const filteredTravelStories = useMemo(() => {
-    let stories = travelStories;
-    
-    // Apply regional filter
-    if (travelFilter === 'regional' && profile?.country) {
-      stories = stories.filter(s => 
-        s.location?.toLowerCase().includes(profile.country.toLowerCase()) ||
-        s.creatorCountry === profile.country
-      );
-    }
-    
-    // Apply search
-    if (travelSearch.trim()) {
-      const search = travelSearch.toLowerCase();
-      stories = stories.filter(p => 
-        p.title.toLowerCase().includes(search) || 
-        p.content.toLowerCase().includes(search) ||
-        p.location?.toLowerCase().includes(search)
-      );
-    }
-    
-    return stories;
-  }, [travelSearch, travelStories, travelFilter, profile?.country]);
-
-  // Challenge actions
-  const createCustomChallenge = () => {
-    if (!newChallenge.title.trim()) {
-      toast.error('Please enter a title');
-      return;
-    }
-    const challenge = {
-      id: `custom-${Date.now()}`,
-      ...newChallenge,
-      type: 'custom',
-      categoryIcon: CHALLENGE_CATEGORIES.find(c => c.name.toLowerCase() === newChallenge.category)?.icon || '🎯',
-      likes: 0,
-      comments: 0,
-      createdAt: new Date().toISOString(),
-      creatorId: user?.id
+  const handleSend = () => {
+    if (!input.trim() && !capturedImage) return;
+    const newMsg = {
+      id: Date.now().toString(),
+      text: input,
+      image: capturedImage,
+      viewOnce: !!capturedImage,
+      sender: 'user',
+      timestamp: Date.now()
     };
-    setCustomChallenges(prev => [...prev, challenge]);
-    setShowCreateChallenge(false);
-    setNewChallenge({ title: '', description: '', duration: 'daily', category: 'lifestyle' });
-    toast.success('Challenge created! 🎯');
+    setMessages([...messages, newMsg]);
+    setInput('');
+    setCapturedImage(null);
+    setIsCapturing(false);
   };
 
-  const toggleChallengeComplete = (id: string) => {
-    setCompletedChallenges(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-        toast.info('Challenge uncompleted');
-      } else {
-        newSet.add(id);
-        toast.success('Challenge completed! 🎉');
-      }
-      return newSet;
-    });
+  const captureMoment = () => {
+    // Simulate camera capture
+    setCapturedImage('https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80&w=800');
+    setIsCapturing(true);
   };
-
-  const toggleChallengeLike = (id: string) => {
-    setLikedChallenges(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) newSet.delete(id);
-      else newSet.add(id);
-      return newSet;
-    });
-  };
-
-  // Discover actions
-  const togglePlaceVisit = (id: string) => {
-    setVisitedPlaces(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-        toast.info('Visit unmarked');
-      } else {
-        newSet.add(id);
-        toast.success('✓ Marked as Visited!');
-      }
-      return newSet;
-    });
-  };
-
-  const togglePlaceLove = (id: string) => {
-    setLovedPlaces(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) newSet.delete(id);
-      else newSet.add(id);
-      return newSet;
-    });
-  };
-
-  const ratePlace = (id: string, rating: number) => {
-    setUserRatings(prev => ({ ...prev, [id]: rating }));
-    toast.success(`Rated ${rating}⭐`);
-  };
-
-  // Travel story actions
-  const [uploadingMedia, setUploadingMedia] = useState(false);
-  
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    
-    // Check file size for videos (max 50MB)
-    if (type === 'video' && file.size > 50 * 1024 * 1024) {
-      toast.error('Video must be under 50MB');
-      return;
-    }
-    
-    setUploadingMedia(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('posts-media')
-        .upload(fileName, file);
-      
-      if (uploadError) throw uploadError;
-      
-      const { data } = supabase.storage.from('posts-media').getPublicUrl(fileName);
-      
-      if (type === 'image') {
-        setNewStory(prev => ({ ...prev, image: data.publicUrl, mediaType: 'image' }));
-        toast.success('Image uploaded! 📸');
-      } else {
-        setNewStory(prev => ({ ...prev, video: data.publicUrl, mediaType: 'video' }));
-        toast.success('Video uploaded! 🎬');
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Failed to upload media');
-    } finally {
-      setUploadingMedia(false);
-    }
-  };
-  
-  const createTravelStory = () => {
-    if (!newStory.title.trim() || !newStory.content.trim()) {
-      toast.error('Please fill in title and content');
-      return;
-    }
-    if (!newStory.image && !newStory.video) {
-      toast.error('Please upload an image or video for your story');
-      return;
-    }
-    const story = {
-      id: `story-${Date.now()}`,
-      ...newStory,
-      author: profile?.name || 'You',
-      authorAvatar: profile?.name?.[0] || 'U',
-      likes: 0,
-      comments: 0,
-      createdAt: new Date().toISOString(),
-      creatorId: user?.id,
-      creatorCountry: profile?.country || ''
-    };
-    setTravelStories(prev => [story, ...prev]);
-    setShowCreateStory(false);
-    setNewStory({ title: '', content: '', image: '', video: '', location: '', mediaType: 'image' });
-    toast.success('Travel story shared! ✈️');
-  };
-
-  const togglePostLike = (id: string) => {
-    setLikedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) newSet.delete(id);
-      else newSet.add(id);
-      return newSet;
-    });
-  };
-
-  const openComments = (id: string, title: string) => {
-    setSelectedPostId(id);
-    setSelectedPostTitle(title);
-    setCommentsOpen(true);
-  };
-
-  const openShare = (id: string, title: string, content: string) => {
-    setShareContent({ id, title, content });
-    setShareOpen(true);
-  };
-
-  // Ranking calculations
-  const calculateUserRank = () => {
-    if (rankingCategory === 'challenges') {
-      return completedChallenges.size === 0 ? 'Unranked' : 1;
-    } else if (rankingCategory === 'discover') {
-      return visitedPlaces.size === 0 ? 'Unranked' : 1;
-    } else {
-      const totalLikes = travelStories.reduce((sum, story) => sum + (likedPosts.has(story.id) ? 1 : 0), 0);
-      return totalLikes === 0 ? 'Unranked' : 1;
-    }
-  };
-
-  const userPoints = rankingCategory === 'challenges' 
-    ? completedChallenges.size * 50 
-    : rankingCategory === 'discover'
-    ? visitedPlaces.size * 30
-    : likedPosts.size * 20;
-
-  const globalRankings: { rank: number; name: string; points: number; emoji: string }[] = [];
-  const regionalRankings: { rank: number; name: string; points: number; emoji: string }[] = [];
-  const userRank = calculateUserRank();
-  
-  const currentRankingCategory = RANKING_CATEGORIES.find(c => c.id === rankingCategory) || RANKING_CATEGORIES[0];
-  const RankingIcon = currentRankingCategory.icon;
 
   return (
-    <div className="min-h-screen pb-24 overflow-y-auto scroll-smooth overscroll-behavior-y-contain">
-      <div className="px-4 py-3">
-      </div>
-
-      {/* Main Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full px-3 mt-2">
-        <TabsList className="w-full grid grid-cols-4 h-auto p-1 bg-muted/50 sticky top-12 z-10">
-          <TabsTrigger value="challenges" className="text-xs py-2.5 gap-1">
-            <Target className="w-4 h-4" />
-            <span className="hidden xs:inline">Challenges</span>
-          </TabsTrigger>
-          <TabsTrigger value="discover" className="text-xs py-2.5 gap-1">
-            <Compass className="w-4 h-4" />
-            <span className="hidden xs:inline">Discover</span>
-          </TabsTrigger>
-          <TabsTrigger value="travel" className="text-xs py-2.5 gap-1">
-            <Plane className="w-4 h-4" />
-            <span className="hidden xs:inline">Travel</span>
-          </TabsTrigger>
-          <TabsTrigger value="ranking" className="text-xs py-2.5 gap-1">
-            <Award className="w-4 h-4" />
-            <span className="hidden xs:inline">Ranking</span>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* CHALLENGES TAB */}
-        <TabsContent value="challenges" className="mt-4 space-y-4">
-          <Accordion type="multiple" defaultValue={['source']} className="space-y-2">
-            <AccordionItem value="source" className="border rounded-lg bg-card/50 px-3">
-              <AccordionTrigger className="py-2.5 hover:no-underline">
-                <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Source</span>
-                  <Badge variant="secondary" className="ml-2 text-[10px] capitalize">{sourceFilter}</Badge>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pb-3">
-                <div className="flex flex-wrap gap-1.5">
-                  {['all', 'system', 'custom'].map(s => (
-                    <Button 
-                      key={s} 
-                      size="sm" 
-                      variant={sourceFilter === s ? 'default' : 'outline'} 
-                      className="h-8 text-xs capitalize"
-                      onClick={() => setSourceFilter(s)}
-                    >
-                      {s === 'all' && '📋 All'}
-                      {s === 'system' && `🎯 System (${SYSTEM_CHALLENGES.length})`}
-                      {s === 'custom' && `✨ Custom (${customChallenges.length})`}
-                    </Button>
-                  ))}
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    className="h-8 text-xs border-dashed border-primary/50"
-                    onClick={() => setShowCreateChallenge(true)}
-                  >
-                    <Plus className="w-3 h-3 mr-1" />
-                    Create
-                  </Button>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value="time" className="border rounded-lg bg-card/50 px-3">
-              <AccordionTrigger className="py-2.5 hover:no-underline">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">Time</span>
-                  <Badge variant="secondary" className="ml-2 text-[10px] capitalize">{timeFilter}</Badge>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pb-3">
-                <div className="flex flex-wrap gap-1.5">
-                  {['all', 'daily', 'weekly', 'monthly', 'yearly', 'lifetime'].map(t => (
-                    <Button 
-                      key={t} 
-                      size="sm" 
-                      variant={timeFilter === t ? 'default' : 'outline'} 
-                      className="h-8 text-xs capitalize"
-                      onClick={() => setTimeFilter(t)}
-                    >
-                      {t === 'all' && '🕐 All'}
-                      {t === 'daily' && '📅 Daily'}
-                      {t === 'weekly' && '📆 Weekly'}
-                      {t === 'monthly' && '🗓️ Monthly'}
-                      {t === 'yearly' && '📊 Yearly'}
-                      {t === 'lifetime' && '♾️ Lifetime'}
-                    </Button>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-
-          {/* Challenge Cards */}
-          <div className="space-y-3">
-            {filteredChallenges.length === 0 ? (
-              <Card className="glass-card">
-                <CardContent className="py-12 text-center">
-                  <Target className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-                  <p className="font-medium">No challenges found</p>
-                  <p className="text-xs text-muted-foreground mt-1">Try changing filters or create your own</p>
-                </CardContent>
-              </Card>
-            ) : (
-              filteredChallenges.map(challenge => {
-                const isCompleted = completedChallenges.has(challenge.id);
-                const isLiked = likedChallenges.has(challenge.id);
-                const isCustom = challenge.type === 'custom';
-                const isOwner = isCustom && challenge.creatorId === user?.id;
-                
-                return (
-                  <Card key={challenge.id} className={`glass-card overflow-hidden transition-all ${isCompleted ? 'border-primary/30 bg-primary/5' : ''}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="text-2xl">{challenge.categoryIcon}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-semibold text-sm">{challenge.title}</h3>
-                            {isCustom && <Badge variant="outline" className="text-[9px]">Custom</Badge>}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">{challenge.description}</p>
-                          <div className="flex gap-1.5 mt-2 flex-wrap">
-                            <Badge variant="secondary" className="text-[10px] capitalize">{challenge.duration}</Badge>
-                            <Badge variant="outline" className="text-[10px] capitalize">{challenge.category}</Badge>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => toggleChallengeComplete(challenge.id)}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isCompleted ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-primary/20'}`}
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                      </div>
-                      
-                      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
-                        <button 
-                          onClick={() => toggleChallengeLike(challenge.id)} 
-                          className={`flex items-center gap-1.5 text-xs transition-colors ${isLiked ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
-                        >
-                          <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
-                          <span>{likedChallenges.has(challenge.id) ? 1 : 0}</span>
-                        </button>
-                        {(!isCustom || isOwner) && (
-                          <button 
-                            onClick={() => openComments(challenge.id, challenge.title)} 
-                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => openShare(challenge.id, challenge.title, challenge.description)} 
-                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-        </TabsContent>
-
-        {/* DISCOVER TAB */}
-        <TabsContent value="discover" className="mt-4 space-y-4">
-          {/* Soft Stop Dialog */}
-          {showSoftStop && (
-            <Card className="glass-card border-primary/30 overflow-hidden animate-fade-in">
-              <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
-              <CardContent className="p-4 text-center space-y-3">
-                <Leaf className="w-8 h-8 text-emerald-400 mx-auto" />
-                <div>
-                  <p className="text-sm font-semibold">You've explored {exploreCount} places 🌿</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Take a mindful pause. Save favorites for later.</p>
-                </div>
-                <div className="flex gap-2 justify-center">
-                  <Button size="sm" variant="outline" className="gap-1" onClick={() => setShowSoftStop(false)}>
-                    <Coffee className="w-3.5 h-3.5" /> Pause
-                  </Button>
-                  <Button size="sm" className="gap-1" onClick={() => setShowSoftStop(false)}>
-                    <Eye className="w-3.5 h-3.5" /> Continue
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Explore Mode Selector */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-            {[
-              { id: 'all' as const, icon: Globe, label: 'All Places' },
-              { id: 'my_country' as const, icon: Flag, label: 'My Country' },
-              { id: 'random_country' as const, icon: Shuffle, label: 'Random' },
-              { id: 'hidden_gems' as const, icon: Sparkles, label: 'Hidden Gems' },
-            ].map(mode => (
-              <Button
-                key={mode.id}
-                size="sm"
-                variant={exploreMode === mode.id ? 'default' : 'outline'}
-                className="h-8 text-xs gap-1 shrink-0"
-                onClick={() => {
-                  setExploreMode(mode.id);
-                  if (mode.id === 'random_country') pickRandomCountry();
-                }}
-              >
-                <mode.icon className="w-3.5 h-3.5" />
-                {mode.label}
-              </Button>
-            ))}
-          </div>
-
-          {/* Random Country Banner */}
-          {exploreMode === 'random_country' && randomCountry && (
-            <Card className="glass-card border-primary/20 overflow-hidden">
-              <CardContent className="p-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="text-sm font-semibold">Exploring: {randomCountry}</p>
-                    <p className="text-[10px] text-muted-foreground">{filteredPlaces.length} places found</p>
-                  </div>
-                </div>
-                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={pickRandomCountry}>
-                  <Shuffle className="w-3 h-3" /> New Country
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Search + View Toggle + Type Filter */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search places..."
-                value={discoverSearch}
-                onChange={(e) => setDiscoverSearch(e.target.value)}
-                className="pl-10 h-10"
-              />
-            </div>
-            <div className="flex gap-1 bg-muted rounded-lg p-1">
-              <Button size="sm" variant={discoverViewMode === 'list' ? 'default' : 'ghost'} className="h-8 w-8 p-0" onClick={() => setDiscoverViewMode('list')}>
-                <List className="w-4 h-4" />
-              </Button>
-              <Button size="sm" variant={discoverViewMode === 'map' ? 'default' : 'ghost'} className="h-8 w-8 p-0" onClick={() => setDiscoverViewMode('map')}>
-                <Map className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Type filter pills */}
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1 flex-1">
-              {[
-                { id: 'all' as const, label: 'All' },
-                { id: 'unesco' as const, label: '🏛️ UNESCO' },
-                { id: 'hidden' as const, label: '💎 Hidden' },
-              ].map(t => (
-                <Button key={t.id} size="sm" variant={discoverTypeFilter === t.id ? 'default' : 'ghost'} className="h-7 text-[10px] px-2.5" onClick={() => setDiscoverTypeFilter(t.id)}>
-                  {t.label}
-                </Button>
-              ))}
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              {filteredPlaces.length} places • {visitedPlaces.size} visited
+    <div className="flex flex-col h-[70vh] bg-slate-950/50 rounded-[32px] border border-white/5 overflow-hidden shadow-2xl relative">
+      {/* Chat Header with Capture Button */}
+      <div className="p-4 border-b border-white/5 flex items-center justify-between bg-slate-900/40 backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <Avatar className="w-8 h-8 border border-primary/20">
+            <AvatarImage src="https://github.com/shadcn.png" />
+            <AvatarFallback>AI</AvatarFallback>
+          </Avatar>
+          <div>
+            <h3 className="text-xs font-black text-white uppercase tracking-widest">Adventure Guide</h3>
+            <p className="text-[8px] text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-1">
+              <span className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse" /> Online
             </p>
           </div>
+        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={captureMoment}
+          className="h-9 w-9 rounded-xl bg-white/5 hover:bg-primary/20 text-slate-400 hover:text-primary transition-all p-0"
+        >
+          <Camera className="w-5 h-5" />
+        </Button>
+      </div>
 
-          {/* Map View */}
-          {discoverViewMode === 'map' && (
-            <Suspense fallback={
-              <div className="h-[400px] rounded-xl bg-muted/50 flex items-center justify-center">
-                <Map className="w-12 h-12 mx-auto text-muted-foreground/30 animate-pulse" />
-              </div>
-            }>
-              <DiscoverMapView
-                places={filteredPlaces}
-                visitedPlaces={visitedPlaces}
-                lovedPlaces={lovedPlaces}
-                onToggleVisit={togglePlaceVisit}
-                onToggleLove={togglePlaceLove}
-                onOpenPlace={(place) => openMediaViewer(place.image, 'image', place.name, place.id, lovedPlaces.has(place.id))}
-              />
-            </Suspense>
-          )}
-
-          {/* List View */}
-          {discoverViewMode === 'list' && (
-            <div className="space-y-4">
-              {filteredPlaces.length === 0 ? (
-                <Card className="glass-card">
-                  <CardContent className="py-12 text-center">
-                    <MapPin className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-                    <p className="font-medium">No places found</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {exploreMode === 'my_country' ? 'No places for your country yet' : 'Try a different search or mode'}
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                filteredPlaces.map(place => {
-                  const isVisited = visitedPlaces.has(place.id);
-                  const isLoved = lovedPlaces.has(place.id);
-                  const myRating = userRatings[place.id];
-                  
-                  return (
-                    <Card key={place.id} className="glass-card overflow-hidden">
-                      <div 
-                        className="aspect-video w-full overflow-hidden relative cursor-pointer"
-                        onClick={() => openMediaViewer(place.image, 'image', place.name, place.id, lovedPlaces.has(place.id))}
-                      >
-                        <LazyBlurImage 
-                          src={place.image} 
-                          alt={place.name}
-                          className="w-full h-full"
-                        />
-                        <div className="absolute top-2 left-2 flex gap-1">
-                          {isVisited && (
-                            <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded-full text-[10px] font-medium">
-                              ✓ Visited
-                            </span>
-                          )}
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${place.type === 'unesco' ? 'bg-amber-500/80 text-white' : 'bg-violet-500/80 text-white'}`}>
-                            {place.type === 'unesco' ? '🏛️ UNESCO' : '💎 Hidden Gem'}
-                          </span>
-                        </div>
-                        {/* Attribution */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-1.5">
-                          <p className="text-[8px] text-white/70">
-                            📷 via Wikimedia Commons
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <h3 className="font-semibold text-base">{place.name}</h3>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                              <span className="text-sm">{place.countryFlag}</span>
-                              {place.country}
-                            </p>
-                          </div>
-                          <a 
-                            href={place.mapUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs text-primary hover:underline"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            Map
-                          </a>
-                        </div>
-
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="flex items-center gap-0.5">
-                            {[1,2,3,4,5].map(star => (
-                              <button 
-                                key={star} 
-                                onClick={() => ratePlace(place.id, star)}
-                                className={`transition-colors ${(myRating || 0) >= star ? 'text-yellow-500' : 'text-muted-foreground/30'}`}
-                              >
-                                <Star className={`w-4 h-4 ${(myRating || 0) >= star ? 'fill-current' : ''}`} />
-                              </button>
-                            ))}
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {myRating ? `Your: ${myRating.toFixed(2)}⭐` : `Avg: ${place.stars.toFixed(2)}⭐`}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center gap-4 pt-3 border-t border-border/50">
-                          <button 
-                            onClick={() => togglePlaceVisit(place.id)} 
-                            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${isVisited ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-                          >
-                            <Footprints className="w-4 h-4" />
-                            {isVisited ? "Visited" : "Visit"}
-                          </button>
-                          <button 
-                            onClick={() => togglePlaceLove(place.id)} 
-                            className={`flex items-center gap-1.5 text-xs transition-colors ${isLoved ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
-                          >
-                            <Heart className={`w-4 h-4 ${isLoved ? 'fill-current' : ''}`} />
-                            <span>{isLoved ? 1 : 0}</span>
-                          </button>
-                          <button 
-                            onClick={() => openComments(place.id, place.name)} 
-                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => openShare(place.id, place.name, `Check out ${place.name} in ${place.country}`)} 
-                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            <Share2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* TRAVEL TAB */}
-        <TabsContent value="travel" className="mt-4 space-y-4">
-          {/* Create Story Button */}
-          <Card 
-            className="glass-card border-dashed border-primary/30 hover:border-primary/50 transition-colors cursor-pointer" 
-            onClick={() => setShowCreateStory(true)}
-          >
-            <CardContent className="py-4 flex items-center justify-center gap-2">
-              <Plus className="w-5 h-5 text-primary" />
-              <div className="text-center">
-                <p className="font-medium text-sm">Share Your Travel Story</p>
-                <p className="text-[10px] text-muted-foreground">Upload photos or videos from your journey</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Global/Regional Filter (like Home) */}
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1 bg-muted rounded-lg p-1 flex-1">
-              <Button
-                size="sm"
-                variant={travelFilter === 'global' ? 'default' : 'ghost'}
-                className="flex-1 h-8 gap-1.5"
-                onClick={() => setTravelFilter('global')}
-              >
-                <Globe className="w-3.5 h-3.5" />
-                Global
-              </Button>
-              <Button
-                size="sm"
-                variant={travelFilter === 'regional' ? 'default' : 'ghost'}
-                className="flex-1 h-8 gap-1.5"
-                onClick={() => setTravelFilter('regional')}
-              >
-                <Flag className="w-3.5 h-3.5" />
-                Regional
-              </Button>
-            </div>
-          </div>
-
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search travel stories..."
-              value={travelSearch}
-              onChange={(e) => setTravelSearch(e.target.value)}
-              className="pl-10 h-10"
-            />
-          </div>
-
-          {/* Travel Stories */}
-          <div className="space-y-4">
-            {filteredTravelStories.length === 0 ? (
-              <Card className="glass-card">
-                <CardContent className="py-12 text-center">
-                  <Plane className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-                  <p className="font-medium">No travel stories yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {travelFilter === 'regional' ? 'No stories from your region' : 'Share your first journey ✨'}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              filteredTravelStories.map(post => {
-                const isLiked = likedPosts.has(post.id);
-                const hasVideo = post.video && post.mediaType === 'video';
-                
-                return (
-                  <Card key={post.id} className="glass-card overflow-hidden">
-                    <CardContent className="p-4 pb-0">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold">
-                          {post.authorAvatar}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{post.author}</p>
-                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            {post.location && (
-                              <>
-                                <MapPin className="w-3 h-3" />
-                                {post.location}
-                              </>
-                            )}
-                            {!post.location && 'Travel Story'}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                    
-                    {/* Media - Image or Video */}
-                    <div 
-                      className="aspect-[4/3] w-full overflow-hidden cursor-pointer relative"
-                      onClick={() => openMediaViewer(
-                        hasVideo ? post.video : post.image, 
-                        hasVideo ? 'video' : 'image',
-                        post.title, 
-                        post.id, 
-                        likedPosts.has(post.id)
-                      )}
-                    >
-                      {hasVideo ? (
-                        <video 
-                          src={post.video}
-                          className="w-full h-full object-cover"
-                          muted
-                          playsInline
-                        />
-                      ) : (
-                        <LazyBlurImage 
-                          src={post.image} 
-                          alt={post.title}
-                          className="w-full h-full"
-                        />
-                      )}
-                      {hasVideo && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
-                            <Video className="w-5 h-5 text-foreground ml-0.5" />
-                          </div>
-                        </div>
-                      )}
+      {/* Message List */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+        {messages.map((m) => (
+          <div key={m.id} className={cx("flex", m.sender === 'user' ? "justify-end" : "justify-start")}>
+            <div className={cx(
+              "max-w-[80%] rounded-2xl p-3 text-sm relative group",
+              m.sender === 'user' ? "bg-primary text-white rounded-tr-none" : "bg-white/5 text-slate-200 rounded-tl-none border border-white/5"
+            )}>
+              {m.image && (
+                <div className="mb-2 relative rounded-xl overflow-hidden aspect-video">
+                  <img src={m.image} alt="Moment" className={cx("w-full h-full object-cover", m.viewed ? "blur-2xl grayscale" : "")} />
+                  {m.viewOnce && !m.viewed && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="sm" className="text-white font-black text-[10px] uppercase tracking-widest" onClick={() => {
+                        setMessages(prev => prev.map(msg => msg.id === m.id ? { ...msg, viewed: true } : msg));
+                        toast.success('Moment viewed');
+                      }}>Tap to View Once</Button>
                     </div>
-                    
-                    <CardContent className="p-4 pt-3">
-                      <h3 className="font-semibold text-base">{post.title}</h3>
-                      <TruncatedText 
-                        text={post.content} 
-                        maxWords={50} 
-                        className="text-sm text-muted-foreground mt-1"
-                      />
-                      
-                      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
-                        <button 
-                          onClick={() => togglePostLike(post.id)} 
-                          className={`flex items-center gap-1.5 text-xs transition-colors ${isLiked ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'}`}
-                        >
-                          <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
-                          <span>{isLiked ? 1 : 0}</span>
-                        </button>
-                        <button 
-                          onClick={() => openComments(post.id, post.title)} 
-                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => openShare(post.id, post.title, post.content)} 
-                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
+                  )}
+                  {m.viewed && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <EyeOff className="w-8 h-8 text-white/20" />
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className={cx("leading-relaxed", m.viewed && "italic opacity-50")}>{m.viewed ? "Moment expired" : m.text}</p>
+              <span className="text-[8px] opacity-40 mt-1 block text-right font-bold tracking-widest">
+                {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Input Area */}
+      <div className="p-4 bg-slate-900/40 backdrop-blur-xl border-t border-white/5">
+        <div className="flex items-center gap-2 bg-white/5 rounded-2xl p-1 border border-white/5 focus-within:border-primary/30 transition-all">
+          <Input 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Type a message..."
+            className="border-0 bg-transparent focus-visible:ring-0 text-sm h-10"
+          />
+          <Button 
+            size="sm" 
+            onClick={handleSend}
+            className="h-8 w-8 rounded-xl bg-primary hover:scale-105 active:scale-95 transition-all p-0 shadow-lg shadow-primary/20"
+          >
+            <Send className="w-4 h-4 text-white" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DocsSection() {
+  const docs = [
+    { title: 'Adventure Guide v1', category: 'Guides', date: 'Today' },
+    { title: 'Packing Checklist', category: 'Travel', date: 'Yesterday' },
+    { title: 'Himalayan Routes', category: 'Maps', date: 'Apr 12' },
+    { title: 'Visa Requirements', category: 'Official', date: 'Apr 10' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-black text-white uppercase tracking-wider">Documents</h2>
+        <Button variant="outline" className="h-9 rounded-xl border-white/10 text-[10px] font-black uppercase tracking-widest px-5">Upload New</Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {docs.map((doc, i) => (
+          <motion.div 
+            key={i}
+            whileHover={{ y: -2 }}
+            className="bg-slate-900/40 border border-white/5 p-4 rounded-3xl flex items-center gap-4 hover:bg-white/5 transition-all cursor-pointer group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <FileText className="w-6 h-6 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-white font-bold text-sm truncate uppercase tracking-wider">{doc.title}</h3>
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-black uppercase">
+                <span>{doc.category}</span>
+                <span>•</span>
+                <span>{doc.date}</span>
+              </div>
+            </div>
+            <Dots4 className="w-4 h-4 text-slate-600" />
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProfileSection() {
+  const stats = [
+    { label: 'Quests', value: '24', icon: Trophy, color: 'text-orange-400' },
+    { label: 'Stories', value: '12', icon: MapIcon, color: 'text-sky-400' },
+    { label: 'Followers', value: '1.2k', icon: UserPlus, color: 'text-emerald-400' },
+  ];
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col items-center text-center space-y-4">
+        <div className="relative">
+          <Avatar className="w-24 h-24 border-4 border-primary/20 p-1">
+            <AvatarImage src="https://github.com/shadcn.png" className="rounded-full" />
+            <AvatarFallback>UN</AvatarFallback>
+          </Avatar>
+          <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-primary rounded-full border-4 border-slate-950 flex items-center justify-center">
+            <Edit3 className="w-4 h-4 text-white" />
+          </div>
+        </div>
+        <div>
+          <h2 className="text-2xl font-black text-white uppercase tracking-widest">Adventure Explorer</h2>
+          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-1">Level 42 Trailblazer</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {stats.map((s, i) => (
+          <div key={i} className="bg-slate-900/40 border border-white/5 p-4 rounded-3xl text-center space-y-1">
+            <s.icon className={cx("w-5 h-5 mx-auto mb-2", s.color)} />
+            <div className="text-lg font-black text-white">{s.value}</div>
+            <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Achievements</h3>
+        <div className="grid grid-cols-1 gap-3">
+          {['Mountain Goat', 'Ocean Diver', 'City Slicker'].map((badge, i) => (
+            <div key={i} className="bg-white/5 border border-white/5 p-4 rounded-[24px] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Crown className="w-4 h-4 text-primary" />
+                </div>
+                <span className="text-xs font-black text-white uppercase tracking-wider">{badge}</span>
+              </div>
+              <Badge className="bg-primary/20 text-primary border-0 text-[8px] font-black uppercase">Earned</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChallengeCard({ challenge, onStart }: { challenge: any, onStart: () => void }) {
+  const difficulty = challenge.duration === 'daily' ? 'Easy' : challenge.duration === 'weekly' ? 'Hard' : 'Epic';
+  const diffColor = difficulty === 'Easy' ? 'bg-emerald-500/20 text-emerald-400' : difficulty === 'Hard' ? 'bg-orange-500/20 text-orange-400' : 'bg-red-500/20 text-red-400';
+  
+  return (
+    <motion.div 
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-slate-900/40 border border-white/5 rounded-[24px] p-5 space-y-4 transition-all group"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+          {challenge.categoryIcon || '🎯'}
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <Badge className={cx("border-0 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5", diffColor)}>
+            {difficulty}
+          </Badge>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase">
+            <Clock className="w-3 h-3" />
+            {challenge.duration}
+          </div>
+        </div>
+      </div>
+      
+      <div className="space-y-1.5">
+        <h3 className="text-white font-black text-sm uppercase tracking-wider line-clamp-2 leading-tight">
+          {challenge.title}
+        </h3>
+        <p className="text-xs text-slate-500 font-medium line-clamp-2">
+          {challenge.description}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between pt-2">
+        <div className="flex items-center gap-3">
+          <button className="text-slate-500 hover:text-red-400 transition-colors">
+            <Heart className="w-4 h-4" />
+          </button>
+          <button className="text-slate-500 hover:text-sky-400 transition-colors">
+            <Share2 className="w-4 h-4" />
+          </button>
+        </div>
+        <Button 
+          onClick={onStart}
+          className="h-9 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest px-6 shadow-md shadow-black/20 hover:scale-105 active:scale-95 transition-all"
+        >
+          Start Quest
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+export default function MusicAdventure() {
+  const { user, profile } = useAuth();
+  
+  // Persistence-based State
+  const [currentLayoutId, setCurrentLayoutId] = useState<LayoutType>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('music_adv_layout_v2') : null;
+    return (saved as LayoutType) || 'layout1';
+  });
+
+  const [activeMainId, setActiveMainId] = useState<string>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('music_adv_active_main') : null;
+    const layout = LAYOUTS[currentLayoutId];
+    if (saved && layout.find(m => m.id === saved)) return saved;
+    return layout[0].id;
+  });
+
+  const [activeSubId, setActiveSubId] = useState<string>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('music_adv_active_sub') : null;
+    const main = LAYOUTS[currentLayoutId].find(m => m.id === activeMainId);
+    if (saved && main?.subsections.find(s => s.id === saved)) return saved;
+    return main?.subsections[0].id || 'ranks';
+  });
+
+  const [customSections, setCustomSections] = useState<Record<string, Subsection[]>>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('music_adv_custom_order') : null;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const merged: Record<string, Subsection[]> = {};
+        Object.values(LAYOUTS).flat().forEach(main => {
+          if (parsed[main.id]) {
+            merged[main.id] = parsed[main.id].map((s: any) => {
+              const original = main.subsections.find(os => os.id === s.id);
+              return { ...s, icon: original?.icon || Sparkles };
+            });
+          } else {
+            merged[main.id] = main.subsections;
+          }
+        });
+        return merged;
+      } catch (e) { /* fallback */ }
+    }
+    const initial: Record<string, Subsection[]> = {};
+    Object.values(LAYOUTS).flat().forEach(main => {
+      initial[main.id] = main.subsections;
+    });
+    return initial;
+  });
+
+  // --- Auto-Reset Logic ---
+  useEffect(() => {
+    const lastReset = localStorage.getItem('adventure_last_reset');
+    const now = new Date();
+    const today = now.toDateString();
+    
+    if (lastReset !== today) {
+      console.log('Performing daily reset...');
+      // Reset Daily Quests/Tasks
+      localStorage.setItem('adventure_last_reset', today);
+      toast.info('Adventure tasks and quests have been reset for the new day!');
+    }
+
+    const lastWeeklyReset = localStorage.getItem('adventure_last_weekly_reset');
+    const currentWeek = getWeekNumber(now);
+    if (lastWeeklyReset !== currentWeek.toString()) {
+      console.log('Performing weekly reset...');
+      // Reset Weekly Quests
+      localStorage.setItem('adventure_last_weekly_reset', currentWeek.toString());
+    }
+
+    const lastMonthlyReset = localStorage.getItem('adventure_last_monthly_reset');
+    const currentMonth = now.getMonth().toString() + '-' + now.getFullYear().toString();
+    if (lastMonthlyReset !== currentMonth) {
+      console.log('Performing monthly reset...');
+      // Reset Monthly Quests
+      localStorage.setItem('adventure_last_monthly_reset', currentMonth);
+    }
+  }, []);
+
+  const getWeekNumber = (d: Date) => {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  };
+
+  // Derived Values
+  const currentLayout = LAYOUTS[currentLayoutId];
+  const currentMain = currentLayout.find(m => m.id === activeMainId) || currentLayout[0];
+  const currentSubsections = customSections[currentMain.id] || currentMain.subsections;
+
+  // Persistence Effects
+  useEffect(() => {
+    localStorage.setItem('music_adv_layout_v2', currentLayoutId);
+    localStorage.setItem('music_adv_active_main', activeMainId);
+    localStorage.setItem('music_adv_active_sub', activeSubId);
+    const orderToSave: any = {};
+    Object.keys(customSections).forEach(key => {
+      orderToSave[key] = customSections[key].map(({ icon, ...rest }) => rest);
+    });
+    localStorage.setItem('music_adv_custom_order', JSON.stringify(orderToSave));
+  }, [currentLayoutId, activeMainId, activeSubId, customSections]);
+
+  const handleMainChange = (id: string) => {
+    setActiveMainId(id);
+    const newMain = currentLayout.find(m => m.id === id);
+    if (newMain) setActiveSubId(newMain.subsections[0].id);
+  };
+
+  const handleSubChange = (id: string) => {
+    setActiveSubId(id);
+  };
+
+  const handleReorder = (newOrder: Subsection[]) => {
+    setCustomSections(prev => ({ ...prev, [activeMainId]: newOrder }));
+  };
+
+  const handleReset = () => {
+    const initial: Record<string, Subsection[]> = {};
+    Object.values(LAYOUTS).flat().forEach(main => {
+      initial[main.id] = main.subsections;
+    });
+    setCustomSections(initial);
+    setCurrentLayoutId('layout1');
+    setActiveMainId('default');
+    setActiveSubId('ranks');
+    toast.success('Layout reset to default');
+  };
+
+  // Shared Data/Loading state
+  const [places, setPlaces] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [travelStories, setTravelStories] = useState<any[]>([]);
+  const [storiesLoading, setStoriesLoading] = useState(true);
+
+  // Modal/UI State
+  const [selectedPlace, setSelectedPlace] = useState<any>(null);
+  const [showStoryCreate, setShowStoryCreate] = useState(false);
+  const [travelReaderStoryId, setTravelReaderStoryId] = useState<string | null>(null);
+  const [travelReaderOpen, setTravelReaderOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const [footerVisible, setFooterVisible] = useState(true);
+  const { scrollY } = useScroll();
+  const [lastScrollY, setLastScrollY] = useState(0);
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  useMotionValueEvent(scrollY, "change", (latest) => {
+    if (selectedPlace || showStoryCreate || travelReaderOpen || commentsOpen) {
+      setHeaderVisible(true);
+      setFooterVisible(true);
+      return;
+    }
+    const direction = latest > lastScrollY ? "down" : "up";
+    if (latest > 50 && direction === "down") {
+      setHeaderVisible(false);
+      setFooterVisible(false);
+    } else if (direction === "up") {
+      setHeaderVisible(true);
+      setFooterVisible(true);
+    }
+    setLastScrollY(latest);
+  });
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      setLoading(true);
+      try {
+        const { data: p } = await supabase.from('adventure_places' as any).select('*').order('name');
+        if (p) setPlaces(p);
+        const { data: s } = await supabase.from('travel_stories' as any).select('*, profiles(*)').order('created_at', { ascending: false });
+        if (s) setTravelStories(s);
+      } finally {
+        setLoading(false);
+        setStoriesLoading(false);
+      }
+    };
+    fetchAll();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-[#0a0f1e] text-slate-200">
+      {/* Top Banner (Stable Branding/Category Switcher) */}
+      <motion.div 
+        initial={{ y: 0 }}
+        animate={{ y: headerVisible ? 0 : -120 }}
+        className="fixed top-0 left-0 right-0 z-[100] w-full bg-[#0a0f1e]/90 backdrop-blur-2xl border-b border-white/5 shadow-2xl shadow-black/60 h-20"
+      >
+        <div className="flex items-center justify-between px-5 h-full max-w-7xl mx-auto gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
+              <Sparkles className="w-5 h-5 text-primary" />
+            </div>
+            {currentLayoutId === 'layout1' && (
+               <div className="flex flex-col -space-y-1">
+                <span className="text-sm font-black text-white uppercase tracking-tighter">Lumatha</span>
+                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-[0.2em]">Music Adventure</span>
+              </div>
             )}
           </div>
-        </TabsContent>
 
-        {/* RANKING TAB */}
-        <TabsContent value="ranking" className="mt-4 space-y-4">
-          {/* Category Selector (like Home feed) */}
-          <div className="flex items-center justify-center gap-1 bg-muted rounded-lg p-1">
-            {RANKING_CATEGORIES.map((cat) => {
-              const Icon = cat.icon;
-              const isActive = rankingCategory === cat.id;
-              return (
-                <Button
-                  key={cat.id}
-                  size="sm"
-                  variant={isActive ? 'default' : 'ghost'}
-                  className={cn("flex-1 h-9 gap-1.5", isActive && cat.color)}
-                  onClick={() => setRankingCategory(cat.id as any)}
+          {(currentLayoutId === 'layout2' || currentLayoutId === 'layout3') && (
+            <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar py-1 justify-center">
+              {currentLayout.map(main => (
+                <button
+                  key={main.id}
+                  onClick={() => handleMainChange(main.id)}
+                  className={cx(
+                    "shrink-0 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
+                    activeMainId === main.id ? "bg-primary text-white border-primary shadow-lg shadow-primary/20" : "bg-white/5 text-slate-500 border-white/5 hover:text-white"
+                  )}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-xs">{cat.label}</span>
-                </Button>
-              );
-            })}
+                  {main.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-all border border-white/5">
+              <Search className="w-5 h-5" />
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors outline-none border border-white/5">
+                  <LayoutGrid className="w-5 h-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 bg-slate-900 border-white/10 rounded-[24px] p-2 shadow-2xl shadow-black">
+                <DropdownMenuLabel className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Navigation Layouts</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setCurrentLayoutId('layout1')} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5">
+                  <LayoutGrid className="w-4 h-4 text-sky-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Default 7-Section</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCurrentLayoutId('layout2')} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5">
+                  <Lock className="w-4 h-4 text-emerald-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Private x Neutral x Public</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCurrentLayoutId('layout3')} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5">
+                  <GraduationCap className="w-4 h-4 text-violet-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Social x Education x Neutral</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-white/5" />
+                <DropdownMenuItem onClick={handleReset} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5 text-red-400">
+                  <RotateCcw className="w-4 h-4" /> <span className="font-bold text-xs uppercase tracking-widest">Reset Layout</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+        </div>
+      </motion.div>
 
-          {/* Scope: Global / Regional */}
-          <div className="flex items-center justify-center gap-2">
-            <Button
-              size="sm"
-              variant={rankingFilter === 'global' ? 'default' : 'outline'}
-              className="gap-1.5"
-              onClick={() => setRankingFilter('global')}
-            >
-              <Globe className="w-4 h-4" />
-              Global
-            </Button>
-            <Button
-              size="sm"
-              variant={rankingFilter === 'regional' ? 'default' : 'outline'}
-              className="gap-1.5"
-              onClick={() => setRankingFilter('regional')}
-            >
-              <MapPin className="w-4 h-4" />
-              Regional
-            </Button>
-          </div>
-
-          {/* Your Rank Card */}
-          <Card className="glass-card bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/30">
-            <CardContent className="py-4 text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <RankingIcon className={cn("w-5 h-5", currentRankingCategory.color)} />
-                <p className="text-sm text-muted-foreground">
-                  Your {currentRankingCategory.label} Rank
-                </p>
-              </div>
-              <p className={`text-3xl font-bold ${userRank === 'Unranked' ? 'text-muted-foreground' : 'text-primary'}`}>
-                {userRank === 'Unranked' ? 'Unranked' : `#${userRank}`}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {userRank === 'Unranked' 
-                  ? rankingCategory === 'challenges' 
-                    ? 'Complete challenges to get ranked!'
-                    : rankingCategory === 'discover'
-                    ? 'Visit places to get ranked!'
-                    : 'Get ❤️ hearts on travel stories to rank!'
-                  : 'You\'re on the leaderboard! 💚'
-                }
-              </p>
-              <p className="text-sm font-medium mt-2">
-                {userPoints} {rankingCategory === 'travel' ? 'hearts' : 'points'}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Top 10 Rankings */}
-          <Card className="glass-card">
-            <CardContent className="p-4">
-              <h3 className="font-medium text-sm mb-3 flex items-center gap-2">
-                {rankingFilter === 'global' ? <Globe className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-                Top 10 {rankingFilter === 'global' ? 'Global' : 'Regional'} • {currentRankingCategory.label}
-              </h3>
-              
-              {(rankingFilter === 'global' ? globalRankings : regionalRankings).length === 0 ? (
-                <div className="text-center py-8">
-                  <Award className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-                  <p className="font-medium text-muted-foreground">No rankings yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Be the first to climb the leaderboard!
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-2 max-w-[200px] mx-auto">
-                    {rankingCategory === 'challenges' 
-                      ? 'Complete challenges to earn points and rank up' 
-                      : rankingCategory === 'discover'
-                      ? 'Visit and rate places to earn points'
-                      : 'Share travel stories and get hearts to rank'
-                    }
-                  </p>
+      <div className="max-w-7xl mx-auto px-4 pt-24 pb-32">
+        {/* Main Subsection Content (Independent Rendering) */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`${activeMainId}-${activeSubId}`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+            className="w-full"
+          >
+            {activeSubId === 'ranks' && (
+              <div className="space-y-12">
+                <AdventureRanks />
+                <div className="px-4 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-black text-white uppercase tracking-wider">Active Quests</h2>
+                    <Badge variant="outline" className="border-primary/30 text-primary text-[8px] font-black uppercase tracking-[0.2em] px-3">Auto-Reset: Daily</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
+                    {SYSTEM_CHALLENGES.slice(0, 24).map((c) => (
+                      <ChallengeCard key={c.id} challenge={c} onStart={() => toast.success(`Quest "${c.title}" started!`)} />
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {(rankingFilter === 'global' ? globalRankings : regionalRankings).map(u => (
-                    <div key={u.rank} className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${u.rank <= 3 ? 'bg-primary/5' : ''}`}>
-                      <span className="w-6 text-center font-bold text-sm">
-                        {u.rank <= 3 ? ['🥇', '🥈', '🥉'][u.rank - 1] : `#${u.rank}`}
-                      </span>
-                      <span className="text-xl">{u.emoji}</span>
+              </div>
+            )}
+
+            {activeSubId === 'explore' && (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {places.slice(0, 48).map((place) => (
+                  <motion.div key={place.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => setSelectedPlace(place)} className="group relative aspect-[4/5] overflow-hidden bg-slate-900 rounded-[24px] border border-white/5 cursor-pointer shadow-xl transition-all hover:scale-[1.02]">
+                    <img src={place.image || FALLBACK_PLACE_IMAGE} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={place.name} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                    <div className="absolute bottom-4 left-4 right-4"> 
+                      <p className="text-[8px] font-black text-primary uppercase tracking-[0.2em]">{place.country}</p>
+                      <h3 className="text-white font-black text-xs uppercase tracking-wider line-clamp-1">{place.name}</h3>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {(activeSubId === 'feed' || activeSubId === 'stories') && (
+              <div className="w-full max-w-[580px] mx-auto space-y-6">
+                {travelStories.map((story) => (
+                  <div key={story.id} className="bg-slate-900/40 border border-white/5 rounded-[32px] overflow-hidden shadow-xl">
+                    <div className="aspect-square relative w-full overflow-hidden">
+                      <img src={story.photos?.[0] || FALLBACK_PLACE_IMAGE} className="w-full h-full object-cover" alt={story.title} />
+                      <div className="absolute top-4 left-4"><Badge className="bg-primary border-0 font-black uppercase text-[10px]">{story.location}</Badge></div>
+                    </div>
+                    <div className="p-5 space-y-3">
+                       <h3 className="text-lg font-black text-white leading-tight uppercase tracking-wider">{story.title}</h3>
+                       <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed">{story.description}</p>
+                       <div className="flex items-center justify-between pt-2">
+                         <div className="flex items-center gap-4 text-slate-500"><Heart className="w-4 h-4" /><MessageCircle className="w-4 h-4" /><Bookmark className="w-4 h-4" /></div>
+                         <Button variant="ghost" className="bg-white/5 text-[10px] font-black uppercase tracking-widest px-5 h-9 rounded-xl" onClick={() => { setTravelReaderStoryId(story.id); setTravelReaderOpen(true); }}>Read Story</Button>
+                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeSubId === 'todo' && (
+              <div className="space-y-6 px-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-black text-white uppercase tracking-wider">To-do List</h2>
+                  <Button variant="outline" className="border-white/10 rounded-xl uppercase tracking-widest text-[10px] font-black h-9 px-4">Add Task</Button>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="p-6 rounded-[24px] bg-slate-900/40 border border-white/5 flex items-center gap-4">
+                      <div className="w-6 h-6 rounded-full border-2 border-slate-700 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{u.name}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {rankingCategory === 'travel' ? 'Story creator' : 'Active explorer'}
-                        </p>
+                        <h3 className="text-white font-black text-sm uppercase tracking-wider truncate">Adventure Task {i}</h3>
+                        <p className="text-[10px] text-slate-500 font-medium">Auto-reset in 12h</p>
                       </div>
-                      <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        {rankingCategory === 'travel' && <Heart className="w-3 h-3 text-destructive fill-current" />}
-                        {u.points.toLocaleString()}
-                      </span>
+                      <Badge className="bg-primary/10 text-primary border-0 text-[8px] font-black uppercase">Low</Badge>
                     </div>
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              </div>
+            )}
 
-      {/* CREATE CHALLENGE DIALOG */}
-      <Dialog open={showCreateChallenge} onOpenChange={setShowCreateChallenge}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="w-5 h-5 text-primary" />
-              Create Challenge
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div>
-              <label className="text-sm font-medium">Title *</label>
-              <Input 
-                value={newChallenge.title} 
-                onChange={e => setNewChallenge(p => ({ ...p, title: e.target.value }))}
-                placeholder="e.g., Morning Walk for 20 Minutes"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Description</label>
-              <Textarea 
-                value={newChallenge.description} 
-                onChange={e => setNewChallenge(p => ({ ...p, description: e.target.value }))}
-                placeholder="Describe your challenge..."
-                className="mt-1"
-                rows={2}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-medium">Time (Resets)</label>
-                <select 
-                  className="w-full h-10 mt-1 rounded-md border bg-background px-3 text-sm"
-                  value={newChallenge.duration}
-                  onChange={e => setNewChallenge(p => ({ ...p, duration: e.target.value }))}
-                >
-                  <option value="daily">📅 Daily</option>
-                  <option value="weekly">📆 Weekly</option>
-                  <option value="monthly">🗓️ Monthly</option>
-                  <option value="yearly">📊 Yearly</option>
-                  <option value="lifetime">♾️ Lifetime</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Category</label>
-                <select 
-                  className="w-full h-10 mt-1 rounded-md border bg-background px-3 text-sm"
-                  value={newChallenge.category}
-                  onChange={e => setNewChallenge(p => ({ ...p, category: e.target.value }))}
-                >
-                  {CHALLENGE_CATEGORIES.map(c => (
-                    <option key={c.name} value={c.name.toLowerCase()}>{c.icon} {c.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <Button onClick={createCustomChallenge} className="w-full">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Challenge
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            {activeSubId === 'notes' && <NotesSection />}
+            
+            {activeSubId === 'messages' && <MessagesSection />}
+            
+            {activeSubId === 'docs' && <DocsSection />}
+            
+            {activeSubId === 'profile' && <ProfileSection />}
 
-      {/* CREATE TRAVEL STORY DIALOG */}
-      <Dialog open={showCreateStory} onOpenChange={setShowCreateStory}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plane className="w-5 h-5 text-primary" />
-              Share Travel Story
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div>
-              <label className="text-sm font-medium">Title *</label>
-              <Input 
-                value={newStory.title} 
-                onChange={e => setNewStory(p => ({ ...p, title: e.target.value }))}
-                placeholder="e.g., Sunrise at the Mountains"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Location</label>
-              <div className="relative mt-1">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input 
-                  value={newStory.location} 
-                  onChange={e => setNewStory(p => ({ ...p, location: e.target.value }))}
-                  placeholder="e.g., Paris, France"
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Story *</label>
-              <Textarea 
-                value={newStory.content} 
-                onChange={e => setNewStory(p => ({ ...p, content: e.target.value }))}
-                placeholder="Share your travel experience..."
-                className="mt-1"
-                rows={3}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Upload Media *</label>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {/* Image Upload */}
-                <label className={cn(
-                  "flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
-                  newStory.image ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"
-                )}>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    onChange={(e) => handleMediaUpload(e, 'image')}
-                    disabled={uploadingMedia}
-                  />
-                  {newStory.image ? (
-                    <div className="text-center">
-                      <Image className="w-6 h-6 mx-auto text-primary" />
-                      <p className="text-[10px] text-primary mt-1">Image Added ✓</p>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <Image className="w-6 h-6 mx-auto text-muted-foreground" />
-                      <p className="text-[10px] text-muted-foreground mt-1">Add Photo</p>
-                    </div>
-                  )}
-                </label>
-                
-                {/* Video Upload */}
-                <label className={cn(
-                  "flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
-                  newStory.video ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"
-                )}>
-                  <input 
-                    type="file" 
-                    accept="video/*" 
-                    className="hidden" 
-                    onChange={(e) => handleMediaUpload(e, 'video')}
-                    disabled={uploadingMedia}
-                  />
-                  {newStory.video ? (
-                    <div className="text-center">
-                      <Video className="w-6 h-6 mx-auto text-primary" />
-                      <p className="text-[10px] text-primary mt-1">Video Added ✓</p>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <Video className="w-6 h-6 mx-auto text-muted-foreground" />
-                      <p className="text-[10px] text-muted-foreground mt-1">Add Video</p>
-                    </div>
-                  )}
-                </label>
-              </div>
-              {uploadingMedia && (
-                <div className="flex items-center justify-center gap-2 mt-2">
-                  <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
-                  <span className="text-xs text-muted-foreground">Uploading...</span>
+            {/* General Sub-Section Placeholder */}
+            {!['ranks', 'explore', 'feed', 'stories', 'todo', 'notes', 'messages', 'docs', 'profile'].includes(activeSubId) && (
+               <div className="flex flex-col items-center justify-center py-20 px-4 text-center space-y-6 animate-in zoom-in-95 duration-500">
+                <div className="w-24 h-24 rounded-[40px] bg-white/5 flex items-center justify-center text-3xl border border-white/5 shadow-2xl">
+                  {(() => {
+                    const iconObj = currentSubsections.find(s => s.id === activeSubId);
+                    const IconComp = iconObj?.icon || Sparkles;
+                    return <IconComp className="w-10 h-10 text-primary" />;
+                  })()}
                 </div>
-              )}
-              <p className="text-[10px] text-muted-foreground mt-2">
-                Photos: JPG, PNG, WEBP • Videos: MP4, MOV (max 50MB)
-              </p>
-            </div>
-            <Button onClick={createTravelStory} className="w-full" disabled={uploadingMedia || (!newStory.image && !newStory.video)}>
-              <Plane className="w-4 h-4 mr-2" />
-              Share Story
-            </Button>
+                <div className="space-y-2">
+                  <h2 className="text-3xl font-black text-white uppercase tracking-widest">{currentSubsections.find(s => s.id === activeSubId)?.label}</h2>
+                  <p className="text-slate-500 font-bold uppercase text-xs tracking-[0.2em] max-w-xs mx-auto leading-relaxed">Independent module: focused content for {activeSubId.replace('_', ' ')} logic.</p>
+                </div>
+                <Button variant="outline" className="border-white/10 rounded-2xl uppercase tracking-widest text-[10px] font-black h-12 px-8 shadow-xl" onClick={() => handleMainChange(currentLayout[0].id)}>Return to Dashboard</Button>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Stable Bottom Navigation (Instagram Style Stability) */}
+      <motion.div
+        initial={{ y: 0 }}
+        animate={{ y: footerVisible ? 0 : 120 }}
+        className="fixed bottom-0 left-0 right-0 z-[100] w-full px-4 pb-8 pt-2 pointer-events-none lg:hidden"
+      >
+        <div className="max-w-md mx-auto pointer-events-auto">
+          <div className="bg-[#0a0f1e]/90 backdrop-blur-2xl border border-white/10 rounded-[36px] shadow-2xl shadow-black/80 px-4 py-3">
+            <Reorder.Group axis="x" values={currentSubsections} onReorder={handleReorder} className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
+              {currentSubsections.map(sub => (
+                <Reorder.Item key={sub.id} value={sub} className="shrink-0">
+                  <button
+                    onClick={() => handleSubChange(sub.id)}
+                    className={cx(
+                      "relative flex flex-col items-center justify-center w-14 h-14 rounded-[22px] transition-all duration-300 outline-none select-none active:scale-90",
+                      activeSubId === sub.id ? "text-primary bg-primary/10 border border-primary/20" : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                    )}
+                  >
+                    <sub.icon className={cx("w-6 h-6", activeSubId === sub.id ? "fill-primary/5" : "")} />
+                    {activeSubId === sub.id && (
+                      <motion.div layoutId="activeSubIndicator" className="absolute -bottom-1 w-5 h-1 bg-primary rounded-full shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
+                    )}
+                  </button>
+                </Reorder.Item>
+              ))}
+              
+              {/* Optional: Layout/Quick Switch dots */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex flex-col items-center justify-center w-14 h-14 rounded-[22px] text-slate-500 hover:text-white transition-all outline-none hover:bg-white/5">
+                    <Dots4 className="w-6 h-6" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="top" className="w-64 bg-slate-900 border-white/10 rounded-[28px] p-2 mb-4 shadow-2xl shadow-black">
+                  <DropdownMenuLabel className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Categories</DropdownMenuLabel>
+                   {currentLayout.map(main => (
+                    <DropdownMenuItem key={main.id} onClick={() => handleMainChange(main.id)} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5">
+                      <main.icon className="w-4 h-4 text-primary" /> <span className="font-bold text-xs uppercase tracking-widest text-white">{main.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator className="bg-white/5" />
+                  <DropdownMenuItem onClick={handleReset} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5 text-red-400">
+                    <RotateCcw className="w-4 h-4" /> <span className="font-bold text-xs uppercase tracking-widest">Reset Layout</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </Reorder.Group>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </motion.div>
 
-      {/* Comments Dialog */}
-      <AdventureCommentsDialog 
-        open={commentsOpen} 
-        onOpenChange={setCommentsOpen} 
-        itemId={selectedPostId} 
-        itemTitle={selectedPostTitle}
-        itemType={selectedPostId.startsWith('sys-') || selectedPostId.startsWith('custom-') ? 'challenge' : selectedPostId.startsWith('story-') ? 'travel' : 'place'}
-      />
-
-      {/* Share Dialog */}
-      <ShareDialog
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-        postId={shareContent.id}
-        postTitle={shareContent.title}
-        postContent={shareContent.content}
-      />
-
-      {/* Full Screen Media Viewer */}
-      <FullScreenMediaViewer
-        open={mediaViewerOpen}
-        onOpenChange={setMediaViewerOpen}
-        mediaUrls={mediaViewerData.urls}
-        mediaTypes={mediaViewerData.types}
-        title={mediaViewerData.title}
-        isLiked={mediaViewerData.isLiked}
-        onLike={() => {
-          const id = mediaViewerData.id;
-          if (id.startsWith('place-')) {
-            togglePlaceLove(id);
-          } else if (id.startsWith('story-')) {
-            togglePostLike(id);
-          }
-          setMediaViewerData(prev => ({ ...prev, isLiked: !prev.isLiked }));
-        }}
-        onComment={() => {
-          setMediaViewerOpen(false);
-          openComments(mediaViewerData.id, mediaViewerData.title);
-        }}
-        onShare={() => {
-          setMediaViewerOpen(false);
-          openShare(mediaViewerData.id, mediaViewerData.title, `Check out ${mediaViewerData.title}`);
-        }}
-      />
-      <DailyDoseCard />
+      {/* Persistence Sheets */}
+      {selectedPlace && <PlaceDetailSheet place={selectedPlace} isVisited={false} isLoved={false} onOpenChange={(open) => !open && setSelectedPlace(null)} onToggleVisit={() => {}} onToggleLove={() => {}} onRate={() => {}} onOpenComments={() => {}} />}
+      <StoryCreationSheet open={showStoryCreate} onOpenChange={setShowStoryCreate} onPublish={() => { setShowStoryCreate(false); }} />
+      <StoryReader story={travelStories.find(s => s?.id === travelReaderStoryId) || null} open={travelReaderOpen} onOpenChange={setTravelReaderOpen} isLiked={false} onLike={() => {}} onComment={() => {}} onShare={() => {}} />
+      <CommentsDialog postId={""} postTitle={""} type={"adventure_place"} open={commentsOpen} onOpenChange={setCommentsOpen} />
     </div>
   );
 }
