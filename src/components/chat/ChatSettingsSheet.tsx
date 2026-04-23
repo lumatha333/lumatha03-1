@@ -122,12 +122,7 @@ export function ChatSettingsSheet({
 
         {/* Tabbed sections */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-          <TabsList className="w-full grid grid-cols-4 h-10 rounded-none bg-card/50 border-b border-border/20">
-            <TabsTrigger value="profile" className="text-[10px] data-[state=active]:bg-primary/10 rounded-none"><User className="w-3 h-3 mr-0.5" />Profile</TabsTrigger>
-            <TabsTrigger value="customize" className="text-[10px] data-[state=active]:bg-primary/10 rounded-none"><Palette className="w-3 h-3 mr-0.5" />Style</TabsTrigger>
-            <TabsTrigger value="privacy" className="text-[10px] data-[state=active]:bg-primary/10 rounded-none"><Lock className="w-3 h-3 mr-0.5" />Privacy</TabsTrigger>
-            <TabsTrigger value="manage" className="text-[10px] data-[state=active]:bg-primary/10 rounded-none"><Users className="w-3 h-3 mr-0.5" />More</TabsTrigger>
-          </TabsList>
+          <TabsList className="w-full grid grid-cols-3 h-12 rounded-none bg-card/50 border-b border-border/20"><TabsTrigger value="profile" className="text-xs data-[state=active]:bg-primary/10 rounded-none">Profile</TabsTrigger><TabsTrigger value="customize" className="text-xs data-[state=active]:bg-primary/10 rounded-none">Themes</TabsTrigger><TabsTrigger value="privacy" className="text-xs data-[state=active]:bg-primary/10 rounded-none">Notify</TabsTrigger></TabsList>
 
           <ScrollArea className="h-[calc(100vh-280px)]">
             {/* PROFILE TAB */}
@@ -261,3 +256,4 @@ function SettingsItem({ icon, label, sublabel, onClick }: { icon: React.ReactNod
     </button>
   );
 }
+

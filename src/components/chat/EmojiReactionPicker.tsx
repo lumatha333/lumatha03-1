@@ -1,7 +1,7 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
-const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍'];
+const REACTION_EMOJIS = ['🙏', '❤️', '😂', '😮', '😢', '😡', '👍'];
 
 interface EmojiReactionPickerProps {
   reactions: Record<string, number>;
@@ -23,7 +23,7 @@ export function EmojiReactionPicker({ reactions, onReact, isOwn }: EmojiReaction
       {/* Reaction display */}
       {totalReactions > 0 && (
         <div className={cn(
-          "absolute -bottom-3 flex items-center gap-0.5 bg-card border border-border rounded-full px-1.5 py-0.5 shadow-sm",
+          "absolute -bottom-3 flex items-center gap-0.5 bg-card border-[1.5px] border-purple-500/60 rounded-full px-2 py-1 shadow-[0_0_10px_rgba(168,85,247,0.4)]",
           isOwn ? "right-1" : "left-1"
         )}>
           {topReactions.map(([emoji, count]) => (
@@ -40,7 +40,7 @@ export function EmojiReactionPicker({ reactions, onReact, isOwn }: EmojiReaction
         className="absolute inset-0 z-10"
         onDoubleClick={(e) => {
           e.stopPropagation();
-          onReact('❤️');
+          onReact('🙏');
         }}
         onContextMenu={(e) => {
           e.preventDefault();
