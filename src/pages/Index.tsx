@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
-import { SplashScreen } from '@/components/SplashScreen';
+import { SplashScreen } from "@/components/SplashScreen";`nimport { useState } from "react";
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useGlobalProtection, GlobalWatermark, GlobalBlurOverlay } from '@/components/GlobalContentProtection';
 import { useAutoTheme } from '@/hooks/useAutoTheme';
@@ -22,11 +22,11 @@ import Notifications from '@/pages/Notifications';
 import Search from '@/pages/Search';
 import NotFound from '@/pages/NotFound';
 
-export default function Index() {
+export default function Index() {`n  const [splashComplete, setSplashComplete] = useState(false);`n  const [splashComplete, setSplashComplete] = useState(false);
   return (
     <>
-      <SplashScreen />
-      <BrowserRouter>
+      <SplashScreen onComplete={() => setSplashComplete(true)} />
+      {splashComplete && {splashComplete && <BrowserRouter>
         <AuthProvider>
           <ProtectionLayer />
           <Layout>
@@ -52,7 +52,7 @@ export default function Index() {
             </Routes>
           </Layout>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>}}
     </>
   );
 }
@@ -68,3 +68,5 @@ function ProtectionLayer() {
     </>
   );
 }
+
+

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import lumathaLogo from '@/assets/lumatha-logo.png';
 
-export function SplashScreen() {
+export function SplashScreen({ onComplete }: { onComplete?: () => void }) {
   const [show, setShow] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
   const [logoVisible, setLogoVisible] = useState(false);
@@ -15,7 +15,7 @@ export function SplashScreen() {
     // Start fade out after 4.5 seconds total
     const fadeTimer = setTimeout(() => setFadeOut(true), 4500);
     // Remove from DOM after fade completes
-    const hideTimer = setTimeout(() => setShow(false), 5300);
+    const hideTimer = setTimeout(() => { setShow(false); if (onComplete) onComplete(); }, 5300);
     return () => {
       clearTimeout(logoTimer);
       clearTimeout(textTimer);
@@ -66,3 +66,5 @@ export function SplashScreen() {
     </div>
   );
 }
+
+
