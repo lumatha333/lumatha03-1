@@ -96,15 +96,15 @@ function DesktopSidebar({ isActive, onNavigate }: { isActive: (path: string) => 
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
     >
-      <div className=\"relative h-full overflow-hidden flex flex-col\">
-        <div className=\"absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none\" />
+      <div className="relative h-full overflow-hidden flex flex-col">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none" />
         
-        <div className=\"relative flex items-center gap-3 p-3 border-b border-border/30 h-[52px]\">
-          <img src={lumathaLogo} alt=\"Lumatha\" className=\"w-9 h-9 rounded-full object-contain shrink-0\" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />
-          {expanded && <span className=\"text-lg font-bold gradient-text tracking-tight whitespace-nowrap\">Lumatha</span>}
+        <div className="relative flex items-center gap-3 p-3 border-b border-border/30 h-[52px]">
+          <img src={lumathaLogo} alt="Lumatha" className="w-9 h-9 rounded-full object-contain shrink-0" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />
+          {expanded && <span className="text-lg font-bold gradient-text tracking-tight whitespace-nowrap">Lumatha</span>}
         </div>
 
-        <nav className=\"relative flex-1 p-2 space-y-1 overflow-y-auto\">
+        <nav className="relative flex-1 p-2 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.url);
@@ -123,13 +123,13 @@ function DesktopSidebar({ isActive, onNavigate }: { isActive: (path: string) => 
                   <Icon className={`w-[18px] h-[18px] ${active ? 'text-primary' : 'text-muted-foreground'}`} />
                 </div>
                 {expanded && (
-                  <div className=\"flex-1 min-w-0 text-left\">
+                  <div className="flex-1 min-w-0 text-left">
                     <span className={`font-medium block text-sm ${active ? 'text-primary' : ''}`}>{item.title}</span>
-                    <span className=\"text-[9px] text-muted-foreground block truncate\">{item.desc}</span>
+                    <span className="text-[9px] text-muted-foreground block truncate">{item.desc}</span>
                   </div>
                 )}
                 {expanded && active && (
-                  <div className=\"w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary shrink-0\" />
+                  <div className="w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary shrink-0" />
                 )}
               </button>
             );
