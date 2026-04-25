@@ -103,6 +103,68 @@ function ProfileSkeleton() {
   );
 }
 
+// Mini people list for dialogs
+const PeopleList = ({ 
+  people, 
+  title, 
+  onClose, 
+  onNavigate, 
+  isOwner, 
+  onAddFriend 
+}: { 
+  people: Profile[]; 
+  title: string; 
+  onClose: () => void; 
+  onNavigate: (id: string) => void;
+  isOwner: (id: string) => boolean;
+  onAddFriend: (id: string) => void;
+}) => (
+  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 animate-in fade-in duration-200" onClick={onClose}>
+    <div 
+      className="bg-background w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden glass-card border-border animate-in slide-in-from-bottom duration-300"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <h3 className="text-lg font-bold gradient-text">{title}</h3>
+        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-8 w-8">
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+      <div className="max-h-[60vh] overflow-y-auto p-2">
+        {people.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground italic text-sm">No {title.toLowerCase()} yet</div>
+        ) : (
+          people.map((person) => (
+            <div 
+              key={person.id} 
+              className="flex items-center justify-between p-3 hover:bg-primary/5 rounded-xl transition-all cursor-pointer group"
+              onClick={() => { onNavigate(person.id); onClose(); }}
+            >
+              <div className="flex items-center gap-3">
+                <ProfileAvatar src={person.avatar_url} name={person.name} size="sm" />
+                <div>
+                  <p className="font-semibold text-sm group-hover:text-primary transition-colors">{person.name}</p>
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[150px]">{person.bio || 'Explorer'}</p>
+                </div>
+              </div>
+              {!isOwner(person.id) && (
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="h-8 text-xs font-bold px-4 rounded-full active:scale-90"
+                  onClick={(e) => { e.stopPropagation(); onAddFriend(person.id); }}
+                >
+                  Add
+                </Button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+);
+
 export default function Profile() {
   const { userId } = useParams();
   const { user: currentUser } = useAuth();
@@ -111,7 +173,8 @@ export default function Profile() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
-  const [friendsCount, setFriendsCount] = useState(0);
+  const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0, friends: 0 });
+  const [isOwner, setIsOwner] = useState(false);
   const [followersList, setFollowersList] = useState<Profile[]>([]);
   const [followingList, setFollowingList] = useState<Profile[]>([]);
   const [friendsList, setFriendsList] = useState<Profile[]>([]);
@@ -131,28 +194,58 @@ export default function Profile() {
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
   const { sendFriendRequest, acceptFriendRequest } = useFriends();
 
-  useEffect(() => {
-    if (userId) fetchProfileData();
-  }, [userId]);
+  const fetchProfileData = useCallback(async () => {
+    if (!userId) return;
+    
+    // Check if we're visiting ourselves
+    const isSelf = userId === currentUser?.id || userId === 'me';
+    const effectiveUserId = userId === 'me' ? currentUser?.id : userId;
+    
+    if (!effectiveUserId) return;
 
-  const fetchProfileData = async () => {
+    setLoading(true);
+
     try {
-      const [profileResult, postsResult, docsResult, userPointsResult, friendsCountResult] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', userId).single(),
-        supabase.from('posts').select('*, profiles(*)').eq('user_id', userId).eq('visibility', 'public').neq('category', 'ghost').order('created_at', { ascending: false }),
-        supabase.from('documents').select('*').eq('user_id', userId).eq('visibility', 'public').order('created_at', { ascending: false }),
-        supabase.from('user_points').select('total_points').eq('user_id', userId).maybeSingle(),
-        supabase.from('friend_requests').select('*', { count: 'exact', head: true }).or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).eq('status', 'accepted'),
+      // Step 1: Fetch profile first to ensure it exists
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', effectiveUserId)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+      
+      if (!profileData) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      setProfile(profileData);
+      setIsOwner(currentUser?.id === profileData.id);
+
+      // Step 2: Fetch everything else in parallel
+      const [postsRes, docsRes, userPointsRes, friendsCountRes, followStatusRes, savedRes, likesRes, friendRequestRes, mutualRes, blockRes] = await Promise.all([
+        supabase.from('posts').select('*, profiles(*)').eq('user_id', effectiveUserId).eq('visibility', 'public').neq('category', 'ghost').order('created_at', { ascending: false }),
+        supabase.from('documents').select('*').eq('user_id', effectiveUserId).eq('visibility', 'public').order('created_at', { ascending: false }),
+        supabase.from('user_points').select('total_points').eq('user_id', effectiveUserId).maybeSingle(),
+        supabase.from('friend_requests').select('*', { count: 'exact', head: true }).or(`sender_id.eq.${effectiveUserId},receiver_id.eq.${effectiveUserId}`).eq('status', 'accepted'),
+        currentUser ? supabase.from('follows').select('id').eq('follower_id', currentUser.id).eq('following_id', effectiveUserId).maybeSingle() : Promise.resolve({ data: null }),
+        currentUser ? supabase.from('saved').select('post_id').eq('user_id', currentUser.id) : Promise.resolve({ data: [] }),
+        currentUser ? supabase.from('likes').select('post_id').eq('user_id', currentUser.id) : Promise.resolve({ data: [] }),
+        currentUser ? supabase.from('friend_requests').select('*').or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${effectiveUserId}),and(sender_id.eq.${effectiveUserId},receiver_id.eq.${currentUser.id})`).maybeSingle() : Promise.resolve({ data: null }),
+        currentUser && currentUser.id !== effectiveUserId ? (supabase.rpc as any)('get_mutual_friends_count', { user1: currentUser.id, user2: effectiveUserId }) : Promise.resolve({ data: 0 }),
+        currentUser ? supabase.from('blocks').select('blocker_id').or(`and(blocker_id.eq.${currentUser.id},blocked_id.eq.${effectiveUserId}),and(blocker_id.eq.${effectiveUserId},blocked_id.eq.${currentUser.id})`) : Promise.resolve({ data: [] }),
       ]);
 
-      setProfile(profileResult.data);
-      const postsData = postsResult.data || [];
+      // Set state from parallel results
+      const postsData = postsRes.data || [];
       setPosts(postsData);
-      setDocuments(docsResult.data || []);
-      setFriendsCount(friendsCountResult.count || 0);
+      setDocuments(docsRes.data || []);
+      setFriendsCount(friendsCountRes.count || 0);
 
-      if (userPointsResult.data) {
-        const pts = userPointsResult.data.total_points;
+      if (userPointsRes.data) {
+        const pts = userPointsRes.data.total_points;
         setAdventurePoints({ challenges: Math.floor(pts * 0.4), discovery: Math.floor(pts * 0.35), explore: Math.floor(pts * 0.25), total: pts });
       }
 
@@ -165,46 +258,39 @@ export default function Profile() {
         setLikesCount(counts);
       }
 
-      if (currentUser && currentUser.id !== userId) {
-        const [followResult, savedResult, likesResult, friendResult, mutualResult, blockResult] = await Promise.all([
-          supabase.from('follows').select('id').eq('follower_id', currentUser.id).eq('following_id', userId).maybeSingle(),
-          supabase.from('saved').select('post_id').eq('user_id', currentUser.id),
-          supabase.from('likes').select('post_id').eq('user_id', currentUser.id),
-          supabase.from('friend_requests').select('*').or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUser.id})`).maybeSingle(),
-          (supabase.rpc as any)('get_mutual_friends_count', { user1: currentUser.id, user2: userId }),
-          supabase.from('blocks').select('blocker_id').or(`and(blocker_id.eq.${currentUser.id},blocked_id.eq.${userId}),and(blocker_id.eq.${userId},blocked_id.eq.${currentUser.id})`),
-        ]);
+      setIsFollowing(!!followStatusRes.data);
+      setSaved(savedRes.data?.map((s: any) => s.post_id) || []);
+      setLikes(likesRes.data || []);
+      setMutualFriendsCount(mutualRes.data || 0);
 
-        setIsFollowing(!!followResult.data);
-        setSaved(savedResult.data?.map(s => s.post_id) || []);
-        setLikes(likesResult.data || []);
-        setMutualFriendsCount(mutualResult.data || 0);
+      const blockData = blockRes.data || [];
+      setIsBlocked(blockData.some((b: any) => b.blocker_id === currentUser?.id));
+      setHasBlockedMe(blockData.some((b: any) => b.blocker_id === effectiveUserId));
 
-        // Check block status
-        const blockData = blockResult.data || [];
-        setIsBlocked(blockData.some((b: any) => b.blocker_id === currentUser.id));
-        setHasBlockedMe(blockData.some((b: any) => b.blocker_id === userId));
+      const friendData = friendRequestRes.data;
+      if (friendData) {
+        if (friendData.status === 'accepted') { setIsFriend(true); setFriendRequestStatus('accepted'); }
+        else if (friendData.status === 'pending') { setFriendRequestStatus(friendData.sender_id === currentUser?.id ? 'pending_sent' : 'pending_received'); }
+      } else { setIsFriend(false); setFriendRequestStatus('none'); }
 
-        const friendData = friendResult.data;
-        if (friendData) {
-          if (friendData.status === 'accepted') { setIsFriend(true); setFriendRequestStatus('accepted'); }
-          else if (friendData.status === 'pending') { setFriendRequestStatus(friendData.sender_id === currentUser.id ? 'pending_sent' : 'pending_received'); }
-        } else { setIsFriend(false); setFriendRequestStatus('none'); }
-      } else if (currentUser) {
-        const [savedResult, likesResult] = await Promise.all([
-          supabase.from('saved').select('post_id').eq('user_id', currentUser.id),
-          supabase.from('likes').select('post_id').eq('user_id', currentUser.id),
-        ]);
-        setSaved(savedResult.data?.map(s => s.post_id) || []);
-        setLikes(likesResult.data || []);
-      }
+      setStats({
+        posts: postsData.length,
+        followers: profileData.total_followers ?? 0,
+        following: profileData.total_following ?? 0,
+        friends: friendsCountRes.count || 0
+      });
+
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error fetching profile data:', error);
       toast.error('Failed to load profile');
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, currentUser]);
+
+  useEffect(() => {
+    fetchProfileData();
+  }, [fetchProfileData]);
 
   // Lazy-load followers list
   const loadFollowers = async () => {
@@ -295,16 +381,23 @@ export default function Profile() {
 
   if (loading) return <ProfileSkeleton />;
 
-  if (!profile) {
+  if (!profile && !loading) {
     return (
-      <div className="max-w-4xl mx-auto text-center py-12">
-        <h2 className="text-2xl font-bold mb-4">Profile not found</h2>
-        <Button onClick={() => navigate(-1)}>Go Back</Button>
+      <div className="max-w-4xl mx-auto text-center py-20 px-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-6">
+          <User className="w-10 h-10 text-muted-foreground/40" />
+        </div>
+        <h2 className="text-2xl font-bold mb-2">Profile not found</h2>
+        <p className="text-muted-foreground mb-8 max-w-xs mx-auto">The profile you are looking for might have been removed or is private.</p>
+        <Button onClick={() => navigate(-1)} className="rounded-full px-8 shadow-glow active:scale-90 transition-all">Go Back</Button>
       </div>
     );
   }
 
-  const isOwnProfile = currentUser?.id === userId;
+  // Final check to prevent rendering with null profile if loading somehow finished without profile
+  if (!profile) return <ProfileSkeleton />;
+
+  const isOwnProfile = currentUser?.id === profile.id;
   const mediaPosts = posts.filter(post => post.file_url || (post.media_urls && post.media_urls.length > 0));
 
   const getLevel = (points: number) => {
@@ -316,49 +409,56 @@ export default function Profile() {
   };
   const levelInfo = getLevel(adventurePoints.total);
 
-  // Mini people list for dialogs
-  const PeopleList = ({ people, title, onClose }: { people: Profile[]; title: string; onClose: () => void }) => (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60" onClick={onClose}>
-      <div className="bg-background rounded-t-3xl sm:rounded-2xl w-full sm:max-w-sm max-h-[70vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h3 className="font-semibold">{title}</h3>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-muted transition-colors"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="overflow-y-auto flex-1 p-2">
-          {people.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8 text-sm">No one here yet</p>
-          ) : people.map(person => (
-            <button
-              key={person.id}
-              className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-muted/50 transition-colors text-left"
-              onClick={() => { onClose(); navigate(`/profile/${person.id}`); }}
-            >
-              <ProfileAvatar src={person.avatar_url} name={person.name} size="sm" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">{person.name}</p>
-                {person.bio && <p className="text-xs text-muted-foreground truncate">{person.bio}</p>}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="max-w-3xl mx-auto space-y-4 p-3 pb-24">
+    <div className="max-w-3xl mx-auto space-y-4 p-3 pb-24 animate-in fade-in duration-500">
       {/* People List Modals */}
-      {showFollowers && <PeopleList people={followersList} title="Followers" onClose={() => setShowFollowers(false)} />}
-      {showFollowing && <PeopleList people={followingList} title="Following" onClose={() => setShowFollowing(false)} />}
-      {showFriends && <PeopleList people={friendsList} title="Friends" onClose={() => setShowFriends(false)} />}
+      {showFollowers && (
+        <PeopleList 
+          people={followersList} 
+          title="Followers" 
+          onClose={() => setShowFollowers(false)} 
+          onNavigate={(id) => navigate(`/profile/${id}`)}
+          isOwner={(id) => currentUser?.id === id}
+          onAddFriend={sendFriendRequest}
+        />
+      )}
+      {showFollowing && (
+        <PeopleList 
+          people={followingList} 
+          title="Following" 
+          onClose={() => setShowFollowing(false)} 
+          onNavigate={(id) => navigate(`/profile/${id}`)}
+          isOwner={(id) => currentUser?.id === id}
+          onAddFriend={sendFriendRequest}
+        />
+      )}
+      {showFriends && (
+        <PeopleList 
+          people={friendsList} 
+          title="Friends" 
+          onClose={() => setShowFriends(false)} 
+          onNavigate={(id) => navigate(`/profile/${id}`)}
+          isOwner={(id) => currentUser?.id === id}
+          onAddFriend={sendFriendRequest}
+        />
+      )}
 
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5 h-8">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => navigate(-1)} 
+          className="gap-1.5 h-8 rounded-full hover:bg-primary/10 active:scale-90 transition-all"
+        >
           <ArrowLeft className="w-4 h-4" /> Back
         </Button>
         {isOwnProfile && (
-          <Button variant="ghost" size="sm" onClick={() => navigate('/settings')} className="gap-1.5 h-8">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate('/settings')} 
+            className="gap-1.5 h-8 rounded-full hover:bg-primary/10 active:scale-90 transition-all"
+          >
             <Settings className="w-4 h-4" /> Settings
           </Button>
         )}
@@ -389,40 +489,39 @@ export default function Profile() {
                 <FriendTick friendsCount={friendsCount} showLabel />
               </div>
 
-              {/* Stats row — clickable */}
               <div className="flex gap-5 flex-wrap">
                 {/* Friends — only owner can view list */}
                 <button
-                  className="flex flex-col items-center hover:opacity-80 transition-opacity"
+                  className="flex flex-col items-center hover:opacity-80 transition-all active:scale-95 group"
                   onClick={isOwnProfile ? loadFriends : undefined}
                   disabled={!isOwnProfile}
                   title={!isOwnProfile ? 'Friends list is private' : 'View friends'}
                 >
-                  <span className="text-lg font-bold">{friendsCount}</span>
-                  <span className="text-[10px] text-muted-foreground">Friends</span>
+                  <span className="text-lg font-bold text-primary group-hover:scale-110 transition-transform">{friendsCount}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-black">Friends</span>
                 </button>
 
                 {/* Followers — public, anyone can view */}
                 <button
-                  className="flex flex-col items-center hover:opacity-80 transition-opacity"
+                  className="flex flex-col items-center hover:opacity-80 transition-all active:scale-95 group"
                   onClick={loadFollowers}
                 >
-                  <span className="text-lg font-bold">{profile.total_followers ?? 0}</span>
-                  <span className="text-[10px] text-muted-foreground">Followers</span>
+                  <span className="text-lg font-bold text-primary group-hover:scale-110 transition-transform">{profile.total_followers ?? 0}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-black">Followers</span>
                 </button>
 
                 {/* Following — public, anyone can view */}
                 <button
-                  className="flex flex-col items-center hover:opacity-80 transition-opacity"
+                  className="flex flex-col items-center hover:opacity-80 transition-all active:scale-95 group"
                   onClick={loadFollowing}
                 >
-                  <span className="text-lg font-bold">{profile.total_following ?? 0}</span>
-                  <span className="text-[10px] text-muted-foreground">Following</span>
+                  <span className="text-lg font-bold text-primary group-hover:scale-110 transition-transform">{profile.total_following ?? 0}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-black">Following</span>
                 </button>
 
-                <div className="flex flex-col items-center">
-                  <span className="text-lg font-bold">{posts.length}</span>
-                  <span className="text-[10px] text-muted-foreground">Posts</span>
+                <div className="flex flex-col items-center group">
+                  <span className="text-lg font-bold text-primary group-hover:scale-110 transition-transform">{posts.length}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-black">Posts</span>
                 </div>
               </div>
 
@@ -543,20 +642,35 @@ export default function Profile() {
 
       {/* Profile Tabs — 5 tabs (liked moved to Private) */}
       <Tabs defaultValue="posts" className="w-full">
-        <TabsList className="glass-card w-full grid grid-cols-5 h-auto p-0.5">
-          <TabsTrigger value="posts" className="flex flex-col gap-0.5 py-2 text-[10px]">
+        <TabsList className="glass-card w-full grid grid-cols-5 h-auto p-1 rounded-2xl mb-6 shadow-glow border-border/40">
+          <TabsTrigger 
+            value="posts" 
+            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
+          >
             <Image className="w-4 h-4" /> Posts
           </TabsTrigger>
-          <TabsTrigger value="info" className="flex flex-col gap-0.5 py-2 text-[10px]">
+          <TabsTrigger 
+            value="info" 
+            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
+          >
             <User className="w-4 h-4" /> Info
           </TabsTrigger>
-          <TabsTrigger value="docs" className="flex flex-col gap-0.5 py-2 text-[10px]">
+          <TabsTrigger 
+            value="docs" 
+            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
+          >
             <FileText className="w-4 h-4" /> Docs
           </TabsTrigger>
-          <TabsTrigger value="adventure" className="flex flex-col gap-0.5 py-2 text-[10px]">
+          <TabsTrigger 
+            value="adventure" 
+            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
+          >
             <Mountain className="w-4 h-4" /> Adventure
           </TabsTrigger>
-          <TabsTrigger value="marketplace" className="flex flex-col gap-0.5 py-2 text-[10px]">
+          <TabsTrigger 
+            value="marketplace" 
+            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
+          >
             <ShoppingBag className="w-4 h-4" /> Market
           </TabsTrigger>
         </TabsList>

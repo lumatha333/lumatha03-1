@@ -17,5 +17,291 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import lumathaLogo from '@/assets/lumatha-logo.png';
 import { type LucideIcon } from 'lucide-react';
 
-interface LayoutProps {\n  children: ReactNode;\n}\n\nconst menuItems: { title: string; url: string; icon: LucideIcon; desc: string }[] = [\n  { title: 'Home', url: '/', icon: Home, desc: 'Social + Explore' },\n  { title: 'Learn', url: '/education', icon: BookOpen, desc: 'Docs, Images, Videos' },\n  { title: 'Messages', url: '/chat', icon: MessageSquare, desc: 'Chat + VC + Groups' },\n  { title: 'Random Connect', url: '/random-connect', icon: Heart, desc: 'Share a moment' },\n  { title: 'Adventure', url: '/music-adventure', icon: Mountain, desc: 'Challenges + Discover' },\n  { title: 'Marketplace', url: '/marketplace', icon: ShoppingCart, desc: 'Buy/Sell/Local' },\n  { title: 'Settings', url: '/settings', icon: Settings, desc: 'Controls + Privacy' },\n];\n\nfunction MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => boolean; onNavigate: (url: string) => void }) {\n  const [open, setOpen] = useState(false);\n\n  const handleItemClick = (url: string) => {\n    onNavigate(url);\n    setOpen(false);\n  };\n\n  return (\n    <Sheet open={open} onOpenChange={setOpen}>\n      <SheetTrigger asChild>\n        <Button \n          variant=\"ghost\" \n          size=\"icon\" \n          className=\"h-8 w-8\"\n        >\n          <Menu className=\"h-5 w-5 text-primary\" />\n        </Button>\n      </SheetTrigger>\n      <SheetContent side=\"left\" className=\"w-[280px] p-0 glass-card border-r border-primary/20\">\n        <div className=\"flex items-center gap-3 p-4 border-b border-border\">\n          <img src={lumathaLogo} alt=\"Lumatha\" className=\"w-10 h-10 rounded-full object-contain\" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />\n          <span className=\"text-2xl font-bold gradient-text tracking-tight\">Lumatha</span>\n        </div>\n        <nav className=\"p-2 space-y-1\">\n          {menuItems.map((item) => {\n            const Icon = item.icon;\n            return (\n              <button\n                key={item.title}\n                onClick={() => handleItemClick(item.url)}\n                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg ${\n                  isActive(item.url) \n                    ? 'bg-primary/20 text-primary' \n                    : 'hover:bg-muted/50 text-foreground'\n                }`}\n              >\n                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${\n                  isActive(item.url) ? 'bg-primary/20' : 'bg-muted/30'\n                }`}>\n                  <Icon className={`w-[18px] h-[18px] ${isActive(item.url) ? 'text-primary' : 'text-muted-foreground'}`} />\n                </div>\n                <div className=\"flex-1 text-left\">\n                  <span className=\"font-medium block text-sm\">{item.title}</span>\n                  <span className=\"text-[10px] text-muted-foreground\">{item.desc}</span>\n                </div>\n              </button>\n            );\n          })}\n        </nav>\n      </SheetContent>\n    </Sheet>\n  );\n}\n\nfunction DesktopSidebar({ isActive, onNavigate }: { isActive: (path: string) => boolean; onNavigate: (url: string) => void }) {\n  const [expanded, setExpanded] = useState(false);\n\n  return (\n    <div \n      className={`sticky top-0 h-screen shrink-0 border-r border-border/30 transition-all duration-300 ease-in-out ${expanded ? 'w-[280px]' : 'w-[72px]'}`}\n      style={{ background: 'linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(220 50% 8%) 100%)' }}\n      onMouseEnter={() => setExpanded(true)}\n      onMouseLeave={() => setExpanded(false)}\n    >\n      <div className=\"relative h-full overflow-hidden flex flex-col\">\n        <div className=\"absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none\" />\n        \n        <div className=\"relative flex items-center gap-3 p-3 border-b border-border/30 h-[52px]\">\n          <img src={lumathaLogo} alt=\"Lumatha\" className=\"w-9 h-9 rounded-full object-contain shrink-0\" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />\n          {expanded && <span className=\"text-lg font-bold gradient-text tracking-tight whitespace-nowrap\">Lumatha</span>}\n        </div>\n\n        <nav className=\"relative flex-1 p-2 space-y-1 overflow-y-auto\">\n          {menuItems.map((item) => {\n            const Icon = item.icon;\n            const active = isActive(item.url);\n            return (\n              <button\n                key={item.title}\n                onClick={() => onNavigate(item.url)}\n                className={`w-full flex items-center gap-3 rounded-xl transition-all duration-200 ${expanded ? 'px-3 py-2.5' : 'px-0 py-2.5 justify-center'} ${\n                  active \n                    ? 'bg-gradient-to-r from-primary/20 to-secondary/10 shadow-lg shadow-primary/10' \n                    : 'hover:bg-primary/10'\n                }`}\n                title={!expanded ? item.title : undefined}\n              >\n                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-gradient-to-br from-primary/30 to-secondary/20' : 'bg-muted/30'}`}>\n                  <Icon className={`w-[18px] h-[18px] ${active ? 'text-primary' : 'text-muted-foreground'}`} />\n                </div>\n                {expanded && (\n                  <div className=\"flex-1 min-w-0 text-left\">\n                    <span className={`font-medium block text-sm ${active ? 'text-primary' : ''}`}>{item.title}</span>\n                    <span className=\"text-[9px] text-muted-foreground block truncate\">{item.desc}</span>\n                  </div>\n                )}\n                {expanded && active && (\n                  <div className=\"w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary shrink-0\" />\n                )}\n              </button>\n            );\n          })}\n        </nav>\n      </div>\n    </div>\n  );\n}\n\nfunction LayoutContent({ children }: LayoutProps) {\n  const location = useLocation();\n  const navigate = useNavigate();\n  const { setOpen } = useSidebar();\n  const { user } = useAuth();\n  const isMobile = useIsMobile();\n  const [isAuthPage, setIsAuthPage] = useState(false);\n  \n  const [headerVisible, setHeaderVisible] = useState(true);\n  const lastScrollY = useRef(0);\n  const ticking = useRef(false);\n\n  useEffect(() => {\n    setIsAuthPage(location.pathname === '/auth');\n  }, [location]);\n\n  useEffect(() => {\n    if (isMobile) setOpen(false);\n  }, [location.pathname, isMobile]);\n\n  const handleScroll = useCallback(() => {\n    const currentScrollY = window.scrollY;\n    const scrollDiff = currentScrollY - lastScrollY.current;\n    if (Math.abs(scrollDiff) < 5) return;\n    if (currentScrollY < 50) setHeaderVisible(true);\n    else if (scrollDiff > 0 && currentScrollY > 50) setHeaderVisible(false);\n    else if (scrollDiff < 0) setHeaderVisible(true);\n    lastScrollY.current = currentScrollY;\n  }, []);\n\n  useEffect(() => {\n    const onScroll = () => {\n      if (!ticking.current) {\n        window.requestAnimationFrame(() => { handleScroll(); ticking.current = false; });\n        ticking.current = true;\n      }\n    };\n    window.addEventListener('scroll', onScroll, { passive: true });\n    return () => window.removeEventListener('scroll', onScroll);\n  }, [handleScroll]);\n\n  useEffect(() => {\n    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {\n      if (!session && !isAuthPage) navigate('/auth');\n      else if (session && isAuthPage) navigate('/');\n    });\n    supabase.auth.getSession().then(({ data: { session } }) => {\n      if (!session && !isAuthPage) navigate('/auth');\n    });\n    return () => subscription.unsubscribe();\n  }, [navigate, isAuthPage]);\n\n  const isActive = (path: string) => {\n    if (path === '/') return location.pathname === '/';\n    return location.pathname.startsWith(path);\n  };\n\n  const handleMenuClick = (url: string) => { navigate(url); setOpen(false); };\n  const handleBack = () => { navigate(-1); };\n\n  const isFullScreenPage = location.pathname.startsWith('/chat/') && location.pathname !== '/chat';\n  const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || location.pathname.startsWith('/profile/');\n  const showSubNav = isHomeSection;\n  const isSubSection = ['/create', '/private', '/notifications', '/search'].includes(location.pathname) || location.pathname.startsWith('/profile/');\n  const isSettingsPage = location.pathname === '/settings';\n\n  // Determine section name for non-home/non-settings pages\n  const getSectionName = () => {\n    if (location.pathname.startsWith('/education')) return 'Learn';\n    if (location.pathname === '/chat') return 'Messages';\n    if (location.pathname.startsWith('/random-connect')) return 'Random Connect';\n    if (location.pathname.startsWith('/music-adventure')) return 'Adventure';\n    if (location.pathname.startsWith('/marketplace')) return 'Marketplace';\n    return '';\n  };\n  const sectionName = getSectionName();\n  const showSectionHeader = !isHomeSection && !isSettingsPage && sectionName;\n\n  const handleLumathaClick = () => {\n    window.scrollTo({ top: 0, behavior: 'smooth' });\n    // Dispatch custom event for sections to handle refresh\n    window.dispatchEvent(new CustomEvent('lumatha-refresh'));\n  };\n\n  if (isAuthPage) return <>{children}</>;\n\n  if (isFullScreenPage) {\n    return (\n      <div className=\"min-h-screen w-full relative\">\n        <BackgroundOrnaments />\n        {children}\n      </div>\n    );\n  }\n\n  return (\n    <div className=\"min-h-screen w-full relative flex\">\n      <BackgroundOrnaments />\n      \n      {/* Desktop Sidebar */}\n      {!isMobile && (\n        <DesktopSidebar isActive={isActive} onNavigate={handleMenuClick} />\n      )}\n\n      {/* Main Content Area */}\n      <main className=\"flex-1 relative flex flex-col min-w-0\">\n        <OfflineIndicator />\n        {/* Single slim TopBar: 52px */}\n        <header className={`sticky z-40 glass-card border-b border-border/40 transition-all duration-300 ${headerVisible ? 'top-0 opacity-100' : '-top-14 opacity-0'}`}>\n          <div className=\"flex items-center h-[52px] px-3 gap-2\">\n            {/* Left: Hamburger or Back */}\n            <div className=\"shrink-0\">\n              {isMobile && isSubSection ? (\n                <Button variant=\"ghost\" size=\"icon\" onClick={handleBack} className=\"h-8 w-8\">\n                  <ArrowLeft className=\"h-4 w-4\" />\n                </Button>\n              ) : isMobile ? (\n                <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />\n              ) : null}\n            </div>\n\n            {/* Center + Right: Section branding OR SubNav */}\n            {showSubNav ? (\n              <div className=\"flex-1 min-w-0\">\n                <SubNavigation visible={headerVisible} />\n              </div>\n            ) : showSectionHeader ? (\n              <>\n                <div className=\"flex-1 flex justify-center\">\n                  <button onClick={handleLumathaClick} className=\"text-base font-bold gradient-text tracking-tight hover:opacity-80 transition-opacity active:scale-95\">\n                    Lumatha\n                  </button>\n                </div>\n                <span className=\"text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest shrink-0\">{sectionName}</span>\n              </>\n            ) : (\n              <div className=\"flex-1\" />\n            )}\n          </div>\n        </header>\n\n        <div className=\"flex-1 flex overflow-hidden\">\n          <div className=\"flex-1 overflow-y-auto p-2 md:p-3 min-w-0\">\n            <div className=\"max-w-lg xl:max-w-xl mx-auto page-enter\">\n              {children}\n            </div>\n          </div>\n          {!isMobile && location.pathname === '/' && (\n            <aside className=\"hidden lg:flex w-[400px] xl:w-[440px] border-l border-border flex-col overflow-hidden shrink-0\">\n              <DesktopMessagesPanel />\n            </aside>\n          )}\n        </div>\n      </main>\n    </div>\n  );\n}\n\nexport function Layout({ children }: LayoutProps) {\n  return (\n    <SidebarProvider defaultOpen={false}>\n      <LayoutContent>{children}</LayoutContent>\n    </SidebarProvider>\n  );\n}\n
+interface LayoutProps {
+  children: ReactNode;
+}
 
+const menuItems: { title: string; url: string; icon: LucideIcon; desc: string }[] = [
+  { title: 'Home', url: '/', icon: Home, desc: 'Social + Explore' },
+  { title: 'Learn', url: '/education', icon: BookOpen, desc: 'Docs, Images, Videos' },
+  { title: 'Messages', url: '/chat', icon: MessageSquare, desc: 'Chat + VC + Groups' },
+  { title: 'Random Connect', url: '/random-connect', icon: Heart, desc: 'Share a moment' },
+  { title: 'Adventure', url: '/music-adventure', icon: Mountain, desc: 'Challenges + Discover' },
+  { title: 'Marketplace', url: '/marketplace', icon: ShoppingCart, desc: 'Buy/Sell/Local' },
+  { title: 'Settings', url: '/settings', icon: Settings, desc: 'Controls + Privacy' },
+];
+
+function MobileSidebar({ isActive, onNavigate }: { isActive: (path: string) => boolean; onNavigate: (url: string) => void }) {
+  const [open, setOpen] = useState(false);
+
+  const handleItemClick = (url: string) => {
+    onNavigate(url);
+    setOpen(false);
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-8 w-8"
+        >
+          <Menu className="h-5 w-5 text-primary" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-[280px] p-0 glass-card border-r border-primary/20">
+        <div className="flex items-center gap-3 p-4 border-b border-border">
+          <img src={lumathaLogo} alt="Lumatha" className="w-10 h-10 rounded-full object-contain" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />
+          <span className="text-2xl font-bold gradient-text tracking-tight">Lumatha</span>
+        </div>
+        <nav className="p-2 space-y-1">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.title}
+                onClick={() => handleItemClick(item.url)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all active:scale-95 ${
+                  isActive(item.url) 
+                    ? 'bg-primary/20 text-primary' 
+                    : 'hover:bg-muted/50 text-foreground'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  isActive(item.url) ? 'bg-primary/20' : 'bg-muted/30'
+                }`}>
+                  <Icon className={`w-[18px] h-[18px] ${isActive(item.url) ? 'text-primary' : 'text-muted-foreground'}`} />
+                </div>
+                <div className="flex-1 text-left">
+                  <span className="font-medium block text-sm">{item.title}</span>
+                  <span className="text-[10px] text-muted-foreground">{item.desc}</span>
+                </div>
+              </button>
+            );
+          })}
+        </nav>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function DesktopSidebar({ isActive, onNavigate }: { isActive: (path: string) => boolean; onNavigate: (url: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div 
+      className={`sticky top-0 h-screen shrink-0 border-r border-border/30 transition-all duration-300 ease-in-out ${expanded ? 'w-[280px]' : 'w-[72px]'}`}
+      style={{ background: 'linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(220 50% 8%) 100%)' }}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+    >
+      <div className=\"relative h-full overflow-hidden flex flex-col\">
+        <div className=\"absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none\" />
+        
+        <div className=\"relative flex items-center gap-3 p-3 border-b border-border/30 h-[52px]\">
+          <img src={lumathaLogo} alt=\"Lumatha\" className=\"w-9 h-9 rounded-full object-contain shrink-0\" style={{ boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }} />
+          {expanded && <span className=\"text-lg font-bold gradient-text tracking-tight whitespace-nowrap\">Lumatha</span>}
+        </div>
+
+        <nav className=\"relative flex-1 p-2 space-y-1 overflow-y-auto\">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.url);
+            return (
+              <button
+                key={item.title}
+                onClick={() => onNavigate(item.url)}
+                className={`w-full flex items-center gap-3 rounded-xl transition-all duration-300 active:scale-95 ${expanded ? 'px-3 py-2.5' : 'px-0 py-2.5 justify-center'} ${
+                  active 
+                    ? 'bg-gradient-to-r from-primary/20 to-secondary/10 shadow-lg shadow-primary/10' 
+                    : 'hover:bg-primary/10'
+                }`}
+                title={!expanded ? item.title : undefined}
+              >
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-gradient-to-br from-primary/30 to-secondary/20' : 'bg-muted/30'}`}>
+                  <Icon className={`w-[18px] h-[18px] ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+                </div>
+                {expanded && (
+                  <div className=\"flex-1 min-w-0 text-left\">
+                    <span className={`font-medium block text-sm ${active ? 'text-primary' : ''}`}>{item.title}</span>
+                    <span className=\"text-[9px] text-muted-foreground block truncate\">{item.desc}</span>
+                  </div>
+                )}
+                {expanded && active && (
+                  <div className=\"w-1 h-6 rounded-full bg-gradient-to-b from-primary to-secondary shrink-0\" />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    </div>
+  );
+}
+
+function LayoutContent({ children }: LayoutProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { setOpen } = useSidebar();
+  const { user } = useAuth();
+  const isMobile = useIsMobile();
+  const [isAuthPage, setIsAuthPage] = useState(false);
+  
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const ticking = useRef(false);
+
+  useEffect(() => {
+    setIsAuthPage(location.pathname === '/auth');
+  }, [location]);
+
+  useEffect(() => {
+    if (isMobile) setOpen(false);
+  }, [location.pathname, isMobile]);
+
+  const handleScroll = useCallback(() => {
+    const currentScrollY = window.scrollY;
+    const scrollDiff = currentScrollY - lastScrollY.current;
+    if (Math.abs(scrollDiff) < 5) return;
+    if (currentScrollY < 50) setHeaderVisible(true);
+    else if (scrollDiff > 0 && currentScrollY > 50) setHeaderVisible(false);
+    else if (scrollDiff < 0) setHeaderVisible(true);
+    lastScrollY.current = currentScrollY;
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (!ticking.current) {
+        window.requestAnimationFrame(() => { handleScroll(); ticking.current = false; });
+        ticking.current = true;
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [handleScroll]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session && !isAuthPage) navigate('/auth');
+      else if (session && isAuthPage) navigate('/');
+    });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session && !isAuthPage) navigate('/auth');
+    });
+    return () => subscription.unsubscribe();
+  }, [navigate, isAuthPage]);
+
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
+
+  const handleMenuClick = (url: string) => { navigate(url); setOpen(false); };
+  const handleBack = () => { navigate(-1); };
+
+  const isFullScreenPage = location.pathname.startsWith('/chat/') && location.pathname !== '/chat';
+  const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || location.pathname.startsWith('/profile/');
+  const showSubNav = isHomeSection;
+  const isSubSection = ['/create', '/private', '/notifications', '/search'].includes(location.pathname) || location.pathname.startsWith('/profile/');
+  const isSettingsPage = location.pathname === '/settings';
+
+  // Determine section name for non-home/non-settings pages
+  const getSectionName = () => {
+    if (location.pathname.startsWith('/education')) return 'Learn';
+    if (location.pathname === '/chat') return 'Messages';
+    if (location.pathname.startsWith('/random-connect')) return 'Random Connect';
+    if (location.pathname.startsWith('/music-adventure')) return 'Adventure';
+    if (location.pathname.startsWith('/marketplace')) return 'Marketplace';
+    return '';
+  };
+  const sectionName = getSectionName();
+  const showSectionHeader = !isHomeSection && !isSettingsPage && sectionName;
+
+  const handleLumathaClick = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Dispatch custom event for sections to handle refresh
+    window.dispatchEvent(new CustomEvent('lumatha-refresh'));
+  };
+
+  if (isAuthPage) return <>{children}</>;
+
+  if (isFullScreenPage) {
+    return (
+      <div className="min-h-screen w-full relative">
+        <BackgroundOrnaments />
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full relative flex">
+      <BackgroundOrnaments />
+      
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <DesktopSidebar isActive={isActive} onNavigate={handleMenuClick} />
+      )}
+
+      {/* Main Content Area */}
+      <main className="flex-1 relative flex flex-col min-w-0">
+        <OfflineIndicator />
+        {/* Single slim TopBar: 52px */}
+        <header className={`sticky z-40 glass-card border-b border-border/40 transition-all duration-300 ${headerVisible ? 'top-0 opacity-100' : '-top-14 opacity-0'}`}>
+          <div className="flex items-center h-[52px] px-3 gap-2">
+            {/* Left: Hamburger or Back */}
+            <div className="shrink-0">
+              {isMobile && isSubSection ? (
+                <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              ) : isMobile ? (
+                <MobileSidebar isActive={isActive} onNavigate={handleMenuClick} />
+              ) : null}
+            </div>
+
+            {/* Center + Right: Section branding OR SubNav */}
+            {showSubNav ? (
+              <div className="flex-1 min-w-0">
+                <SubNavigation visible={headerVisible} />
+              </div>
+            ) : showSectionHeader ? (
+              <>
+                <div className="flex-1 flex justify-center">
+                  <button onClick={handleLumathaClick} className="text-base font-bold gradient-text tracking-tight hover:opacity-80 transition-opacity active:scale-95">
+                    Lumatha
+                  </button>
+                </div>
+                <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-widest shrink-0">{sectionName}</span>
+              </>
+            ) : (
+              <div className="flex-1" />
+            )}
+          </div>
+        </header>
+
+        <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-2 md:p-3 min-w-0">
+            <div className="max-w-lg xl:max-w-xl mx-auto page-enter">
+              {children}
+            </div>
+          </div>
+          {!isMobile && location.pathname === '/' && (
+            <aside className="hidden lg:flex w-[400px] xl:w-[440px] border-l border-border flex-col overflow-hidden shrink-0">
+              <DesktopMessagesPanel />
+            </aside>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export function Layout({ children }: LayoutProps) {
+  return (
+    <SidebarProvider defaultOpen={false}>
+      <LayoutContent>{children}</LayoutContent>
+    </SidebarProvider>
+  );
+}

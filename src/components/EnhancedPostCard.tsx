@@ -486,7 +486,7 @@ export function EnhancedPostCard({
               variant="ghost"
               size="sm"
               onClick={() => setCommentsOpen(true)}
-              className="flex-1 gap-1 h-8 text-muted-foreground"
+              className="flex-1 gap-1 h-8 text-muted-foreground active:scale-90"
             >
               <MessageCircle className="w-4 h-4" />
               <span className="text-xs">Comment</span>
@@ -499,7 +499,7 @@ export function EnhancedPostCard({
               variant="ghost"
               size="sm"
               onClick={handleShare}
-              className="flex-1 gap-1 h-8 text-muted-foreground"
+              className="flex-1 gap-1 h-8 text-muted-foreground active:scale-90"
             >
               <Share2 className="w-4 h-4" />
               <span className="text-xs">Share</span>
@@ -510,7 +510,7 @@ export function EnhancedPostCard({
             variant="ghost"
             size="sm"
             onClick={() => onToggleSave(post.id)}
-            className={`h-8 w-8 p-0 ${isSaved ? 'text-primary' : 'text-muted-foreground'}`}
+            className={`h-8 w-8 p-0 active:scale-90 ${isSaved ? 'text-primary' : 'text-muted-foreground'}`}
           >
             <Star className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
           </Button>

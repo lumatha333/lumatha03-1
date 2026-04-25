@@ -80,7 +80,7 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
   if (!visible) return null;
 
   return (
-    <div className="flex items-center justify-between w-full gap-0">
+    <div className="flex items-center justify-around w-full px-2 py-1 glass-card border-t border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40 pb-safe">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const active = isActive(tab);
@@ -92,16 +92,16 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
             key={tab.id}
             onClick={() => handleTabClick(tab)}
             className={cn(
-              "flex flex-col items-center justify-center flex-1 py-1.5 rounded-xl transition-all relative",
-              active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+              "flex flex-col items-center justify-center flex-1 py-1 rounded-2xl transition-all duration-300 active:scale-90 relative group",
+              active ? "text-primary" : "text-muted-foreground hover:text-primary"
             )}
             title={tab.label}
           >
-            <div className="relative">
+            <div className="relative p-1.5 rounded-xl transition-all group-hover:bg-primary/10">
               {isProfileTab ? (
                 <Avatar className={cn(
-                  "w-7 h-7 transition-all",
-                  active ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : ""
+                  "w-6 h-6 transition-all duration-500",
+                  active ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110" : "grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100"
                 )}>
                   <AvatarImage src={profile?.avatar_url || undefined} />
                   <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground text-[10px] font-bold">
@@ -109,17 +109,23 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
                   </AvatarFallback>
                 </Avatar>
               ) : (
-                <Icon className={cn("w-6 h-6", active ? "text-primary" : "")} />
+                <Icon className={cn("w-5 h-5 transition-transform duration-300", active ? "text-primary scale-110" : "group-hover:scale-110")} />
               )}
               {showBadge && (
-                <span className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5">
+                <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[8px] font-black rounded-full min-w-[16px] h-[16px] flex items-center justify-center border-2 border-background animate-in zoom-in duration-300">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </div>
-            <span className={cn("text-[9px] font-medium mt-0.5", active ? "text-primary" : "text-muted-foreground")}>
+            <span className={cn(
+              "text-[8px] font-black uppercase tracking-widest transition-all duration-300 mt-0.5",
+              active ? "text-primary opacity-100" : "text-muted-foreground opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0"
+            )}>
               {tab.label}
             </span>
+            {active && (
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary shadow-glow-primary animate-pulse" />
+            )}
           </button>
         );
       })}
