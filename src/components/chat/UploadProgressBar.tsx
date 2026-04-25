@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -7,7 +8,7 @@ interface UploadProgressBarProps {
   className?: string;
 }
 
-export function UploadProgressBar({ filesCount, currentIndex, className }: UploadProgressBarProps) {
+export const UploadProgressBar = memo(function UploadProgressBar({ filesCount, currentIndex, className }: UploadProgressBarProps) {
   const percent = filesCount > 0 ? Math.round(((currentIndex + 1) / filesCount) * 100) : 0;
 
   return (
@@ -21,10 +22,10 @@ export function UploadProgressBar({ filesCount, currentIndex, className }: Uploa
         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-primary rounded-full transition-all duration-300"
-            style={{ width: `${percent}%` }}
+            style={{ width: `${percent}%`, willChange: 'width' }}
           />
         </div>
       </div>
     </div>
   );
-}
+});

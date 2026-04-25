@@ -1,864 +1,627 @@
-import { useState, useEffect, useCallback, useMemo, useDeferredValue, useTransition, lazy, Suspense, useRef, memo } from 'react';
-import React from 'react';
+import { useState, useEffect, useCallback, useMemo, useTransition } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
-  Trophy, Target, MapPin, Plane, ChevronRight, Sparkles,
+  Trophy, Target, MapPin, Plane,
   Search, Globe, Heart, MessageCircle, Bookmark, Plus,
-  UserCircle2, Compass, Map as MapIcon, Share2, MoreVertical,
-  Flag, UserPlus, EyeOff, Copy, Pencil, Trash2, MinusCircle, ChevronUp,
- Edit3, Crown, Zap, Smile, GraduationCap, ChevronDown, LayoutGrid, Lock, Settings2,
- Clock, CheckCircle2, MoreHorizontal, ListTodo, Notebook, Bell, BarChart3, Home,
- Cpu, FileText, Play, ShoppingBag, GripHorizontal, RotateCcw, Info, MoreVertical as Dots4,
- ArrowLeft, Camera, Send, X, Image as ImageIcon, UserCircle
+  UserCircle2, Compass, Map as MapIcon, Share2,
+  Flag,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import { motion, AnimatePresence, useScroll, useMotionValueEvent, Reorder } from 'framer-motion';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import { motion, AnimatePresence } from 'framer-motion';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AdventureRanks } from '@/components/adventure/AdventureRanks';
-import { TravelStoriesFeed } from '@/components/adventure/TravelStoriesFeed';
+import { AdventureQuests } from '@/components/adventure/AdventureQuests';
 import { PlaceDetailSheet } from '@/components/adventure/PlaceDetailSheet';
 import { StoryCreationSheet } from '@/components/adventure/StoryCreationSheet';
-import { StoryReader } from '@/components/adventure/StoryReader';      
+import { StoryReader } from '@/components/adventure/StoryReader';
 import { CommentsDialog } from '@/components/CommentsDialog';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { SYSTEM_CHALLENGES } from '@/data/adventureChallenges';
-import { NotesSection } from './NotesSection';
+import { ADVENTURE_PLACES } from '@/data/adventurePlaces';
 
 const FALLBACK_PLACE_IMAGE = 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&q=80&w=800';
 
-type LayoutType = 'layout1' | 'layout2' | 'layout3';
-
-interface Subsection {
-  id: string;
-  label: string;
-  icon: any;
-}
-
-interface MainCategory {
-  id: string;
-  label: string;
-  icon: any;
-  subsections: Subsection[];
-}
-
-const LAYOUTS: Record<LayoutType, MainCategory[]> = {
-  layout1: [
-    {
-      id: 'default',
-      label: 'Lumatha',
-      icon: Sparkles,
-      subsections: [
-        { id: 'ranks', label: 'Quests', icon: Trophy },
-        { id: 'explore', label: 'Explore', icon: Compass },
-        { id: 'feed', label: 'Stories', icon: MapIcon },
-        { id: 'docs', label: 'Docs', icon: FileText },
-        { id: 'marketplace', label: 'Market', icon: ShoppingBag },
-        { id: 'profile', label: 'Profile', icon: UserCircle2 },
-        { id: 'private_zone', label: 'Private', icon: Lock },
-      ]
-    }
-  ],
-  layout2: [
-    {
-      id: 'private',
-      label: 'Private',
-      icon: Lock,
-      subsections: [
-        { id: 'private_zone', label: 'Private Zone', icon: Lock },
-        { id: 'todo', label: 'To-do', icon: ListTodo },
-        { id: 'notes', label: 'Notes', icon: Notebook },
-        { id: 'quests', label: 'Quests', icon: Target },
-        { id: 'messages', label: 'Messages', icon: MessageCircle },
-        { id: 'funpun', label: 'FunPun', icon: Sparkles },
-      ]
-    },
-    {
-      id: 'neutral',
-      label: 'Neutral',
-      icon: Zap,
-      subsections: [
-        { id: 'explore', label: 'Explore', icon: Compass },
-        { id: 'connect', label: 'Connect', icon: UserPlus },
-        { id: 'notify', label: 'Notify', icon: Bell },
-        { id: 'stats', label: 'Stats', icon: BarChart3 },
-        { id: 'ranking', label: 'Ranking', icon: Crown },
-      ]
-    },
-    {
-      id: 'public',
-      label: 'Public',
-      icon: Globe,
-      subsections: [
-        { id: 'feed', label: 'Feed', icon: Home },
-        { id: 'docs', label: 'Docs', icon: FileText },
-        { id: 'stories', label: 'Stories', icon: Play },
-        { id: 'marketplace', label: 'Market', icon: ShoppingBag },
-        { id: 'profile', label: 'Profile', icon: UserCircle2 },
-      ]
-    }
-  ],
-  layout3: [
-    {
-      id: 'social',
-      label: 'Social',
-      icon: UserPlus,
-      subsections: [
-        { id: 'feed', label: 'Feed', icon: Home },
-        { id: 'quests', label: 'Quest', icon: Target },
-        { id: 'explore', label: 'Explore', icon: Compass },
-        { id: 'connect', label: 'Connect', icon: UserPlus },
-        { id: 'marketplace', label: 'Market', icon: ShoppingBag },
-        { id: 'profile', label: 'Profile', icon: UserCircle2 },
-      ]
-    },
-    {
-      id: 'education',
-      label: 'Education',
-      icon: GraduationCap,
-      subsections: [
-        { id: 'private_zone', label: 'Private Zone', icon: Lock },
-        { id: 'todo', label: 'To-do', icon: ListTodo },
-        { id: 'notes', label: 'Notes', icon: Notebook },
-        { id: 'docs', label: 'Docs', icon: FileText },
-        { id: 'messages', label: 'Messages', icon: MessageCircle },
-      ]
-    },
-    {
-      id: 'neutral',
-      label: 'Neutral',
-      icon: Zap,
-      subsections: [
-        { id: 'stories', label: 'Stories', icon: Play },
-        { id: 'funpun', label: 'FunPun', icon: Sparkles },
-        { id: 'notify', label: 'Notify', icon: Bell },
-        { id: 'stats', label: 'Stats', icon: BarChart3 },
-        { id: 'ranking', label: 'Ranking', icon: Crown },
-      ]
-    }
-  ]
-};
+const EXPLORE_SEARCH_FILTERS = [
+  { id: 'all', label: 'All Places' },
+  { id: 'nepal', label: 'Nepal' },
+  { id: 'nature', label: 'Nature' },
+  { id: 'cities', label: 'Cities' },
+  { id: 'culture', label: 'Culture' },
+  { id: 'hidden', label: 'Hidden Gems' },
+];
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
 
-// --- New Components for Chat, Docs, Profile ---
-
-function MessagesSection() {
-  const [messages, setMessages] = useState<any[]>(() => {
-    const saved = localStorage.getItem('chat_messages_v1');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', text: 'Hey there! Ready for the next adventure? 🏔️', sender: 'ai', timestamp: Date.now() - 3600000 },
-      { id: '2', text: 'I found a great spot in the Himalayas!', sender: 'user', timestamp: Date.now() - 1800000 },
-    ];
-  });
-  const [input, setInput] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior
-      });
-    }
-  };
-
-  useEffect(() => {
-    scrollToBottom('auto');
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-    localStorage.setItem('chat_messages_v1', JSON.stringify(messages));
-  }, [messages]);
-
-  const handleSend = () => {
-    if (!input.trim() && !capturedImage) return;
-    const newMsg = {
-      id: Date.now().toString(),
-      text: input,
-      image: capturedImage,
-      viewOnce: !!capturedImage,
-      sender: 'user',
-      timestamp: Date.now()
-    };
-    setMessages([...messages, newMsg]);
-    setInput('');
-    setCapturedImage(null);
-    setIsCapturing(false);
-  };
-
-  const captureMoment = () => {
-    // Simulate camera capture
-    setCapturedImage('https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80&w=800');
-    setIsCapturing(true);
-  };
-
-  return (
-    <div className="flex flex-col h-[70vh] bg-slate-950/50 rounded-[32px] border border-white/5 overflow-hidden shadow-2xl relative">
-      {/* Chat Header with Capture Button */}
-      <div className="p-4 border-b border-white/5 flex items-center justify-between bg-slate-900/40 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          <Avatar className="w-8 h-8 border border-primary/20">
-            <AvatarImage src="https://github.com/shadcn.png" />
-            <AvatarFallback>AI</AvatarFallback>
-          </Avatar>
-          <div>
-            <h3 className="text-xs font-black text-white uppercase tracking-widest">Adventure Guide</h3>
-            <p className="text-[8px] text-emerald-400 font-bold uppercase tracking-widest flex items-center gap-1">
-              <span className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse" /> Online
-            </p>
-          </div>
-        </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={captureMoment}
-          className="h-9 w-9 rounded-xl bg-white/5 hover:bg-primary/20 text-slate-400 hover:text-primary transition-all p-0"
-        >
-          <Camera className="w-5 h-5" />
-        </Button>
-      </div>
-
-      {/* Message List */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-        {messages.map((m) => (
-          <div key={m.id} className={cx("flex", m.sender === 'user' ? "justify-end" : "justify-start")}>
-            <div className={cx(
-              "max-w-[80%] rounded-2xl p-3 text-sm relative group",
-              m.sender === 'user' ? "bg-primary text-white rounded-tr-none" : "bg-white/5 text-slate-200 rounded-tl-none border border-white/5"
-            )}>
-              {m.image && (
-                <div className="mb-2 relative rounded-xl overflow-hidden aspect-video">
-                  <img src={m.image} alt="Moment" className={cx("w-full h-full object-cover", m.viewed ? "blur-2xl grayscale" : "")} />
-                  {m.viewOnce && !m.viewed && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="sm" className="text-white font-black text-[10px] uppercase tracking-widest" onClick={() => {
-                        setMessages(prev => prev.map(msg => msg.id === m.id ? { ...msg, viewed: true } : msg));
-                        toast.success('Moment viewed');
-                      }}>Tap to View Once</Button>
-                    </div>
-                  )}
-                  {m.viewed && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <EyeOff className="w-8 h-8 text-white/20" />
-                    </div>
-                  )}
-                </div>
-              )}
-              <p className={cx("leading-relaxed", m.viewed && "italic opacity-50")}>{m.viewed ? "Moment expired" : m.text}</p>
-              <span className="text-[8px] opacity-40 mt-1 block text-right font-bold tracking-widest">
-                {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Input Area */}
-      <div className="p-4 bg-slate-900/40 backdrop-blur-xl border-t border-white/5">
-        <div className="flex items-center gap-2 bg-white/5 rounded-2xl p-1 border border-white/5 focus-within:border-primary/30 transition-all">
-          <Input 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Type a message..."
-            className="border-0 bg-transparent focus-visible:ring-0 text-sm h-10"
-          />
-          <Button 
-            size="sm" 
-            onClick={handleSend}
-            className="h-8 w-8 rounded-xl bg-primary hover:scale-105 active:scale-95 transition-all p-0 shadow-lg shadow-primary/20"
-          >
-            <Send className="w-4 h-4 text-white" />
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+// --- localStorage helpers ---
+function getLocalSet(key: string): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || '[]') as string[]); } catch { return new Set(); }
 }
-
-function DocsSection() {
-  const docs = [
-    { title: 'Adventure Guide v1', category: 'Guides', date: 'Today' },
-    { title: 'Packing Checklist', category: 'Travel', date: 'Yesterday' },
-    { title: 'Himalayan Routes', category: 'Maps', date: 'Apr 12' },
-    { title: 'Visa Requirements', category: 'Official', date: 'Apr 10' },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-black text-white uppercase tracking-wider">Documents</h2>
-        <Button variant="outline" className="h-9 rounded-xl border-white/10 text-[10px] font-black uppercase tracking-widest px-5">Upload New</Button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {docs.map((doc, i) => (
-          <motion.div 
-            key={i}
-            whileHover={{ y: -2 }}
-            className="bg-slate-900/40 border border-white/5 p-4 rounded-3xl flex items-center gap-4 hover:bg-white/5 transition-all cursor-pointer group"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <FileText className="w-6 h-6 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-white font-bold text-sm truncate uppercase tracking-wider">{doc.title}</h3>
-              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-black uppercase">
-                <span>{doc.category}</span>
-                <span>•</span>
-                <span>{doc.date}</span>
-              </div>
-            </div>
-            <Dots4 className="w-4 h-4 text-slate-600" />
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
+function saveLocalSet(key: string, s: Set<string>) {
+  try { localStorage.setItem(key, JSON.stringify([...s])); } catch {}
 }
-
-function ProfileSection() {
-  const stats = [
-    { label: 'Quests', value: '24', icon: Trophy, color: 'text-orange-400' },
-    { label: 'Stories', value: '12', icon: MapIcon, color: 'text-sky-400' },
-    { label: 'Followers', value: '1.2k', icon: UserPlus, color: 'text-emerald-400' },
-  ];
-
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-col items-center text-center space-y-4">
-        <div className="relative">
-          <Avatar className="w-24 h-24 border-4 border-primary/20 p-1">
-            <AvatarImage src="https://github.com/shadcn.png" className="rounded-full" />
-            <AvatarFallback>UN</AvatarFallback>
-          </Avatar>
-          <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-primary rounded-full border-4 border-slate-950 flex items-center justify-center">
-            <Edit3 className="w-4 h-4 text-white" />
-          </div>
-        </div>
-        <div>
-          <h2 className="text-2xl font-black text-white uppercase tracking-widest">Adventure Explorer</h2>
-          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-1">Level 42 Trailblazer</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        {stats.map((s, i) => (
-          <div key={i} className="bg-slate-900/40 border border-white/5 p-4 rounded-3xl text-center space-y-1">
-            <s.icon className={cx("w-5 h-5 mx-auto mb-2", s.color)} />
-            <div className="text-lg font-black text-white">{s.value}</div>
-            <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Achievements</h3>
-        <div className="grid grid-cols-1 gap-3">
-          {['Mountain Goat', 'Ocean Diver', 'City Slicker'].map((badge, i) => (
-            <div key={i} className="bg-white/5 border border-white/5 p-4 rounded-[24px] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Crown className="w-4 h-4 text-primary" />
-                </div>
-                <span className="text-xs font-black text-white uppercase tracking-wider">{badge}</span>
-              </div>
-              <Badge className="bg-primary/20 text-primary border-0 text-[8px] font-black uppercase">Earned</Badge>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+function getLocalInt(key: string): number {
+  try { return parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch { return 0; }
 }
-
-function ChallengeCard({ challenge, onStart }: { challenge: any, onStart: () => void }) {
-  const difficulty = challenge.duration === 'daily' ? 'Easy' : challenge.duration === 'weekly' ? 'Hard' : 'Epic';
-  const diffColor = difficulty === 'Easy' ? 'bg-emerald-500/20 text-emerald-400' : difficulty === 'Hard' ? 'bg-orange-500/20 text-orange-400' : 'bg-red-500/20 text-red-400';
-  
-  return (
-    <motion.div 
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-slate-900/40 border border-white/5 rounded-[24px] p-5 space-y-4 transition-all group"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-          {challenge.categoryIcon || '🎯'}
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <Badge className={cx("border-0 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5", diffColor)}>
-            {difficulty}
-          </Badge>
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase">
-            <Clock className="w-3 h-3" />
-            {challenge.duration}
-          </div>
-        </div>
-      </div>
-      
-      <div className="space-y-1.5">
-        <h3 className="text-white font-black text-sm uppercase tracking-wider line-clamp-2 leading-tight">
-          {challenge.title}
-        </h3>
-        <p className="text-xs text-slate-500 font-medium line-clamp-2">
-          {challenge.description}
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between pt-2">
-        <div className="flex items-center gap-3">
-          <button className="text-slate-500 hover:text-red-400 transition-colors">
-            <Heart className="w-4 h-4" />
-          </button>
-          <button className="text-slate-500 hover:text-sky-400 transition-colors">
-            <Share2 className="w-4 h-4" />
-          </button>
-        </div>
-        <Button 
-          onClick={onStart}
-          className="h-9 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest px-6 shadow-md shadow-black/20 hover:scale-105 active:scale-95 transition-all"
-        >
-          Start Quest
-        </Button>
-      </div>
-    </motion.div>
-  );
+function saveLocalInt(key: string, n: number) {
+  try { localStorage.setItem(key, String(n)); } catch {}
 }
 
 export default function MusicAdventure() {
   const { user, profile } = useAuth();
-  
-  // Persistence-based State
-  const [currentLayoutId, setCurrentLayoutId] = useState<LayoutType>(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('music_adv_layout_v2') : null;
-    return (saved as LayoutType) || 'layout1';
-  });
+  const [activeTab, setActiveTab] = useState<'quests' | 'explore' | 'stories' | 'ranking'>('quests');
+  const [isPending, startTabTransition] = useTransition();
 
-  const [activeMainId, setActiveMainId] = useState<string>(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('music_adv_active_main') : null;
-    const layout = LAYOUTS[currentLayoutId];
-    if (saved && layout.find(m => m.id === saved)) return saved;
-    return layout[0].id;
-  });
-
-  const [activeSubId, setActiveSubId] = useState<string>(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('music_adv_active_sub') : null;
-    const main = LAYOUTS[currentLayoutId].find(m => m.id === activeMainId);
-    if (saved && main?.subsections.find(s => s.id === saved)) return saved;
-    return main?.subsections[0].id || 'ranks';
-  });
-
-  const [customSections, setCustomSections] = useState<Record<string, Subsection[]>>(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('music_adv_custom_order') : null;
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        const merged: Record<string, Subsection[]> = {};
-        Object.values(LAYOUTS).flat().forEach(main => {
-          if (parsed[main.id]) {
-            merged[main.id] = parsed[main.id].map((s: any) => {
-              const original = main.subsections.find(os => os.id === s.id);
-              return { ...s, icon: original?.icon || Sparkles };
-            });
-          } else {
-            merged[main.id] = main.subsections;
-          }
-        });
-        return merged;
-      } catch (e) { /* fallback */ }
-    }
-    const initial: Record<string, Subsection[]> = {};
-    Object.values(LAYOUTS).flat().forEach(main => {
-      initial[main.id] = main.subsections;
-    });
-    return initial;
-  });
-
-  // --- Auto-Reset Logic ---
-  useEffect(() => {
-    const lastReset = localStorage.getItem('adventure_last_reset');
-    const now = new Date();
-    const today = now.toDateString();
-    
-    if (lastReset !== today) {
-      console.log('Performing daily reset...');
-      // Reset Daily Quests/Tasks
-      localStorage.setItem('adventure_last_reset', today);
-      toast.info('Adventure tasks and quests have been reset for the new day!');
-    }
-
-    const lastWeeklyReset = localStorage.getItem('adventure_last_weekly_reset');
-    const currentWeek = getWeekNumber(now);
-    if (lastWeeklyReset !== currentWeek.toString()) {
-      console.log('Performing weekly reset...');
-      // Reset Weekly Quests
-      localStorage.setItem('adventure_last_weekly_reset', currentWeek.toString());
-    }
-
-    const lastMonthlyReset = localStorage.getItem('adventure_last_monthly_reset');
-    const currentMonth = now.getMonth().toString() + '-' + now.getFullYear().toString();
-    if (lastMonthlyReset !== currentMonth) {
-      console.log('Performing monthly reset...');
-      // Reset Monthly Quests
-      localStorage.setItem('adventure_last_monthly_reset', currentMonth);
-    }
-  }, []);
-
-  const getWeekNumber = (d: Date) => {
-    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  };
-
-  // Derived Values
-  const currentLayout = LAYOUTS[currentLayoutId];
-  const currentMain = currentLayout.find(m => m.id === activeMainId) || currentLayout[0];
-  const currentSubsections = customSections[currentMain.id] || currentMain.subsections;
-
-  // Persistence Effects
-  useEffect(() => {
-    localStorage.setItem('music_adv_layout_v2', currentLayoutId);
-    localStorage.setItem('music_adv_active_main', activeMainId);
-    localStorage.setItem('music_adv_active_sub', activeSubId);
-    const orderToSave: any = {};
-    Object.keys(customSections).forEach(key => {
-      orderToSave[key] = customSections[key].map(({ icon, ...rest }) => rest);
-    });
-    localStorage.setItem('music_adv_custom_order', JSON.stringify(orderToSave));
-  }, [currentLayoutId, activeMainId, activeSubId, customSections]);
-
-  const handleMainChange = (id: string) => {
-    setActiveMainId(id);
-    const newMain = currentLayout.find(m => m.id === id);
-    if (newMain) setActiveSubId(newMain.subsections[0].id);
-  };
-
-  const handleSubChange = (id: string) => {
-    setActiveSubId(id);
-  };
-
-  const handleReorder = (newOrder: Subsection[]) => {
-    setCustomSections(prev => ({ ...prev, [activeMainId]: newOrder }));
-  };
-
-  const handleReset = () => {
-    const initial: Record<string, Subsection[]> = {};
-    Object.values(LAYOUTS).flat().forEach(main => {
-      initial[main.id] = main.subsections;
-    });
-    setCustomSections(initial);
-    setCurrentLayoutId('layout1');
-    setActiveMainId('default');
-    setActiveSubId('ranks');
-    toast.success('Layout reset to default');
-  };
-
-  // Shared Data/Loading state
   const [places, setPlaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [exploreSearchFilter, setExploreSearchFilter] = useState('all');
+  const [profileViewFilter, setProfileViewFilter] = useState<'all' | 'liked' | 'saved' | 'visited'>('all');
+  const [visiblePlaceCount, setVisiblePlaceCount] = useState(48);
+
   const [travelStories, setTravelStories] = useState<any[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
+  const [travelViewFilter, setTravelViewFilter] = useState<'public' | 'own' | 'liked' | 'saved' | 'reviewed'>('public');
 
-  // Modal/UI State
   const [selectedPlace, setSelectedPlace] = useState<any>(null);
   const [showStoryCreate, setShowStoryCreate] = useState(false);
   const [travelReaderStoryId, setTravelReaderStoryId] = useState<string | null>(null);
   const [travelReaderOpen, setTravelReaderOpen] = useState(false);
+
   const [commentsOpen, setCommentsOpen] = useState(false);
-  const [headerVisible, setHeaderVisible] = useState(true);
-  const [footerVisible, setFooterVisible] = useState(true);
-  const { scrollY } = useScroll();
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedPostTitle, setSelectedPostTitle] = useState('');
+  const [selectedCommentType, setSelectedCommentType] = useState<'post' | 'travel'>('post');
+
+  // Points and gamification state
+  const [userPoints, setUserPoints] = useState(0);
+  const [totalChallengesDone, setTotalChallengesDone] = useState(0);
+  const [visitedPlaceIds, setVisitedPlaceIds] = useState<Set<string>>(new Set());
+  const [lovedPlaceIds, setLovedPlaceIds] = useState<Set<string>>(new Set());
+  const [savedPlaceIds, setSavedPlaceIds] = useState<Set<string>>(new Set());
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
-  useMotionValueEvent(scrollY, "change", (latest) => {
-    if (selectedPlace || showStoryCreate || travelReaderOpen || commentsOpen) {
-      setHeaderVisible(true);
-      setFooterVisible(true);
-      return;
-    }
-    const direction = latest > lastScrollY ? "down" : "up";
-    if (latest > 50 && direction === "down") {
-      setHeaderVisible(false);
-      setFooterVisible(false);
-    } else if (direction === "up") {
-      setHeaderVisible(true);
-      setFooterVisible(true);
-    }
-    setLastScrollY(latest);
-  });
+  const formatStoryDate = (value: string | null | undefined) => {
+    if (!value) return 'Unknown date';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleDateString();
+  };
+
+  // Load localStorage-backed gamification state
+  useEffect(() => {
+    if (!user?.id) return;
+    setVisitedPlaceIds(getLocalSet(`adv_visited_${user.id}`));
+    setLovedPlaceIds(getLocalSet(`adv_loved_${user.id}`));
+    setSavedPlaceIds(getLocalSet(`adv_saved_places_${user.id}`));
+    setTotalChallengesDone(getLocalInt(`adv_challenge_total_${user.id}`));
+  }, [user?.id]);
+
+  // Load user points from DB
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('user_points')
+      .select('total_points')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setUserPoints(data.total_points || 0); })
+      .catch(console.error);
+  }, [user?.id]);
 
   useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true);
-      try {
-        const { data: p } = await supabase.from('adventure_places' as any).select('*').order('name');
-        if (p) setPlaces(p);
-        const { data: s } = await supabase.from('travel_stories' as any).select('*, profiles(*)').order('created_at', { ascending: false });
-        if (s) setTravelStories(s);
-      } finally {
-        setLoading(false);
-        setStoriesLoading(false);
+    fetchPlaces();
+    fetchTravelStories();
+  }, [user?.id]);
+
+  // Award points to DB (monotonic — trigger keeps max)
+  const awardPoints = useCallback(async (delta: number) => {
+    if (!user?.id || delta <= 0) return;
+    const { data } = await supabase.from('user_points').select('total_points').eq('user_id', user.id).maybeSingle();
+    const current = (data as any)?.total_points || 0;
+    const next = current + delta;
+    await supabase.from('user_points').upsert({ user_id: user.id, total_points: next }, { onConflict: 'user_id' });
+    setUserPoints(next);
+  }, [user?.id]);
+
+  // Called by AdventureQuests when a challenge is newly completed
+  const handleChallengePointsEarned = useCallback((delta: number) => {
+    if (!user?.id) return;
+    const newTotal = totalChallengesDone + delta;
+    setTotalChallengesDone(newTotal);
+    saveLocalInt(`adv_challenge_total_${user.id}`, newTotal);
+    awardPoints(delta).catch(console.error);
+  }, [user?.id, totalChallengesDone, awardPoints]);
+
+  const fetchPlaces = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('adventure_places' as any)
+        .select('*')
+        .order('name');
+      if (!error && data && data.length > 0) {
+        setPlaces(data.filter((p: any) => p && p.id));
+      } else {
+        // Fall back to static data if DB table is empty or missing
+        setPlaces(ADVENTURE_PLACES.filter(p => p && p.id));
       }
-    };
-    fetchAll();
-  }, []);
+    } catch (e) {
+      console.error(e);
+      // Fall back to static data on error
+      setPlaces(ADVENTURE_PLACES.filter(p => p && p.id));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTravelStories = async () => {
+    setStoriesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('travel_stories' as any)
+        .select('*, profiles(*)')
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        const storiesWithState = (await Promise.all(data.map(async (s: any) => {
+          if (!s || !s.id) return null;
+          if (!user) return { ...s, is_liked: false, is_saved: false };
+          const [{ data: like }, { data: save }] = await Promise.all([
+            supabase.from('travel_story_likes' as any).select('id').eq('story_id', s.id).eq('user_id', user.id).maybeSingle(),
+            supabase.from('travel_story_saves' as any).select('id').eq('story_id', s.id).eq('user_id', user.id).maybeSingle(),
+          ]);
+          return { ...s, is_liked: !!like, is_saved: !!save };
+        }))).filter(Boolean);
+        setTravelStories(storiesWithState);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStoriesLoading(false);
+    }
+  };
+
+  const likeStory = async (id: string) => {
+    if (!user || !id) return;
+    const story = travelStories.find(s => s && s.id === id);
+    if (!story) return;
+    if (story.is_liked) {
+      await supabase.from('travel_story_likes' as any).delete().eq('story_id', id).eq('user_id', user.id);
+    } else {
+      await supabase.from('travel_story_likes' as any).insert({ story_id: id, user_id: user.id });
+    }
+    setTravelStories(prev => prev.map(s => s && s.id === id ? { ...s, is_liked: !s.is_liked } : s));
+  };
+
+  const saveStory = async (id: string) => {
+    if (!user || !id) return;
+    const story = travelStories.find(s => s && s.id === id);
+    if (!story) return;
+    if (story.is_saved) {
+      await supabase.from('travel_story_saves' as any).delete().eq('story_id', id).eq('user_id', user.id);
+    } else {
+      await supabase.from('travel_story_saves' as any).insert({ story_id: id, user_id: user.id });
+      toast.success('Saved to collection');
+    }
+    setTravelStories(prev => prev.map(s => s && s.id === id ? { ...s, is_saved: !s.is_saved } : s));
+  };
+
+  // Toggle place visited/loved/saved with localStorage + points
+  const toggleVisitPlace = useCallback((placeId: string) => {
+    if (!user?.id) return;
+    setVisitedPlaceIds(prev => {
+      const next = new Set(prev);
+      const isNew = !next.has(placeId);
+      if (next.has(placeId)) next.delete(placeId); else next.add(placeId);
+      saveLocalSet(`adv_visited_${user.id}`, next);
+      if (isNew) {
+        toast.success('Added to visited places! 📍');
+        awardPoints(3).catch(console.error);
+      }
+      return next;
+    });
+  }, [user?.id, awardPoints]);
+
+  const toggleLovePlace = useCallback((placeId: string) => {
+    if (!user?.id) return;
+    setLovedPlaceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(placeId)) next.delete(placeId); else next.add(placeId);
+      saveLocalSet(`adv_loved_${user.id}`, next);
+      return next;
+    });
+  }, [user?.id]);
+
+  const toggleSavePlaceGrid = useCallback((e: React.MouseEvent, placeId: string) => {
+    e.stopPropagation();
+    if (!user?.id) { toast.error('Sign in to save places'); return; }
+    setSavedPlaceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(placeId)) { next.delete(placeId); } else { next.add(placeId); toast.success('Saved to collection'); }
+      saveLocalSet(`adv_saved_places_${user.id}`, next);
+      return next;
+    });
+  }, [user?.id]);
+
+  const filteredPlaces = useMemo(() => {
+    return places.filter(p => {
+      if (!p || typeof p !== 'object' || !p.id) return false;
+      const matchesSearch = !searchQuery || p.name?.toLowerCase().includes(searchQuery.toLowerCase()) || p.country?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesFilter = exploreSearchFilter === 'all'
+        || (exploreSearchFilter === 'hidden' && p.type === 'hidden')
+        || (exploreSearchFilter === 'nepal' && p.country?.toLowerCase().includes('nepal'))
+        || p.category?.toLowerCase() === exploreSearchFilter
+        || p.country?.toLowerCase() === exploreSearchFilter;
+      // profileViewFilter sub-filter
+      if (profileViewFilter === 'visited') return matchesSearch && matchesFilter && visitedPlaceIds.has(p.id);
+      if (profileViewFilter === 'saved') return matchesSearch && matchesFilter && savedPlaceIds.has(p.id);
+      if (profileViewFilter === 'liked') return matchesSearch && matchesFilter && lovedPlaceIds.has(p.id);
+      return matchesSearch && matchesFilter;
+    });
+  }, [places, searchQuery, exploreSearchFilter, profileViewFilter, visitedPlaceIds, savedPlaceIds, lovedPlaceIds]);
+
+  const visiblePlaces = filteredPlaces.slice(0, visiblePlaceCount);
+
+  const filteredTravelStories = useMemo(() => {
+    return travelStories.filter((s) => {
+      if (!s || typeof s !== 'object' || !s.id) return false;
+      const matchesSearch = !searchQuery || s.title?.toLowerCase().includes(searchQuery.toLowerCase()) || s.location?.toLowerCase().includes(searchQuery.toLowerCase());
+      if (travelViewFilter === 'own') return matchesSearch && s.user_id === user?.id;
+      if (travelViewFilter === 'liked') return matchesSearch && s.is_liked;
+      if (travelViewFilter === 'saved') return matchesSearch && s.is_saved;
+      return matchesSearch;
+    }).filter(Boolean);
+  }, [travelStories, searchQuery, travelViewFilter, user?.id]);
 
   return (
     <div className="min-h-screen bg-[#0a0f1e] text-slate-200">
-      {/* Top Banner (Stable Branding/Category Switcher) */}
-      <motion.div 
-        initial={{ y: 0 }}
-        animate={{ y: headerVisible ? 0 : -120 }}
-        className="fixed top-0 left-0 right-0 z-[100] w-full bg-[#0a0f1e]/90 backdrop-blur-2xl border-b border-white/5 shadow-2xl shadow-black/60 h-20"
-      >
-        <div className="flex items-center justify-between px-5 h-full max-w-7xl mx-auto gap-4">
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
-              <Sparkles className="w-5 h-5 text-primary" />
-            </div>
-            {currentLayoutId === 'layout1' && (
-               <div className="flex flex-col -space-y-1">
-                <span className="text-sm font-black text-white uppercase tracking-tighter">Lumatha</span>
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-[0.2em]">Music Adventure</span>
-              </div>
-            )}
-          </div>
+      <div className="sticky top-0 z-30 w-full bg-[#0a0f1e]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="flex items-center justify-around h-14 max-w-md mx-auto">
+          {[
+            { id: 'quests', icon: Target, label: 'Quests' },
+            { id: 'explore', icon: Compass, label: 'Explore' },
+            { id: 'stories', icon: MapIcon, label: 'Stories' },
+            { id: 'ranking', icon: Trophy, label: 'Ranking' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => startTabTransition(() => setActiveTab(tab.id as any))}
+              className={cx("relative flex flex-col items-center justify-center gap-0.5 transition-all duration-300", activeTab === tab.id ? "text-primary scale-105" : "text-slate-500 hover:text-slate-300")}
+            >
+              <tab.icon className={cx("w-4 h-4", activeTab === tab.id ? "fill-primary/10" : "")} />
+              <span className="text-[8px] font-black uppercase tracking-widest">{tab.label}</span>
+              {activeTab === tab.id && <motion.div layoutId="activeTab" className="absolute -bottom-[15px] w-6 h-1 bg-primary rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />}
+            </button>
+          ))}
+        </div>
+      </div>
 
-          {(currentLayoutId === 'layout2' || currentLayoutId === 'layout3') && (
-            <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar py-1 justify-center">
-              {currentLayout.map(main => (
+      <div className="max-w-4xl mx-auto">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+
+        {activeTab === 'quests' && (
+          <ErrorBoundary fallback={<div className="p-8 text-center text-slate-400">Failed to load quests. Please refresh.</div>}>
+            <AdventureQuests userId={user?.id} onPointsEarned={handleChallengePointsEarned} />
+          </ErrorBoundary>
+        )}
+
+        {activeTab === 'explore' && (
+          <div className="w-full animate-in slide-in-from-right-2 duration-200">
+            <div className="w-full flex gap-3 overflow-x-auto no-scrollbar px-4 py-6 border-b border-white/5 bg-[#0a0f1e]/50 items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="w-14 h-14 rounded-full overflow-hidden border-2 border-primary/30 shrink-0 active:scale-90 transition-all shadow-lg flex touch-manipulation">
+                    <Avatar className="w-full h-full rounded-full">
+                      <AvatarImage src={profile?.avatar_url || undefined} className="object-cover" />
+                      <AvatarFallback className="bg-slate-800 text-primary font-black uppercase">{profile?.name?.[0] || '?'}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56 bg-slate-900 border-white/10 rounded-[24px] p-2 shadow-2xl">
+                  <DropdownMenuItem onClick={() => setProfileViewFilter('all')} className="rounded-xl py-3 gap-3">
+                    <Globe className="w-4 h-4 text-sky-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">All Places</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setProfileViewFilter('liked')} className="rounded-xl py-3 gap-3">
+                    <Heart className="w-4 h-4 text-red-500" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Liked</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setProfileViewFilter('saved')} className="rounded-xl py-3 gap-3">
+                    <Bookmark className="w-4 h-4 text-violet-500" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Saved</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setProfileViewFilter('visited')} className="rounded-xl py-3 gap-3">
+                    <MapPin className="w-4 h-4 text-emerald-500" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Visited</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Input
+                  placeholder="Find your next adventure..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full h-12 bg-slate-900/50 border-white/5 rounded-full pl-11 pr-4 text-white placeholder:text-slate-600 font-bold focus-visible:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className={cx("w-full flex gap-2 overflow-x-auto no-scrollbar bg-[#0a0f1e]", isMobile ? "px-3 py-3" : "px-4 py-4")}>
+              {EXPLORE_SEARCH_FILTERS.map(f => (
                 <button
-                  key={main.id}
-                  onClick={() => handleMainChange(main.id)}
-                  className={cx(
-                    "shrink-0 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
-                    activeMainId === main.id ? "bg-primary text-white border-primary shadow-lg shadow-primary/20" : "bg-white/5 text-slate-500 border-white/5 hover:text-white"
-                  )}
+                  key={f.id}
+                  onClick={() => startTabTransition(() => setExploreSearchFilter(f.id))}
+                  className={cx("shrink-0 rounded-full font-black uppercase border transition-all", isMobile ? "px-3.5 py-2 text-[9px] tracking-[0.08em]" : "px-5 py-2 text-[10px] tracking-widest", exploreSearchFilter === f.id ? "bg-white/10 border-white/20 text-white" : "bg-transparent text-slate-600 border-white/5")}
                 >
-                  {main.label}
+                  {f.label}
                 </button>
               ))}
             </div>
-          )}
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-all border border-white/5">
-              <Search className="w-5 h-5" />
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors outline-none border border-white/5">
-                  <LayoutGrid className="w-5 h-5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 bg-slate-900 border-white/10 rounded-[24px] p-2 shadow-2xl shadow-black">
-                <DropdownMenuLabel className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Navigation Layouts</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => setCurrentLayoutId('layout1')} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5">
-                  <LayoutGrid className="w-4 h-4 text-sky-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Default 7-Section</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCurrentLayoutId('layout2')} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5">
-                  <Lock className="w-4 h-4 text-emerald-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Private x Neutral x Public</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCurrentLayoutId('layout3')} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5">
-                  <GraduationCap className="w-4 h-4 text-violet-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Social x Education x Neutral</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-white/5" />
-                <DropdownMenuItem onClick={handleReset} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5 text-red-400">
-                  <RotateCcw className="w-4 h-4" /> <span className="font-bold text-xs uppercase tracking-widest">Reset Layout</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </motion.div>
+            <div className="grid grid-cols-2 gap-px px-0 pb-20 mt-2 border-t border-white/5">
+              {visiblePlaces.map((place) => {
+                if (!place || !place.id) return null;
+                const placeName = place.name?.trim() || 'Untitled Place';
+                const placeCountry = place.country?.trim() || 'Unknown';
+                const placeImage = place.image?.trim() || FALLBACK_PLACE_IMAGE;
 
-      <div className="max-w-7xl mx-auto px-4 pt-24 pb-32">
-        {/* Main Subsection Content (Independent Rendering) */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`${activeMainId}-${activeSubId}`}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3 }}
-            className="w-full"
-          >
-            {activeSubId === 'ranks' && (
-              <div className="space-y-12">
-                <AdventureRanks />
-                <div className="px-4 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-black text-white uppercase tracking-wider">Active Quests</h2>
-                    <Badge variant="outline" className="border-primary/30 text-primary text-[8px] font-black uppercase tracking-[0.2em] px-3">Auto-Reset: Daily</Badge>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
-                    {SYSTEM_CHALLENGES.slice(0, 24).map((c) => (
-                      <ChallengeCard key={c.id} challenge={c} onStart={() => toast.success(`Quest "${c.title}" started!`)} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeSubId === 'explore' && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {places.slice(0, 48).map((place) => (
-                  <motion.div key={place.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => setSelectedPlace(place)} className="group relative aspect-[4/5] overflow-hidden bg-slate-900 rounded-[24px] border border-white/5 cursor-pointer shadow-xl transition-all hover:scale-[1.02]">
-                    <img src={place.image || FALLBACK_PLACE_IMAGE} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={place.name} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                    <div className="absolute bottom-4 left-4 right-4"> 
-                      <p className="text-[8px] font-black text-primary uppercase tracking-[0.2em]">{place.country}</p>
-                      <h3 className="text-white font-black text-xs uppercase tracking-wider line-clamp-1">{place.name}</h3>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-
-            {(activeSubId === 'feed' || activeSubId === 'stories') && (
-              <div className="w-full max-w-[580px] mx-auto space-y-6">
-                {travelStories.map((story) => (
-                  <div key={story.id} className="bg-slate-900/40 border border-white/5 rounded-[32px] overflow-hidden shadow-xl">
-                    <div className="aspect-square relative w-full overflow-hidden">
-                      <img src={story.photos?.[0] || FALLBACK_PLACE_IMAGE} className="w-full h-full object-cover" alt={story.title} />
-                      <div className="absolute top-4 left-4"><Badge className="bg-primary border-0 font-black uppercase text-[10px]">{story.location}</Badge></div>
-                    </div>
-                    <div className="p-5 space-y-3">
-                       <h3 className="text-lg font-black text-white leading-tight uppercase tracking-wider">{story.title}</h3>
-                       <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed">{story.description}</p>
-                       <div className="flex items-center justify-between pt-2">
-                         <div className="flex items-center gap-4 text-slate-500"><Heart className="w-4 h-4" /><MessageCircle className="w-4 h-4" /><Bookmark className="w-4 h-4" /></div>
-                         <Button variant="ghost" className="bg-white/5 text-[10px] font-black uppercase tracking-widest px-5 h-9 rounded-xl" onClick={() => { setTravelReaderStoryId(story.id); setTravelReaderOpen(true); }}>Read Story</Button>
-                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {activeSubId === 'todo' && (
-              <div className="space-y-6 px-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-black text-white uppercase tracking-wider">To-do List</h2>
-                  <Button variant="outline" className="border-white/10 rounded-xl uppercase tracking-widest text-[10px] font-black h-9 px-4">Add Task</Button>
-                </div>
-                <div className="grid grid-cols-1 gap-4">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="p-6 rounded-[24px] bg-slate-900/40 border border-white/5 flex items-center gap-4">
-                      <div className="w-6 h-6 rounded-full border-2 border-slate-700 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-white font-black text-sm uppercase tracking-wider truncate">Adventure Task {i}</h3>
-                        <p className="text-[10px] text-slate-500 font-medium">Auto-reset in 12h</p>
+                return (
+                  <div
+                    key={place.id}
+                    onClick={() => setSelectedPlace(place)}
+                    className="group relative aspect-square overflow-hidden bg-slate-900 border-[0.5px] border-white/5 cursor-pointer shadow-2xl"
+                  >
+                    <img src={placeImage} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt={placeName} loading="lazy" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <div className="flex items-end justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[7px] font-black text-primary uppercase tracking-[0.2em] mb-0.5">{placeCountry}</p>
+                          <h3 className="text-white font-bold text-[10px] truncate leading-tight uppercase tracking-wider">{placeName}</h3>
+                        </div>
+                        <div className="flex items-center gap-2 pb-0.5">
+                          <button
+                            onClick={(e) => toggleSavePlaceGrid(e, place.id)}
+                            className={cx("transition-colors", savedPlaceIds.has(place.id) ? "text-violet-400" : "text-white/40 hover:text-violet-400")}
+                          >
+                            <Bookmark className={cx("w-3.5 h-3.5", savedPlaceIds.has(place.id) && "fill-current")} />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`${window.location.origin}/music-adventure?place=${place.id}`); toast.success('Link copied'); }} className="text-white/40 hover:text-sky-400 transition-colors">
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <Badge className="bg-primary/10 text-primary border-0 text-[8px] font-black uppercase">Low</Badge>
                     </div>
-                  ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'stories' && (
+          <div className="w-full animate-in fade-in duration-200 px-4 pt-4 pb-24">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-black text-white uppercase tracking-wider">Travel Stories</h2>
+              <button onClick={() => setShowStoryCreate(true)} className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20"><Plus className="w-6 h-6" /></button>
+            </div>
+
+            <div className="w-full flex gap-3 overflow-x-auto no-scrollbar px-1 py-4 mb-2 items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="w-12 h-12 rounded-full overflow-hidden border-2 border-primary/30 shrink-0">
+                    <Avatar className="w-full h-full rounded-full">
+                      <AvatarImage src={profile?.avatar_url || undefined} className="object-cover" />
+                      <AvatarFallback className="bg-slate-800 text-primary font-black uppercase">{profile?.name?.[0] || '?'}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 bg-slate-900 border-white/10 rounded-[24px] p-2 shadow-2xl">
+                  <DropdownMenuItem onClick={() => setTravelViewFilter('public')} className="rounded-xl py-3 gap-3">
+                    <Globe className="w-4 h-4 text-sky-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Public Posts</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTravelViewFilter('own')} className="rounded-xl py-3 gap-3">
+                    <UserCircle2 className="w-4 h-4 text-emerald-400" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Own Posts</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTravelViewFilter('liked')} className="rounded-xl py-3 gap-3">
+                    <Heart className="w-4 h-4 text-red-500" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Liked Posts</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTravelViewFilter('saved')} className="rounded-xl py-3 gap-3">
+                    <Bookmark className="w-4 h-4 text-violet-500" /> <span className="font-bold text-xs uppercase tracking-widest text-white">Saved Posts</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Input placeholder="Search travel stories..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-11 bg-slate-900/50 border-white/5 rounded-full pl-11 pr-4 text-white font-bold" />
+              </div>
+            </div>
+
+            {storiesLoading ? (
+              <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-48 w-full rounded-3xl bg-slate-900/50 animate-pulse" />)}</div>
+            ) : filteredTravelStories.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <span className="text-4xl mb-3">✈️</span>
+                <p className="text-sm font-black text-slate-400 uppercase tracking-wider">No stories yet</p>
+                <p className="text-xs text-slate-600 mt-1">Be the first to share your journey!</p>
+              </div>
+            ) : (
+              <div className="w-full px-2 md:px-0 md:max-w-[580px] md:mx-auto">
+                <div className="grid grid-cols-1 gap-6">
+                  {filteredTravelStories.map((story) => {
+                    if (!story || !story.id) return null;
+                    const authorName = story.profiles?.name || 'Explorer';
+                    const coverImg = story.cover_image || story.photos?.[0] || FALLBACK_PLACE_IMAGE;
+                    return (
+                      <div key={story.id} className="group relative bg-slate-900/40 border border-white/5 rounded-[24px] md:rounded-[32px] overflow-hidden">
+                        <div className="aspect-square relative w-full overflow-hidden">
+                          <img src={coverImg} className="w-full h-full object-cover grayscale-[0.2] group-hover:grayscale-0 transition-all duration-500 group-hover:scale-105" alt={story.title} />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+                          {story.location && (
+                            <div className="absolute top-3 left-3 md:top-4 md:left-4">
+                              <Badge className="bg-primary/85 backdrop-blur-md border-0 text-[9px] md:text-[11px] font-black uppercase tracking-widest px-2.5 py-0.5 shadow-lg"><MapPin className="w-2.5 h-2.5 mr-1" /> {story.location}</Badge>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-4 md:p-5 space-y-3">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar className="w-7 h-7 md:w-8 md:h-8 border border-white/10"><AvatarImage src={story.profiles?.avatar_url || undefined} /><AvatarFallback className="bg-slate-800 text-[9px] text-primary font-black">{authorName[0] || '?'}</AvatarFallback></Avatar>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] md:text-[11px] font-black text-white uppercase tracking-wider truncate">{authorName}</p>
+                              <p className="text-[8px] md:text-[9px] text-slate-500 font-bold uppercase tracking-widest">{formatStoryDate(story.created_at)}</p>
+                            </div>
+                          </div>
+                          <div>
+                            <h3 className="text-base md:text-lg font-black text-white leading-tight uppercase tracking-wider line-clamp-2">{story.title}</h3>
+                            <p className="text-xs md:text-sm text-slate-400 line-clamp-2 mt-1.5 font-medium leading-relaxed">{story.description || story.content}</p>
+                          </div>
+                          <div className="flex items-center justify-between pt-1">
+                            <div className="flex items-center gap-2.5">
+                              <button onClick={() => likeStory(story.id)} className={cx("transition-colors", story.is_liked ? "text-red-500" : "text-slate-500")}><Heart className={cx("w-4 h-4", story.is_liked && "fill-current")} /></button>
+                              <button onClick={() => { setSelectedPostId(story.id); setSelectedPostTitle(story.title); setSelectedCommentType('travel'); setCommentsOpen(true); }} className="text-slate-500"><MessageCircle className="w-4 h-4" /></button>
+                              <button onClick={() => saveStory(story.id)} className={cx("transition-colors", story.is_saved ? "text-violet-500" : "text-slate-500")}><Bookmark className={cx("w-4 h-4", story.is_saved && "fill-current")} /></button>
+                              <button onClick={async () => { const shareUrl = `${window.location.origin}/music-adventure?story=${story.id}`; if (navigator.share) await navigator.share({ title: story.title, url: shareUrl }); else { await navigator.clipboard.writeText(shareUrl); toast.success('Link copied'); } }} className="text-slate-500"><Share2 className="w-4 h-4" /></button>
+                            </div>
+                            <Button variant="ghost" className="h-8 md:h-9 rounded-lg bg-white/5 text-white text-[8px] md:text-[10px] font-black uppercase tracking-widest px-4 md:px-5" onClick={() => { setTravelReaderStoryId(story.id); setTravelReaderOpen(true); }}>Read</Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
+          </div>
+        )}
 
-            {activeSubId === 'notes' && <NotesSection />}
-            
-            {activeSubId === 'messages' && <MessagesSection />}
-            
-            {activeSubId === 'docs' && <DocsSection />}
-            
-            {activeSubId === 'profile' && <ProfileSection />}
+        {activeTab === 'ranking' && (
+          <div className="w-full">
+            <ErrorBoundary fallback={<div className="p-8 text-center text-slate-400">Failed to load ranks. Please refresh.</div>}>
+              <AdventureRanks
+                userPoints={userPoints}
+                challengeCount={totalChallengesDone}
+                placesCount={visitedPlaceIds.size}
+                storiesCount={travelStories.filter(s => s?.user_id === user?.id).length}
+              />
+            </ErrorBoundary>
+          </div>
+        )}
 
-            {/* General Sub-Section Placeholder */}
-            {!['ranks', 'explore', 'feed', 'stories', 'todo', 'notes', 'messages', 'docs', 'profile'].includes(activeSubId) && (
-               <div className="flex flex-col items-center justify-center py-20 px-4 text-center space-y-6 animate-in zoom-in-95 duration-500">
-                <div className="w-24 h-24 rounded-[40px] bg-white/5 flex items-center justify-center text-3xl border border-white/5 shadow-2xl">
-                  {(() => {
-                    const iconObj = currentSubsections.find(s => s.id === activeSubId);
-                    const IconComp = iconObj?.icon || Sparkles;
-                    return <IconComp className="w-10 h-10 text-primary" />;
-                  })()}
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-black text-white uppercase tracking-widest">{currentSubsections.find(s => s.id === activeSubId)?.label}</h2>
-                  <p className="text-slate-500 font-bold uppercase text-xs tracking-[0.2em] max-w-xs mx-auto leading-relaxed">Independent module: focused content for {activeSubId.replace('_', ' ')} logic.</p>
-                </div>
-                <Button variant="outline" className="border-white/10 rounded-2xl uppercase tracking-widest text-[10px] font-black h-12 px-8 shadow-xl" onClick={() => handleMainChange(currentLayout[0].id)}>Return to Dashboard</Button>
-              </div>
-            )}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Stable Bottom Navigation (Instagram Style Stability) */}
-      <motion.div
-        initial={{ y: 0 }}
-        animate={{ y: footerVisible ? 0 : 120 }}
-        className="fixed bottom-0 left-0 right-0 z-[100] w-full px-4 pb-8 pt-2 pointer-events-none lg:hidden"
-      >
-        <div className="max-w-md mx-auto pointer-events-auto">
-          <div className="bg-[#0a0f1e]/90 backdrop-blur-2xl border border-white/10 rounded-[36px] shadow-2xl shadow-black/80 px-4 py-3">
-            <Reorder.Group axis="x" values={currentSubsections} onReorder={handleReorder} className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
-              {currentSubsections.map(sub => (
-                <Reorder.Item key={sub.id} value={sub} className="shrink-0">
-                  <button
-                    onClick={() => handleSubChange(sub.id)}
-                    className={cx(
-                      "relative flex flex-col items-center justify-center w-14 h-14 rounded-[22px] transition-all duration-300 outline-none select-none active:scale-90",
-                      activeSubId === sub.id ? "text-primary bg-primary/10 border border-primary/20" : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-                    )}
-                  >
-                    <sub.icon className={cx("w-6 h-6", activeSubId === sub.id ? "fill-primary/5" : "")} />
-                    {activeSubId === sub.id && (
-                      <motion.div layoutId="activeSubIndicator" className="absolute -bottom-1 w-5 h-1 bg-primary rounded-full shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
-                    )}
-                  </button>
-                </Reorder.Item>
-              ))}
-              
-              {/* Optional: Layout/Quick Switch dots */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex flex-col items-center justify-center w-14 h-14 rounded-[22px] text-slate-500 hover:text-white transition-all outline-none hover:bg-white/5">
-                    <Dots4 className="w-6 h-6" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="top" className="w-64 bg-slate-900 border-white/10 rounded-[28px] p-2 mb-4 shadow-2xl shadow-black">
-                  <DropdownMenuLabel className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Categories</DropdownMenuLabel>
-                   {currentLayout.map(main => (
-                    <DropdownMenuItem key={main.id} onClick={() => handleMainChange(main.id)} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5">
-                      <main.icon className="w-4 h-4 text-primary" /> <span className="font-bold text-xs uppercase tracking-widest text-white">{main.label}</span>
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator className="bg-white/5" />
-                  <DropdownMenuItem onClick={handleReset} className="rounded-xl py-3 gap-3 outline-none focus:bg-white/5 text-red-400">
-                    <RotateCcw className="w-4 h-4" /> <span className="font-bold text-xs uppercase tracking-widest">Reset Layout</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </Reorder.Group>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Persistence Sheets */}
-      {selectedPlace && <PlaceDetailSheet place={selectedPlace} isVisited={false} isLoved={false} onOpenChange={(open) => !open && setSelectedPlace(null)} onToggleVisit={() => {}} onToggleLove={() => {}} onRate={() => {}} onOpenComments={() => {}} />}
-      <StoryCreationSheet open={showStoryCreate} onOpenChange={setShowStoryCreate} onPublish={() => { setShowStoryCreate(false); }} />
-      <StoryReader story={travelStories.find(s => s?.id === travelReaderStoryId) || null} open={travelReaderOpen} onOpenChange={setTravelReaderOpen} isLiked={false} onLike={() => {}} onComment={() => {}} onShare={() => {}} />
-      <CommentsDialog postId={""} postTitle={""} type={"adventure_place"} open={commentsOpen} onOpenChange={setCommentsOpen} />
+      {selectedPlace ? (
+        <PlaceDetailSheet
+          place={selectedPlace}
+          isVisited={visitedPlaceIds.has(selectedPlace.id)}
+          isLoved={lovedPlaceIds.has(selectedPlace.id)}
+          isSaved={savedPlaceIds.has(selectedPlace.id)}
+          onOpenChange={(open) => !open && setSelectedPlace(null)}
+          onToggleVisit={() => toggleVisitPlace(selectedPlace.id)}
+          onToggleLove={() => toggleLovePlace(selectedPlace.id)}
+          onToggleSave={() => {
+            if (!user?.id) { toast.error('Sign in to save places'); return; }
+            setSavedPlaceIds(prev => {
+              const next = new Set(prev);
+              if (next.has(selectedPlace.id)) { next.delete(selectedPlace.id); } else { next.add(selectedPlace.id); toast.success('Saved to collection ✨'); }
+              saveLocalSet(`adv_saved_places_${user.id}`, next);
+              return next;
+            });
+          }}
+          onRate={(rating) => console.log('Rated:', rating)}
+          onOpenComments={() => {}}
+        />
+      ) : null}
+      <StoryCreationSheet
+        open={showStoryCreate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowStoryCreate(false);
+            fetchTravelStories();
+          }
+        }}
+        onPublish={async (story) => {
+          if (!user?.id) { toast.error('Sign in to publish stories'); return; }
+          try {
+            const { error } = await supabase.from('travel_stories' as any).insert({
+              user_id: user.id,
+              title: story.title,
+              content: story.content,
+              description: story.content?.slice(0, 200) || null,
+              location: story.location || null,
+              cover_image: story.image || null,
+              photos: story.photos || [],
+              moods: story.moods || [],
+              tags: story.tags || [],
+              audience: story.audience || 'global',
+              is_deleted: false,
+            });
+            if (error) throw error;
+            toast.success('Story published! ✈️');
+            // Award 5 points for publishing a story
+            await awardPoints(5);
+            setShowStoryCreate(false);
+            fetchTravelStories();
+          } catch (e: any) {
+            console.error('Publish error:', e);
+            toast.error('Failed to publish story. Please try again.');
+          }
+        }}
+      />
+      {(() => {
+        const rawStory = travelStories.find(s => s?.id === travelReaderStoryId);
+        const mappedStory = rawStory ? {
+          id: rawStory.id,
+          title: rawStory.title || '',
+          content: rawStory.content || rawStory.description || '',
+          location: rawStory.location || '',
+          image: rawStory.cover_image || rawStory.photos?.[0] || undefined,
+          author: rawStory.profiles?.name || 'Explorer',
+          authorAvatar: rawStory.profiles?.name?.[0] || '?',
+          authorAvatarUrl: rawStory.profiles?.avatar_url || undefined,
+          createdAt: rawStory.created_at || new Date().toISOString(),
+          likes: rawStory.likes_count || 0,
+          comments: rawStory.comments_count || 0,
+          moods: rawStory.moods || [],
+          tags: rawStory.tags || [],
+          photos: rawStory.photos || [],
+        } : null;
+        return (
+          <StoryReader
+            story={mappedStory}
+            open={travelReaderOpen}
+            onOpenChange={setTravelReaderOpen}
+            isLiked={rawStory?.is_liked || false}
+            onLike={() => travelReaderStoryId && likeStory(travelReaderStoryId)}
+            onComment={() => {
+              if (travelReaderStoryId && rawStory) {
+                setSelectedPostId(travelReaderStoryId);
+                setSelectedPostTitle(rawStory.title || '');
+                setSelectedCommentType('travel');
+                setTravelReaderOpen(false);
+                setCommentsOpen(true);
+              }
+            }}
+            onShare={async () => {
+              if (!rawStory) return;
+              const url = `${window.location.origin}/music-adventure?story=${rawStory.id}`;
+              if (navigator.share) await navigator.share({ title: rawStory.title, url });
+              else { await navigator.clipboard.writeText(url); toast.success('Link copied'); }
+            }}
+          />
+        );
+      })()}
+      <CommentsDialog postId={selectedPostId || ''} postTitle={selectedPostTitle} type={selectedCommentType} open={commentsOpen} onOpenChange={setCommentsOpen} />
     </div>
   );
 }

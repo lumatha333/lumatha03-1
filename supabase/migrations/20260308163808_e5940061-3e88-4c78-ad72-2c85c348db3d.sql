@@ -1,0 +1,1 @@
+ALTER TABLE public.marketplace_listings ADD COLUMN IF NOT EXISTS extra_data jsonb DEFAULT '{}'::jsonb;

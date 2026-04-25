@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Notes</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0B0F1A;
+  --surface: #121826;
+  --surface-1: #1a2230;
+  --surface-2: #232c3e;
+  --primary: #7C6CFF;
+  --success: #22C55E;
+  --text: #E5E7EB;
+  --text-2: #9CA3AF;
+  --text-3: #6B7280;
+  --glass: rgba(18, 24, 38, 0.95);
+  --radius: 20px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 16px; }
+button, input, textarea { font-family: inherit; border: none; background: none; outline: none; color: inherit; }
+button { cursor: pointer; }
+textarea { resize: none; }
+
+#app { max-width: 480px; margin: 0 auto; height: 100dvh; position: relative; overflow: hidden; }
+
+/* ===== LIST VIEW ===== */
+.list-container { height: 100%; display: flex; flex-direction: column; padding: 0 20px; }
+.list-tabs { display: flex; gap: 8px; padding: 16px 0; }
+.tab { padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500; color: var(--text-2); background: var(--surface); transition: all 0.25s var(--ease); }
+.tab.active { background: var(--primary); color: #fff; }
+.search-wrap { margin-bottom: 16px; }
+.search-input { width: 100%; padding: 14px 18px; background: var(--surface); border-radius: var(--radius); font-size: 15px; color: var(--text); transition: all 0.25s; }
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,108,255,0.15); }
+.search-input::placeholder { color: var(--text-3); }
+.list-scroll { flex: 1; overflow-y: auto; padding-bottom: 100px; }
+.time-section { margin-top: 20px; }
+.time-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-3); margin-bottom: 12px; padding-left: 4px; }
+.notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.note-card { background: var(--surface); border-radius: var(--radius); padding: 16px; position: relative; cursor: pointer; transition: transform 0.25s var(--ease); }
+.note-card:active { transform: scale(0.95); }
+.note-card.pinned::after { content: ''; position: absolute; top: 12px; right: 12px; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+.note-title { font-size: 15px; font-weight: 600; line-height: 1.4; margin-bottom: 6px; overflow: hidden; display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.note-preview { font-size: 13px; color: var(--text-2); line-height: 1.5; overflow: hidden; display: -webkit-box; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.note-time { font-size: 11px; color: var(--text-3); margin-top: 10px; text-align: right; }
+.empty { text-align: center; padding: 100px 20px; color: var(--text-3); }
+.empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+.fab { position: fixed; bottom: 24px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), #9d8cff); color: #fff; font-size: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(124,108,255,0.4); z-index: 100; transition: transform 0.2s var(--ease); border: none; }
+.fab:active { transform: scale(0.92); }
+
+/* ===== EDITOR ===== */
+.editor { position: fixed; inset: 0; background: var(--bg); z-index: 200; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.35s var(--ease); }
+.editor.open { transform: translateY(0); }
+
+/* TOP BAR - Ultra Clean */
+.editor-top { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.top-btn { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-2); background: transparent; transition: all 0.2s var(--ease); border: none; }
+.top-btn:hover, .top-btn:active { background: var(--surface); color: var(--text); }
+.top-btn.save { color: var(--success); font-size: 22px; }
+.top-btn.save:hover, .top-btn.save:active { background: rgba(34,197,94,0.15); box-shadow: 0 0 20px rgba(34,197,94,0.3); }
+.top-actions { display: flex; align-items: center; gap: 6px; }
+
+/* BODY */
+.editor-body { flex: 1; overflow-y: auto; padding: 20px; }
+.editor-input-title { width: 100%; font-size: 28px; font-weight: 600; line-height: 1.3; margin-bottom: 18px; caret-color: var(--primary); background: none; border: none; padding: 0; }
+.editor-input-title::placeholder { color: var(--text-3); transition: opacity 0.3s; }
+.editor-input-title:focus { outline: none; color: var(--text); }
+.editor-input-title:focus::placeholder { opacity: 0.5; }
+
+/* Media Row - Smart Appear */
+.media-row { display: none; gap: 12px; overflow-x: auto; margin-bottom: 18px; padding-bottom: 4px; scroll-snap-type: x mandatory; }
+.media-row.show { display: flex; }
+.media-row::-webkit-scrollbar { height: 0; }
+.media-item { position: relative; flex-shrink: 0; width: 140px; height: 140px; border-radius: 16px; overflow: hidden; background: var(--surface); cursor: grab; scroll-snap-align: start; transition: transform 0.2s; }
+.media-item:active { cursor: grabbing; transform: scale(0.96); }
+.media-item img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.media-del { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; border: none; transition: all 0.15s; }
+.media-del:active { transform: scale(0.9); background: rgba(255,0,0,0.6); }
+
+/* Description */
+.editor-textarea { width: 100%; min-height: 300px; font-size: 16px; line-height: 1.6; color: var(--text-2); caret-color: var(--primary); background: none; border: none; padding: 0; }
+.editor-textarea:focus { outline: none; color: var(--text); }
+.editor-textarea::placeholder { color: var(--text-3); }
+
+/* Auto Save */
+.auto-save { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 500; color: var(--text-3); opacity: 0; transition: all 0.3s; z-index: 250; background: var(--surface); padding: 6px 14px; border-radius: 20px; pointer-events: none; }
+.auto-save.show { opacity: 1; }
+
+/* ===== BOTTOM TOOLBAR - Glassmorphism ===== */
+.bottom-toolbar { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; z-index: 300; padding: 8px; background: var(--glass); backdrop-filter: blur(20px) saturate(180%); border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+
+.toolbar-btn { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-2); background: transparent; transition: all 0.2s var(--ease); border: none; }
+.toolbar-btn:active { transform: scale(0.95); background: rgba(255,255,255,0.05); color: var(--text); }
+.toolbar-btn.active { background: rgba(124,108,255,0.2); color: var(--primary); }
+
+.nav-pill { display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: rgba(255,255,255,0.03); border-radius: 24px; }
+.nav-btn { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--text-2); background: transparent; transition: all 0.2s; border: none; }
+.nav-btn:hover, .nav-btn:active { background: rgba(255,255,255,0.08); color: var(--text); }
+.nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.nav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 8px var(--primary); transition: all 0.3s; }
+
+/* ===== PANELS ===== */
+.panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(12px); z-index: 400; opacity: 0; pointer-events: none; transition: opacity 0.3s var(--ease); }
+.panel-overlay.show { opacity: 1; pointer-events: all; }
+
+.panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: var(--radius) var(--radius) 0 0; padding: 24px 20px 48px; z-index: 500; transform: translateY(100%); transition: transform 0.3s var(--ease); max-height: 85vh; }
+.panel.show { transform: translateY(0); }
+
+.panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.panel-title { font-size: 18px; font-weight: 600; }
+.panel-close { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--text-2); background: transparent; transition: all 0.15s; border: none; }
+.panel-close:active { background: var(--surface-1); }
+
+/* Add Panel */
+.add-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.add-item { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; background: var(--surface-1); border-radius: var(--radius); transition: all 0.2s; cursor: pointer; }
+.add-item:active { background: var(--surface-2); transform: scale(0.96); }
+.add-item span { font-size: 28px; }
+.add-item label { font-size: 13px; color: var(--text-2); font-weight: 500; }
+
+/* Color Panel - Horizontal Sliding */
+.color-slider { display: flex; gap: 20px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 10px; }
+.color-slider::-webkit-scrollbar { height: 0; }
+.color-section { flex-shrink: 0; width: 100%; scroll-snap-align: start; }
+.color-label { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.swatches { display: flex; gap: 12px; flex-wrap: wrap; }
+.swatch { width: 44px; height: 44px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: all 0.15s; position: relative; }
+.swatch:active { transform: scale(1.1); }
+.swatch.active { border-color: var(--text); box-shadow: 0 0 0 3px var(--primary); }
+.swatch.check::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-weight: 700; }
+
+/* Text Format Panel */
+.format-grid { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.format-btn { padding: 14px 18px; background: var(--surface-1); border-radius: 12px; font-size: 16px; color: var(--text-2); font-weight: 500; transition: all 0.15s; cursor: pointer; border: none; min-width: 48px; }
+.format-btn:active { background: var(--surface-2); color: var(--text); }
+.format-btn.active { background: rgba(124,108,255,0.2); color: var(--primary); }
+
+/* Menu Items */
+.menu-list { display: flex; flex-direction: column; gap: 4px; }
+.menu-item { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 12px; font-size: 15px; color: var(--text-2); transition: all 0.15s; cursor: pointer; }
+.menu-item:active { background: var(--surface-1); color: var(--text); }
+.menu-item.danger { color: #ef4444; }
+.menu-item span { font-size: 20px; width: 24px; text-align: center; }
+.menu-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 8px 0; }
+
+/* ===== DRAWING ===== */
+.draw-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 600; display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.35s var(--ease); }
+.draw-overlay.show { transform: translateX(0); }
+.draw-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.draw-title { font-size: 17px; font-weight: 600; }
+.draw-actions { display: flex; gap: 8px; }
+.draw-btn { padding: 10px 16px; border-radius: 10px; font-size: 14px; color: var(--text-2); background: var(--surface); transition: all 0.15s; border: none; }
+.draw-btn:active { background: var(--surface-1); }
+.draw-btn.primary { color: var(--primary); font-weight: 600; }
+.draw-canvas { flex: 1; background: #0a0e17; touch-action: none; cursor: crosshair; display: block; }
+.draw-toolbar { display: flex; align-items: center; gap: 8px; padding: 16px 20px 40px; border-top: 1px solid rgba(255,255,255,0.03); }
+.draw-tool { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--text-2); background: var(--surface); border: none; transition: all 0.15s; }
+.draw-tool:active { background: var(--surface-1); }
+.draw-tool.active { background: rgba(124,108,255,0.2); color: var(--primary); }
+.brush-slider { flex: 1; max-width: 150px; accent-color: var(--primary); }
+
+/* ===== TOAST ===== */
+.toast { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); color: var(--text); padding: 14px 24px; border-radius: 30px; font-size: 14px; font-weight: 500; border: 1px solid rgba(255,255,255,0.06); opacity: 0; pointer-events: none; transition: all 0.3s var(--ease); z-index: 700; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Desktop adjustments */
+@media (min-width: 768px) {
+  .bottom-toolbar { left: auto; right: 24px; transform: none; }
+  .panel { left: auto; right: 24px; bottom: 100px; width: 320px; border-radius: var(--radius); transform: translateY(20px) scale(0.95); opacity: 0; }
+  .panel.show { transform: translateY(0) scale(1); opacity: 1; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- LIST VIEW -->
+  <div class="list-container">
+    <div class="list-tabs">
+      <button class="tab active" data-filter="all">All</button>
+      <button class="tab" data-filter="pinned">Pinned</button>
+      <button class="tab" data-filter="saved">Saved</button>
+    </div>
+    <div class="search-wrap">
+      <input type="text" class="search-input" id="searchIn" placeholder="Search notes..." autocomplete="off">
+    </div>
+    <div class="list-scroll" id="listScroll"></div>
+  </div>
+  <button class="fab" id="fab">+</button>
+
+  <!-- EDITOR -->
+  <div class="editor" id="editor">
+    <!-- CLEAN TOP BAR -->
+    <div class="editor-top">
+      <button class="top-btn" id="backBtn">←</button>
+      <div class="top-actions">
+        <button class="top-btn save" id="saveBtn">✓</button>
+        <button class="top-btn" id="topMenuBtn">⋯</button>
+      </div>
+    </div>
+
+    <div class="editor-body">
+      <input type="text" class="editor-input-title" id="titleIn" placeholder="Title" autocomplete="off">
+      <div class="media-row" id="mediaRow"></div>
+      <textarea class="editor-textarea" id="bodyIn" placeholder="Start writing your notes..."></textarea>
+    </div>
+  </div>
+
+  <!-- AUTO SAVE INDICATOR -->
+  <div class="auto-save" id="autoSave">Saved</div>
+
+  <!-- BOTTOM TOOLBAR - Floating Center (Mobile) / Right (Desktop) -->
+  <div class="bottom-toolbar" id="bottomToolbar">
+    <button class="toolbar-btn" id="btnAdd">+</button>
+    <button class="toolbar-btn" id="btnColor">🎨</button>
+    <button class="toolbar-btn" id="btnFormat">Aa</button>
+    <div class="nav-pill" id="navPill">
+      <button class="nav-btn" id="btnPrev">◀︎</button>
+      <div class="nav-dot" id="navDot"></div>
+      <button class="nav-btn" id="btnNext">▶︎</button>
+    </div>
+  </div>
+
+  <!-- PANEL OVERLAY -->
+  <div class="panel-overlay" id="overlay"></div>
+
+  <!-- ADD PANEL -->
+  <div class="panel" id="addPanel">
+    <div class="panel-header">
+      <span class="panel-title">Add</span>
+      <button class="panel-close" onclick="closePanels()">✕</button>
+    </div>
+    <div class="add-grid">
+      <div class="add-item" onclick="addImage()">
+        <span>🖼️</span>
+        <label>Image</label>
+      </div>
+      <div class="add-item" onclick="openDrawing()">
+        <span>✏️</span>
+        <label>Drawing</label>
+      </div>
+      <div class="add-item" onclick="addCheckbox()">
+        <span>☑️</span>
+        <label>Checkbox</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLOR PANEL - Horizontal Sliding -->
+  <div class="panel" id="colorPanel">
+    <div class="panel-header">
+      <span class="panel-title">Colors</span>
+      <button class="panel-close" onclick="closePanels()">✕</button>
+    </div>
+    <div class="color-slider">
+      <div class="color-section">
+        <div class="color-label">Text Color</div>
+        <div class="swatches">
+          <div class="swatch active check" style="background:var(--text)" data-tc=""></div>
+          <div class="swatch" style="background:#fff" data-tc="#fff"></div>
+          <div class="swatch" style="background:#ef4444" data-tc="#ef4444"></div>
+          <div class="swatch" style="background:#f59e0b" data-tc="#f59e0b"></div>
+          <div class="swatch" style="background:#22c55e" data-tc="#22c55e"></div>
+          <div class="swatch" style="background:var(--primary)" data-tc="var(--primary)"></div>
+          <div class="swatch" style="background:#ec4899" data-tc="#ec4899"></div>
+          <div class="swatch" style="background:#3b82f6" data-tc="#3b82f6"></div>
+        </div>
+      </div>
+      <div class="color-section">
+        <div class="color-label">Background</div>
+        <div class="swatches">
+          <div class="swatch active check" style="background:var(--surface)" data-bc=""></div>
+          <div class="swatch" style="background:#1e293b" data-bc="#1e293b"></div>
+          <div class="swatch" style="background:#312e81" data-bc="#312e81"></div>
+          <div class="swatch" style="background:#14532d" data-bc="#14532d"></div>
+          <div class="swatch" style="background:#7c2d12" data-bc="#7c2d12"></div>
+          <div class="swatch" style="background:#581c87" data-bc="#581c87"></div>
+          <div class="swatch" style="background:#713f12" data-bc="#713f12"></div>
+          <div class="swatch" style="background:#134e4a" data-bc="#134e4a"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORMAT PANEL -->
+  <div class="panel" id="formatPanel">
+    <div class="panel-header">
+      <span class="panel-title">Typography</span>
+      <button class="panel-close" onclick="closePanels()">✕</button>
+    </div>
+    <div class="format-grid">
+      <button class="format-btn" onclick="format('smaller')">A-</button>
+      <button class="format-btn" onclick="format('h1')">H1</button>
+      <button class="format-btn" onclick="format('h2')">H2</button>
+      <button class="format-btn" onclick="format('clear')">Aa</button>
+      <button class="format-btn" onclick="format('bold')"><b>B</b></button>
+      <button class="format-btn" onclick="format('italic')"><i>I</i></button>
+      <button class="format-btn" onclick="format('underline')"><u>U</u></button>
+    </div>
+  </div>
+
+  <!-- UNIFIED MENU: Pin, Archive, Reminder, Delete, Copy, Share, Timestamp -->
+  <div class="panel" id="menuPanel">
+    <div class="panel-header">
+      <span class="panel-title">Actions</span>
+      <button class="panel-close" onclick="closePanels()">✕</button>
+    </div>
+    <div class="menu-list">
+      <div class="menu-item" onclick="pinNote()"><span>📌</span> Pin</div>
+      <div class="menu-item" onclick="archiveNote()"><span>📦</span> Archive</div>
+      <div class="menu-item" onclick="setReminder()"><span>🔔</span> Reminder</div>
+      <div class="menu-divider"></div>
+      <div class="menu-item danger" onclick="deleteNote()"><span>🗑️</span> Delete</div>
+      <div class="menu-item" onclick="copyNote()"><span>�</span> Make a copy</div>
+      <div class="menu-item" onclick="shareNote()"><span>�</span> Share</div>
+      <div class="menu-divider"></div>
+      <div class="menu-item" style="color:var(--text-3); font-size:13px; cursor:default;"><span>🕐</span> <span id="menuTime">--</span></div>
+    </div>
+  </div>
+
+  <!-- DRAWING PANEL -->
+  <div class="draw-overlay" id="drawOverlay">
+    <div class="draw-header">
+      <button class="draw-btn" onclick="closeDrawing()">← Back</button>
+      <span class="draw-title">Drawing</span>
+      <div class="draw-actions">
+        <button class="draw-btn" onclick="undoDraw()">Undo</button>
+        <button class="draw-btn primary" onclick="saveDraw()">Done</button>
+      </div>
+    </div>
+    <canvas class="draw-canvas" id="drawCanvas"></canvas>
+    <div class="draw-toolbar">
+      <button class="draw-tool active" data-tool="pen">✏️</button>
+      <button class="draw-tool" data-tool="marker">🖌️</button>
+      <button class="draw-tool" data-tool="eraser">🧽</button>
+      <input type="range" class="brush-slider" id="brushSize" min="2" max="20" value="4">
+      <button class="draw-tool" onclick="clearDraw()">🗑️</button>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let notes = JSON.parse(localStorage.getItem('notes_pro_v3') || '[]');
+let cur = null, curIdx = -1, filter = 'all';
+let drawTool = 'pen', drawing = false, dHist = [], lx, ly;
+let autoSaveTimer = null;
+
+init();
+
+function init() {
+  renderList();
+  initCanvas();
+  bindEvents();
+}
+
+function haptic() { if (navigator.vibrate) navigator.vibrate(5); }
+
+function bindEvents() {
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => { haptic(); document.querySelectorAll('.tab').forEach(x => x.classList.remove('active')); t.classList.add('active'); filter = t.dataset.filter; renderList(); };
+  });
+
+  $('searchIn').oninput = e => renderList(e.target.value);
+  $('fab').onclick = () => { haptic(); cur = newNote(); curIdx = -1; openEditor(); };
+  
+  $('backBtn').onclick = () => { haptic(); save(); closeEditor(); };
+  $('saveBtn').onclick = () => { haptic(); save(); toast('Saved'); };
+  $('topMenuBtn').onclick = () => { 
+    haptic(); 
+    $('menuTime').textContent = cur ? new Date(cur.updated).toLocaleString() : '--';
+    openPanel('menuPanel'); 
+  };
+
+  // Bottom toolbar
+  $('btnAdd').onclick = () => { haptic(); openPanel('addPanel'); };
+  $('btnColor').onclick = () => { haptic(); openPanel('colorPanel'); };
+  $('btnFormat').onclick = () => { haptic(); openPanel('formatPanel'); };
+  $('btnPrev').onclick = () => { haptic(); navigate(-1); };
+  $('btnNext').onclick = () => { haptic(); navigate(1); };
+
+  $('overlay').onclick = closePanels;
+
+  // Color swatches
+  document.querySelectorAll('.color-section:first-child .swatch').forEach(s => {
+    s.onclick = () => { haptic(); setSwatch(s.parentElement, s); if (cur) cur.txtCol = s.dataset.tc; triggerAutoSave(); };
+  });
+  document.querySelectorAll('.color-section:last-child .swatch').forEach(s => {
+    s.onclick = () => { haptic(); setSwatch(s.parentElement, s); if (cur) cur.bgCol = s.dataset.bc; triggerAutoSave(); };
+  });
+
+  // Drawing tools
+  document.querySelectorAll('[data-tool]').forEach(t => {
+    t.onclick = () => { haptic(); document.querySelectorAll('[data-tool]').forEach(x => x.classList.remove('active')); t.classList.add('active'); drawTool = t.dataset.tool; };
+  });
+
+  // Auto-expand textarea
+  $('bodyIn').oninput = function() { this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'; triggerAutoSave(); };
+  $('titleIn').oninput = () => triggerAutoSave();
+
+  // Swipe navigation
+  let sx = 0;
+  const eb = $('editor');
+  eb.addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, {passive: true});
+  eb.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx;
+    if (dx > 100) { haptic(); navigate(-1); }
+    else if (dx < -100) { haptic(); navigate(1); }
+  }, {passive: true});
+}
+
+function newNote() {
+  return { id: Date.now(), title: '', body: '', txtCol: '', bgCol: '', media: [], pinned: false, archived: false, updated: Date.now() };
+}
+
+function renderList(query = '') {
+  const c = $('listScroll');
+  let n = notes.filter(x => !x.archived);
+  if (filter === 'pinned') n = n.filter(x => x.pinned);
+  if (query) n = n.filter(x => (x.title + x.body).toLowerCase().includes(query.toLowerCase()));
+
+  if (!n.length) { c.innerHTML = '<div class="empty"><div class="empty-icon">📝</div>No notes yet.<br>Tap + to create.</div>'; return; }
+
+  const now = Date.now();
+  const today = n.filter(x => now - x.updated < 86400000);
+  const week = n.filter(x => now - x.updated >= 86400000 && now - x.updated < 604800000);
+  const earlier = n.filter(x => now - x.updated >= 604800000);
+
+  let html = '';
+  if (today.length) html += section('Today', today);
+  if (week.length) html += section('This Week', week);
+  if (earlier.length) html += section('Earlier', earlier);
+
+  c.innerHTML = html;
+  c.querySelectorAll('.note-card').forEach(el => { el.onclick = () => { haptic(); openNote(parseInt(el.dataset.id)); }; });
+}
+
+function section(label, items) {
+  return `<div class="time-section"><div class="time-label">${label}</div><div class="notes-grid">${items.map(card).join('')}</div></div>`;
+}
+
+function card(n) {
+  const pin = n.pinned ? ' pinned' : '';
+  const t = n.title ? `<div class="note-title" style="${n.txtCol ? 'color:'+n.txtCol : ''}">${esc(n.title)}</div>` : '';
+  const p = n.body ? `<div class="note-preview">${esc(n.body.slice(0, 80))}</div>` : '';
+  const time = new Date(n.updated).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  return `<div class="note-card${pin}" data-id="${n.id}" style="${n.bgCol ? 'background:'+n.bgCol : ''}">${t}${p}<div class="note-time">${time}</div></div>`;
+}
+
+function esc(s) { return (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function openNote(id) {
+  const idx = notes.findIndex(x => x.id === id);
+  if (idx >= 0) { curIdx = idx; cur = notes[idx]; }
+  else { cur = newNote(); curIdx = -1; }
+  openEditor();
+}
+
+function openEditor() {
+  if (!cur) return;
+  $('titleIn').value = cur.title || '';
+  $('bodyIn').value = cur.body || '';
+  $('bodyIn').style.height = 'auto';
+  
+  const mr = $('mediaRow');
+  mr.innerHTML = '';
+  (cur.media || []).forEach((m, i) => {
+    const d = document.createElement('div');
+    d.className = 'media-item';
+    d.innerHTML = `<img src="${m}"><span class="media-del" onclick="removeMedia(${i})">✕</span>`;
+    mr.appendChild(d);
+  });
+  if (cur.media?.length) mr.classList.add('show'); else mr.classList.remove('show');
+
+  updateNav();
+  $('editor').classList.add('open');
+  $('bottomToolbar').style.display = 'flex';
+  $('fab').style.display = 'none';
+  
+  setTimeout(() => $('titleIn').focus(), 100);
+}
+
+function closeEditor() {
+  $('editor').classList.remove('open');
+  $('bottomToolbar').style.display = 'none';
+  $('fab').style.display = 'flex';
+  renderList();
+}
+
+function save() {
+  if (!cur) return;
+  cur.title = $('titleIn').value;
+  cur.body = $('bodyIn').value;
+  cur.updated = Date.now();
+  if (curIdx < 0) { notes.unshift(cur); curIdx = 0; } else { notes[curIdx] = cur; }
+  localStorage.setItem('notes_pro_v3', JSON.stringify(notes));
+}
+
+function triggerAutoSave() {
+  const ind = $('autoSave');
+  ind.classList.add('show');
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => { save(); ind.classList.remove('show'); }, 1000);
+}
+
+function openPanel(id) { $('overlay').classList.add('show'); $(id).classList.add('show'); }
+function closePanels() { haptic(); $('overlay').classList.remove('show'); document.querySelectorAll('.panel').forEach(p => p.classList.remove('show')); }
+
+function setSwatch(container, el) {
+  container.querySelectorAll('.swatch').forEach(s => s.classList.remove('active', 'check'));
+  el.classList.add('active', 'check');
+}
+
+function updateNav() {
+  const prev = $('btnPrev'), next = $('btnNext'), dot = $('navDot');
+  prev.disabled = curIdx <= 0;
+  next.disabled = curIdx >= notes.length - 1;
+  dot.style.opacity = curIdx >= 0 && notes.length > 0 ? '1' : '0.3';
+}
+
+function navigate(dir) {
+  const newIdx = curIdx + dir;
+  if (newIdx < 0 || newIdx >= notes.length) return;
+  save();
+  curIdx = newIdx;
+  cur = notes[curIdx];
+  openEditor();
+}
+
+function pinNote() { haptic(); if (cur) { cur.pinned = !cur.pinned; toast(cur.pinned ? 'Pinned' : 'Unpinned'); triggerAutoSave(); closePanels(); } }
+function archiveNote() { haptic(); if (cur) { cur.archived = true; toast('Archived'); save(); closeEditor(); closePanels(); } }
+function setReminder() { haptic(); toast('Reminder set'); closePanels(); }
+function deleteNote() { haptic(); if (curIdx >= 0) { notes.splice(curIdx, 1); localStorage.setItem('notes_pro_v3', JSON.stringify(notes)); closeEditor(); toast('Deleted'); } closePanels(); }
+function copyNote() { haptic(); if (!cur) return; const copy = {...cur, id: Date.now(), title: (cur.title || 'Untitled') + ' (Copy)', updated: Date.now()}; notes.splice(curIdx + 1, 0, copy); localStorage.setItem('notes_pro_v3', JSON.stringify(notes)); curIdx++; cur = copy; openEditor(); toast('Copied'); closePanels(); }
+function shareNote() { haptic(); const text = (cur?.title || '') + '\n\n' + (cur?.body || ''); if (navigator.share) { navigator.share({title: cur?.title, text: text}); } else { navigator.clipboard.writeText(text); toast('Copied to clipboard'); } closePanels(); }
+function removeMedia(i) { haptic(); cur?.media?.splice(i, 1); openEditor(); triggerAutoSave(); }
+
+function format(cmd) {
+  haptic();
+  const ta = $('bodyIn');
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const sel = ta.value.slice(start, end);
+  let insert = '';
+  
+  switch(cmd) {
+    case 'h1': insert = '# ' + sel; break;
+    case 'h2': insert = '## ' + sel; break;
+    case 'smaller': ta.style.fontSize = '14px'; toast('Font size: Small'); closePanels(); return;
+    case 'bold': insert = '**' + sel + '**'; break;
+    case 'italic': insert = '*' + sel + '*'; break;
+    case 'underline': insert = '__' + sel + '__'; break;
+    case 'clear': ta.value = ta.value.replace(/[#*_~]/g, ''); toast('Formatting cleared'); triggerAutoSave(); closePanels(); return;
+  }
+  
+  ta.value = ta.value.slice(0, start) + insert + ta.value.slice(end);
+  ta.focus();
+  ta.setSelectionRange(start + insert.length, start + insert.length);
+  triggerAutoSave();
+  closePanels();
+}
+
+function addCheckbox() {
+  haptic();
+  const ta = $('bodyIn');
+  const start = ta.selectionStart;
+  ta.value = ta.value.slice(0, start) + '\n☐ ' + ta.value.slice(start);
+  ta.focus();
+  ta.setSelectionRange(start + 3, start + 3);
+  triggerAutoSave();
+  closePanels();
+}
+
+function addImage() {
+  haptic();
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { 
+      if (!cur) cur = newNote(); 
+      if (!cur.media) cur.media = []; 
+      cur.media.push(ev.target.result); 
+      openEditor(); 
+      closePanels(); 
+      triggerAutoSave(); 
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function initCanvas() {
+  const cv = $('drawCanvas');
+  const resize = () => { 
+    const r = cv.parentElement.getBoundingClientRect(); 
+    cv.width = r.width; 
+    cv.height = r.height; 
+  };
+  resize();
+  window.addEventListener('resize', resize);
+  
+  cv.onpointerdown = e => { drawing = true; const p = pos(e); lx = p.x; ly = p.y; saveHist(); };
+  cv.onpointermove = e => {
+    if (!drawing) return;
+    const p = pos(e), ctx = cv.getContext('2d');
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(p.x, p.y);
+    const size = parseInt($('brushSize').value);
+    if (drawTool === 'eraser') { ctx.strokeStyle = '#0a0e17'; ctx.lineWidth = size * 3; }
+    else if (drawTool === 'marker') { ctx.strokeStyle = 'rgba(124,108,255,0.4)'; ctx.lineWidth = size * 2; }
+    else { ctx.strokeStyle = '#7C6CFF'; ctx.lineWidth = size; }
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+    lx = p.x; ly = p.y;
+  };
+  cv.onpointerup = cv.onpointerleave = () => { if (drawing) { drawing = false; saveHist(); } };
+}
+
+function pos(e) { const r = $('drawCanvas').getBoundingClientRect(); return {x: e.clientX - r.left, y: e.clientY - r.top}; }
+function saveHist() { const cv = $('drawCanvas'); if (dHist.length > 20) dHist.shift(); dHist.push(cv.toDataURL()); }
+function undoDraw() { haptic(); const cv = $('drawCanvas'), ctx = cv.getContext('2d'); dHist.pop(); if (dHist.length) { const img = new Image(); img.src = dHist[dHist.length - 1]; img.onload = () => { ctx.clearRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0); }; } else { ctx.clearRect(0, 0, cv.width, cv.height); } }
+function clearDraw() { haptic(); const cv = $('drawCanvas'), ctx = cv.getContext('2d'); ctx.clearRect(0, 0, cv.width, cv.height); dHist = []; saveHist(); }
+function openDrawing() { haptic(); clearDraw(); $('drawOverlay').classList.add('show'); closePanels(); }
+function closeDrawing() { $('drawOverlay').classList.remove('show'); }
+function saveDraw() { haptic(); const data = $('drawCanvas').toDataURL(); if (!cur) cur = newNote(); if (!cur.media) cur.media = []; cur.media.push(data); closeDrawing(); openEditor(); toast('Drawing saved'); triggerAutoSave(); }
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
+</script>
+</body>
+</html>

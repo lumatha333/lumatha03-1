@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -8,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Search, Send, Link2, Copy, MessageCircle } from 'lucide-react';
+import { Search, Send, Copy, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ShareDialogProps {
@@ -27,7 +26,6 @@ interface Friend {
 
 export function ShareDialog({ open, onOpenChange, postId, postTitle, postContent }: ShareDialogProps) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [friends, setFriends] = useState<Friend[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
@@ -96,25 +94,38 @@ export function ShareDialog({ open, onOpenChange, postId, postTitle, postContent
     setSending(true);
 
     try {
+      const selectedIds = Array.from(selectedFriends);
       const shareMessage = `📤 Shared a post: "${postTitle || 'Post'}"`;
-      const postLink = `${window.location.origin}/?post=${postId}`;
+      const postLink = `${window.location.origin}/public?post=${postId}`;
+      const previewText = postContent?.trim()
+        ? `"${postContent.slice(0, 100)}${postContent.length > 100 ? '...' : ''}"`
+        : '';
+      const fullContent = [shareMessage, previewText, `🔗 ${postLink}`]
+        .filter(Boolean)
+        .join('\n\n');
 
-      // Send message to each selected friend
-      for (const friendId of selectedFriends) {
-        await supabase.from('messages').insert({
+      const { error: messageError } = await supabase.from('messages').insert(
+        selectedIds.map((friendId) => ({
           sender_id: user.id,
           receiver_id: friendId,
-          content: `${shareMessage}\n\n"${postContent?.slice(0, 100) || ''}..."\n\n🔗 ${postLink}`
-        });
+          content: fullContent,
+        }))
+      );
 
-        // Create notification
-        await supabase.from('notifications').insert({
+      if (messageError) throw messageError;
+
+      const { error: notificationError } = await supabase.from('notifications').insert(
+        selectedIds.map((friendId) => ({
           user_id: friendId,
           type: 'share',
           from_user_id: user.id,
-          content: `shared a post with you`,
-          link: `/chat/${user.id}`
-        });
+          content: 'shared a post with you',
+          link: `/chat/${user.id}`,
+        }))
+      );
+
+      if (notificationError) {
+        console.warn('Share notifications failed:', notificationError);
       }
 
       toast.success(`Sent to ${selectedFriends.size} ${selectedFriends.size === 1 ? 'friend' : 'friends'}`);
@@ -128,7 +139,7 @@ export function ShareDialog({ open, onOpenChange, postId, postTitle, postContent
   };
 
   const copyLink = () => {
-    const postLink = `${window.location.origin}/?post=${postId}`;
+    const postLink = `${window.location.origin}/public?post=${postId}`;
     navigator.clipboard.writeText(postLink);
     toast.success('Link copied!');
   };
@@ -141,6 +152,9 @@ export function ShareDialog({ open, onOpenChange, postId, postTitle, postContent
             <MessageCircle className="w-4 h-4" />
             Share with friends
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Search friends and share this post through direct messages.
+          </DialogDescription>
         </DialogHeader>
 
         {/* Search */}

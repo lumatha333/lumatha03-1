@@ -6,6 +6,25 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export interface TravelStory {
+  id: string
+  user_id: string
+  title: string
+  description: string
+  location: string
+  latitude: number | null
+  longitude: number | null
+  photos: string[]
+  is_saved: boolean
+  created_at: string
+  updated_at: string
+  profiles: {
+    username: string
+    avatar_url: string
+    username: string
+  }
+}
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -14,6 +33,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      arcade_progress: {
+        Row: {
+          achievements: string[]
+          created_at: string
+          favorite_game: string | null
+          games_played: Json
+          high_scores: Json
+          id: string
+          level: number
+          total_playtime: number
+          unlocked_themes: string[]
+          updated_at: string
+          user_id: string
+          xp: number
+        }
+        Insert: {
+          achievements?: string[]
+          created_at?: string
+          favorite_game?: string | null
+          games_played?: Json
+          high_scores?: Json
+          id?: string
+          level?: number
+          total_playtime?: number
+          unlocked_themes?: string[]
+          updated_at?: string
+          user_id: string
+          xp?: number
+        }
+        Update: {
+          achievements?: string[]
+          created_at?: string
+          favorite_game?: string | null
+          games_played?: Json
+          high_scores?: Json
+          id?: string
+          level?: number
+          total_playtime?: number
+          unlocked_themes?: string[]
+          updated_at?: string
+          user_id?: string
+          xp?: number
+        }
+        Relationships: []
+      }
       blocks: {
         Row: {
           blocked_id: string
@@ -348,6 +412,76 @@ export type Database = {
           },
         ]
       }
+      diary_drafts: {
+        Row: {
+          background: string
+          canvas_data: Json
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          background?: string
+          canvas_data?: Json
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          background?: string
+          canvas_data?: Json
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_drafts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_posts: {
+        Row: {
+          audience: string
+          background: string
+          canvas_data: Json
+          created_at: string
+          expires_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          audience?: string
+          background?: string
+          canvas_data?: Json
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          audience?: string
+          background?: string
+          canvas_data?: Json
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_posts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discover_visits: {
         Row: {
           id: string
@@ -418,6 +552,8 @@ export type Database = {
       }
       documents: {
         Row: {
+          category: string | null
+          cover_url: string | null
           created_at: string
           description: string | null
           file_name: string
@@ -430,6 +566,8 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          category?: string | null
+          cover_url?: string | null
           created_at?: string
           description?: string | null
           file_name: string
@@ -442,6 +580,8 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          category?: string | null
+          cover_url?: string | null
           created_at?: string
           description?: string | null
           file_name?: string
@@ -622,14 +762,18 @@ export type Database = {
         Row: {
           category: string | null
           comments_count: number | null
+          condition: string | null
           created_at: string
           currency: string | null
           description: string | null
+          extra_data: Json | null
           id: string
           likes_count: number | null
           location: string | null
           media_types: string[] | null
           media_urls: string[] | null
+          negotiable: boolean | null
+          payment_methods: string[] | null
           price: number | null
           qualification: string | null
           salary_range: string | null
@@ -643,14 +787,18 @@ export type Database = {
         Insert: {
           category?: string | null
           comments_count?: number | null
+          condition?: string | null
           created_at?: string
           currency?: string | null
           description?: string | null
+          extra_data?: Json | null
           id?: string
           likes_count?: number | null
           location?: string | null
           media_types?: string[] | null
           media_urls?: string[] | null
+          negotiable?: boolean | null
+          payment_methods?: string[] | null
           price?: number | null
           qualification?: string | null
           salary_range?: string | null
@@ -664,14 +812,18 @@ export type Database = {
         Update: {
           category?: string | null
           comments_count?: number | null
+          condition?: string | null
           created_at?: string
           currency?: string | null
           description?: string | null
+          extra_data?: Json | null
           id?: string
           likes_count?: number | null
           location?: string | null
           media_types?: string[] | null
           media_urls?: string[] | null
+          negotiable?: boolean | null
+          payment_methods?: string[] | null
           price?: number | null
           qualification?: string | null
           salary_range?: string | null
@@ -686,31 +838,70 @@ export type Database = {
       }
       marketplace_profiles: {
         Row: {
+          allow_reviews: boolean | null
+          area: string | null
+          availability: string[] | null
           bio: string | null
           created_at: string
+          username: string | null
           id: string
+          is_phone_verified: boolean | null
           location: string | null
+          payment_methods: string[] | null
+          phone: string | null
           qualification: string | null
+          response_time: string | null
+          seller_type: string | null
+          selling_categories: string[] | null
+          show_phone_to: string | null
           updated_at: string
           user_id: string
+          whatsapp: string | null
+          whatsapp_same: boolean | null
         }
         Insert: {
+          allow_reviews?: boolean | null
+          area?: string | null
+          availability?: string[] | null
           bio?: string | null
           created_at?: string
+          username?: string | null
           id?: string
+          is_phone_verified?: boolean | null
           location?: string | null
+          payment_methods?: string[] | null
+          phone?: string | null
           qualification?: string | null
+          response_time?: string | null
+          seller_type?: string | null
+          selling_categories?: string[] | null
+          show_phone_to?: string | null
           updated_at?: string
           user_id: string
+          whatsapp?: string | null
+          whatsapp_same?: boolean | null
         }
         Update: {
+          allow_reviews?: boolean | null
+          area?: string | null
+          availability?: string[] | null
           bio?: string | null
           created_at?: string
+          username?: string | null
           id?: string
+          is_phone_verified?: boolean | null
           location?: string | null
+          payment_methods?: string[] | null
+          phone?: string | null
           qualification?: string | null
+          response_time?: string | null
+          seller_type?: string | null
+          selling_categories?: string[] | null
+          show_phone_to?: string | null
           updated_at?: string
           user_id?: string
+          whatsapp?: string | null
+          whatsapp_same?: boolean | null
         }
         Relationships: []
       }
@@ -1023,17 +1214,30 @@ export type Database = {
       }
       posts: {
         Row: {
+          allow_comments: boolean
+          allow_sharing: boolean
+          audience: string
+          bg_color: string | null
           category: string
           content: string | null
           created_at: string | null
+          expires_at: string | null
+          feeling: string | null
           file_type: string | null
           file_url: string | null
           id: string
+          is_anonymous: boolean
+          is_private: boolean
           likes_count: number | null
+          location: string | null
+          media_type: string
           media_types: string[] | null
           media_urls: string[] | null
+          post_type: string
           shares_count: number | null
+          shield_enabled: boolean
           subcategory: string | null
+          tagged_user_ids: string[]
           tags: string[] | null
           title: string
           updated_at: string | null
@@ -1042,17 +1246,30 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          allow_comments?: boolean
+          allow_sharing?: boolean
+          audience?: string
+          bg_color?: string | null
           category: string
           content?: string | null
           created_at?: string | null
+          expires_at?: string | null
+          feeling?: string | null
           file_type?: string | null
           file_url?: string | null
           id?: string
+          is_anonymous?: boolean
+          is_private?: boolean
           likes_count?: number | null
+          location?: string | null
+          media_type?: string
           media_types?: string[] | null
           media_urls?: string[] | null
+          post_type?: string
           shares_count?: number | null
+          shield_enabled?: boolean
           subcategory?: string | null
+          tagged_user_ids?: string[]
           tags?: string[] | null
           title: string
           updated_at?: string | null
@@ -1061,17 +1278,30 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          allow_comments?: boolean
+          allow_sharing?: boolean
+          audience?: string
+          bg_color?: string | null
           category?: string
           content?: string | null
           created_at?: string | null
+          expires_at?: string | null
+          feeling?: string | null
           file_type?: string | null
           file_url?: string | null
           id?: string
+          is_anonymous?: boolean
+          is_private?: boolean
           likes_count?: number | null
+          location?: string | null
+          media_type?: string
           media_types?: string[] | null
           media_urls?: string[] | null
+          post_type?: string
           shares_count?: number | null
+          shield_enabled?: boolean
           subcategory?: string | null
+          tagged_user_ids?: string[]
           tags?: string[] | null
           title?: string
           updated_at?: string | null
@@ -1089,6 +1319,135 @@ export type Database = {
           },
         ]
       }
+      travel_stories: {
+        Row: {
+          audience: string
+          comments_count: number
+          content: string | null
+          cover_image: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_deleted: boolean
+          latitude: number | null
+          likes_count: number
+          location: string | null
+          longitude: number | null
+          moods: string[] | null
+          photos: string[] | null
+          tags: string[] | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          audience?: string
+          comments_count?: number
+          content?: string | null
+          cover_image?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_deleted?: boolean
+          latitude?: number | null
+          likes_count?: number
+          location?: string | null
+          longitude?: number | null
+          moods?: string[] | null
+          photos?: string[] | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          audience?: string
+          comments_count?: number
+          content?: string | null
+          cover_image?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_deleted?: boolean
+          latitude?: number | null
+          likes_count?: number
+          location?: string | null
+          longitude?: number | null
+          moods?: string[] | null
+          photos?: string[] | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "travel_stories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      travel_story_likes: {
+        Row: {
+          created_at: string
+          id: string
+          story_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          story_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          story_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "travel_story_likes_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "travel_stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      travel_story_saves: {
+        Row: {
+          created_at: string
+          id: string
+          story_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          story_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          story_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "travel_story_saves_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "travel_stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           age_group: string | null
@@ -1100,11 +1459,14 @@ export type Database = {
           created_at: string | null
           detected_city: string | null
           first_name: string | null
+          gender: string | null
           id: string
           is_private: boolean | null
           last_name: string | null
           location: string | null
           name: string
+          primary_interest: string | null
+          section_order: Json | null
           timezone: string | null
           total_followers: number | null
           total_following: number | null
@@ -1123,11 +1485,14 @@ export type Database = {
           created_at?: string | null
           detected_city?: string | null
           first_name?: string | null
+          gender?: string | null
           id: string
           is_private?: boolean | null
           last_name?: string | null
           location?: string | null
           name: string
+          primary_interest?: string | null
+          section_order?: Json | null
           timezone?: string | null
           total_followers?: number | null
           total_following?: number | null
@@ -1146,11 +1511,14 @@ export type Database = {
           created_at?: string | null
           detected_city?: string | null
           first_name?: string | null
+          gender?: string | null
           id?: string
           is_private?: boolean | null
           last_name?: string | null
           location?: string | null
           name?: string
+          primary_interest?: string | null
+          section_order?: Json | null
           timezone?: string | null
           total_followers?: number | null
           total_following?: number | null
@@ -1238,6 +1606,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          interests: string[] | null
           language: string | null
           mode: string
           pseudo_name: string
@@ -1247,6 +1616,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          interests?: string[] | null
           language?: string | null
           mode: string
           pseudo_name: string
@@ -1256,6 +1626,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          interests?: string[] | null
           language?: string | null
           mode?: string
           pseudo_name?: string
@@ -1545,6 +1916,45 @@ export type Database = {
           visibility?: string
         }
         Relationships: []
+      }
+      story_views: {
+        Row: {
+          id: string
+          reaction: string | null
+          story_id: string
+          viewed_at: string
+          viewer_id: string
+        }
+        Insert: {
+          id?: string
+          reaction?: string | null
+          story_id: string
+          viewed_at?: string
+          viewer_id: string
+        }
+        Update: {
+          id?: string
+          reaction?: string | null
+          story_id?: string
+          viewed_at?: string
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_views_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "story_views_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       todos: {
         Row: {

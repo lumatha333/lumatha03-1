@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
-import { PostCard } from '@/components/PostCard';
+import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search } from 'lucide-react';
@@ -41,7 +41,7 @@ export default function Saved() {
   }, [posts, saved, search, sortBy, likesCount]);
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6 p-2 md:p-4">
       <h1 className="text-3xl md:text-4xl font-black flex items-center gap-2">
         ⭐ Saved Posts
       </h1>
@@ -83,7 +83,7 @@ export default function Saved() {
       </div>
 
       {/* Posts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 gap-3">
         {filteredPosts.length === 0 ? (
           <div className="col-span-full">
             <div className="glass-card hover-lift border-border p-8 md:p-12 text-center">
@@ -92,7 +92,7 @@ export default function Saved() {
           </div>
         ) : (
           filteredPosts.map((post) => (
-            <PostCard
+            <EnhancedPostCard
               key={post.id}
               post={post}
               isSaved={saved.includes(post.id)}

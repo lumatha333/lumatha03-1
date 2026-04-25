@@ -1,72 +1,68 @@
 import { useEffect, useCallback } from 'react';
 
 /**
- * Auto theme: Light 5AM-5PM, Dark 5PM-5AM based on user's timezone.
- * Manual override lasts 1 week, then reverts to auto.
+ * Theme system: Dark is default. User can manually switch.
+ * Manual override persists until changed again.
  */
 export function useAutoTheme() {
-  const getIsDay = useCallback(() => {
-    const hour = new Date().getHours();
-    return hour >= 5 && hour < 17; // 5AM to 5PM = light
-  }, []);
-
   const applyTheme = useCallback((theme: 'light' | 'dark') => {
     const root = document.documentElement;
     const body = document.body;
+    root.classList.add('theme-transitioning');
     if (theme === 'light') {
       root.classList.add('light');
       root.classList.remove('dark');
       body.classList.add('light');
       body.classList.remove('dark');
-      // Force light background immediately to prevent black flash
-      root.style.backgroundColor = 'hsl(210, 40%, 98%)';
-      body.style.backgroundColor = 'hsl(210, 40%, 98%)';
+      root.setAttribute('data-theme', 'light');
+      root.style.colorScheme = 'light';
+      root.style.backgroundColor = '#F8FAFC';
+      body.style.backgroundColor = '#F8FAFC';
+      document.querySelector('meta[name=theme-color]')?.setAttribute('content', '#F8FAFC');
     } else {
       root.classList.remove('light');
       root.classList.add('dark');
       body.classList.remove('light');
       body.classList.add('dark');
+      root.setAttribute('data-theme', 'dark');
+      root.style.colorScheme = 'dark';
       root.style.backgroundColor = '';
       body.style.backgroundColor = '';
+      document.querySelector('meta[name=theme-color]')?.setAttribute('content', '#09090f');
     }
+    setTimeout(() => root.classList.remove('theme-transitioning'), 300);
   }, []);
 
-  const checkAndApply = useCallback(() => {
-    const override = localStorage.getItem('lumatha_theme_override');
-    const overrideTime = localStorage.getItem('lumatha_theme_override_time');
-
-    // If manual override exists, check if it's within 1 week
-    if (override && overrideTime) {
-      const elapsed = Date.now() - parseInt(overrideTime);
-      const oneWeek = 7 * 24 * 60 * 60 * 1000;
-      if (elapsed < oneWeek) {
-        applyTheme(override as 'light' | 'dark');
-        localStorage.setItem('lumatha_theme', override);
-        return;
-      }
-      // Override expired, clear it
-      localStorage.removeItem('lumatha_theme_override');
-      localStorage.removeItem('lumatha_theme_override_time');
-    }
-
-    // Auto theme based on time
-    const autoTheme = getIsDay() ? 'light' : 'dark';
-    applyTheme(autoTheme);
-    localStorage.setItem('lumatha_theme', autoTheme);
-  }, [getIsDay, applyTheme]);
-
   useEffect(() => {
-    checkAndApply();
-    // Re-check every 5 minutes
-    const interval = setInterval(checkAndApply, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [checkAndApply]);
+    // Dark is default — only apply light if explicitly saved
+    const saved = localStorage.getItem('lumatha_theme') || 'dark';
+    applyTheme(saved as 'light' | 'dark');
+
+    const handleStorageThemeChange = (event: StorageEvent) => {
+      if (event.key && event.key !== 'lumatha_theme' && event.key !== 'lumatha_theme_override') return;
+      const nextTheme = (localStorage.getItem('lumatha_theme') || 'dark') as 'light' | 'dark';
+      applyTheme(nextTheme);
+    };
+
+    const handleCustomThemeChange = () => {
+      const nextTheme = (localStorage.getItem('lumatha_theme') || 'dark') as 'light' | 'dark';
+      applyTheme(nextTheme);
+    };
+
+    window.addEventListener('storage', handleStorageThemeChange);
+    window.addEventListener('lumatha-theme-changed', handleCustomThemeChange as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageThemeChange);
+      window.removeEventListener('lumatha-theme-changed', handleCustomThemeChange as EventListener);
+    };
+  }, [applyTheme]);
 
   const setManualTheme = useCallback((theme: 'light' | 'dark') => {
     localStorage.setItem('lumatha_theme_override', theme);
-    localStorage.setItem('lumatha_theme_override_time', String(Date.now()));
     localStorage.setItem('lumatha_theme', theme);
     applyTheme(theme);
+    window.dispatchEvent(new CustomEvent('lumatha-theme-changed', { detail: theme }));
   }, [applyTheme]);
 
   return { setManualTheme, currentTheme: (localStorage.getItem('lumatha_theme') || 'dark') as 'light' | 'dark' };

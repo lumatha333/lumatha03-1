@@ -1,17 +1,18 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import WelcomeScreen from '@/components/WelcomeScreen';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ScrollWheelColumn } from '@/components/ScrollWheelColumn';
 import { toast } from 'sonner';
-import { Eye, EyeOff, LogIn, UserPlus, Calendar, Check, X, ArrowRight, ArrowLeft, Camera, User, MapPin, Loader2, AtSign } from 'lucide-react';
+import { Eye, EyeOff, LogIn, UserPlus, Check, X, ArrowRight, ArrowLeft, Camera, User, MapPin, Loader2, AtSign } from 'lucide-react';
 import { validateLoginForm, validateSignupForm, getValidationErrors } from '@/lib/authValidation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { detectLocation } from '@/lib/geolocation';
-import lumathaLogo from '@/assets/lumatha-logo.png';
+import logo from '@/assets/lumatha-logo.png';
 
 // Generate years for date of birth (ages 13-100)
 const currentYear = new Date().getFullYear();
@@ -22,13 +23,42 @@ const MONTHS = [
 ];
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
+// Floating dots CSS
+const floatingDotsStyle = `
+@keyframes auth-float {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 0.12; }
+  90% { opacity: 0.12; }
+  100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+}
+@keyframes auth-card-in {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes auth-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes auth-pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(124, 58, 237, 0.3), 0 0 40px rgba(124, 58, 237, 0.1); }
+  50% { box-shadow: 0 0 30px rgba(124, 58, 237, 0.5), 0 0 60px rgba(124, 58, 237, 0.2); }
+}
+`;
+
+const dots = Array.from({ length: 20 }, (_, i) => ({
+  left: `${Math.random() * 100}%`,
+  size: 2 + Math.random() * 3,
+  delay: Math.random() * 8,
+  duration: 10 + Math.random() * 12,
+}));
+
 export default function Auth() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
-  const [step, setStep] = useState(1); // 1=name+username, 2=DOB, 3=location(auto), 4=profile pic, 5=credentials
+  const [step, setStep] = useState(1);
   
-  // Form fields
   const [firstName, setFirstName] = useState('');
+  const [gender, setGender] = useState('');
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -49,50 +79,40 @@ export default function Auth() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
+  const [showCitySearch, setShowCitySearch] = useState(false);
+  const [manualCity, setManualCity] = useState('');
+  const [showAvatarOptions, setShowAvatarOptions] = useState(false);
+  const [selectedAvatarGradient, setSelectedAvatarGradient] = useState<string | null>(null);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [signupUserId, setSignupUserId] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
 
-  // Check username availability
   useEffect(() => {
-    if (!username.trim() || username.length < 3) {
-      setUsernameAvailable(null);
-      return;
-    }
+    if (!username.trim() || username.length < 3) { setUsernameAvailable(null); return; }
     const timer = setTimeout(async () => {
       setCheckingUsername(true);
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', username.toLowerCase().trim())
-        .maybeSingle();
+      const { data } = await supabase.from('profiles').select('id').eq('username', username.toLowerCase().trim()).maybeSingle();
       setUsernameAvailable(!data);
       setCheckingUsername(false);
     }, 500);
     return () => clearTimeout(timer);
   }, [username]);
 
-  // Auto-detect location when reaching step 3
   useEffect(() => {
-    if (step === 3 && !locationDetected) {
-      handleDetectLocation();
-    }
+    if (step === 3 && !locationDetected) handleDetectLocation();
   }, [step]);
 
   const handleDetectLocation = async () => {
     setDetectingLocation(true);
     try {
       const loc = await detectLocation();
-      setDetectedCity(loc.city);
-      setDetectedCountry(loc.country);
-      setDetectedTimezone(loc.timezone);
+      setDetectedCity(loc.city); setDetectedCountry(loc.country); setDetectedTimezone(loc.timezone);
       setLocationDetected(true);
-    } catch {
-      toast.error('Could not detect location');
-    } finally {
-      setDetectingLocation(false);
-    }
+    } catch { toast.error('Could not detect location'); }
+    finally { setDetectingLocation(false); }
   };
 
   const passwordChecks = useMemo(() => ({
@@ -126,12 +146,8 @@ export default function Auth() {
   const getAgeGroup = () => {
     const age = calculateAge();
     if (!age) return '18-25';
-    if (age < 18) return '13-17';
-    if (age <= 25) return '18-25';
-    if (age <= 35) return '26-35';
-    if (age <= 45) return '36-45';
-    if (age <= 55) return '46-55';
-    return '56+';
+    if (age < 18) return '13-17'; if (age <= 25) return '18-25'; if (age <= 35) return '26-35';
+    if (age <= 45) return '36-45'; if (age <= 55) return '46-55'; return '56+';
   };
 
   const handleNextStep = () => {
@@ -139,6 +155,7 @@ export default function Auth() {
       if (!firstName.trim()) { toast.error('Please enter your first name'); return; }
       if (!username.trim() || username.length < 3) { toast.error('Username must be at least 3 characters'); return; }
       if (usernameAvailable === false) { toast.error('Username is taken'); return; }
+      if (!gender) { toast.error('Please select how you identify'); return; }
     }
     setStep(step + 1);
   };
@@ -146,55 +163,33 @@ export default function Auth() {
   const handlePrevStep = () => setStep(step - 1);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormErrors({});
+    e.preventDefault(); setFormErrors({});
     const result = validateLoginForm({ email, password });
-    if (!result.success) {
-      const errors = getValidationErrors(result);
-      setFormErrors(errors);
-      toast.error(Object.values(errors)[0]);
-      return;
-    }
+    if (!result.success) { const errors = getValidationErrors(result); setFormErrors(errors); toast.error(Object.values(errors)[0]); return; }
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
       if (error) throw error;
-      toast.success('Welcome back to Lumatha!');
-      navigate('/');
-    } catch (error: any) {
-      toast.error(error.message || 'Authentication failed');
-    } finally {
-      setLoading(false);
-    }
+      toast.success('Welcome back to Lumatha!'); navigate('/');
+    } catch (error: any) { toast.error(error.message || 'Authentication failed'); }
+    finally { setLoading(false); }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormErrors({});
+    e.preventDefault(); setFormErrors({});
     const country = detectedCountry || 'Unknown';
     const ageGroup = getAgeGroup();
-    const result = validateSignupForm({ 
-      username: displayName, email, password, country, ageGroup, deviceType: 'mobile'
-    });
-    if (!result.success) {
-      const errors = getValidationErrors(result);
-      setFormErrors(errors);
-      toast.error(Object.values(errors)[0]);
-      return;
-    }
+    const result = validateSignupForm({ username: displayName, email, password, country, ageGroup, deviceType: 'mobile' });
+    if (!result.success) { const errors = getValidationErrors(result); setFormErrors(errors); toast.error(Object.values(errors)[0]); return; }
     setLoading(true);
     try {
       const sanitizedName = displayName.replace(/[<>'"`;]/g, '').slice(0, 50);
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
+        email: email.trim().toLowerCase(), password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
-          data: { 
-            name: sanitizedName, country, age_group: ageGroup,
-            birth_date: birthYear && birthMonth && birthDay 
-              ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}` : null
-          }
+          data: { name: sanitizedName, country, age_group: ageGroup,
+            birth_date: birthYear && birthMonth && birthDay ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}` : null }
         }
       });
       if (error) throw error;
@@ -204,307 +199,560 @@ export default function Auth() {
           const fileExt = profilePicFile.name.split('.').pop();
           const fileName = `${data.user.id}.${fileExt}`;
           const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, profilePicFile, { upsert: true });
-          if (!uploadError) {
-            const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-            avatarUrl = urlData.publicUrl;
-          }
+          if (!uploadError) { const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName); avatarUrl = urlData.publicUrl; }
         }
         await supabase.from('profiles').upsert({
-          id: data.user.id,
-          name: sanitizedName,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          username: username.toLowerCase().trim(),
-          country,
-          detected_city: detectedCity,
-          timezone: detectedTimezone,
+          id: data.user.id, name: sanitizedName, first_name: firstName.trim(), last_name: lastName.trim(),
+          username: username.toLowerCase().trim(), country, detected_city: detectedCity, timezone: detectedTimezone,
+          location: detectedCity ? `${detectedCity}, ${country}` : country,
           age_group: ageGroup,
-          avatar_url: avatarUrl
+          avatar_url: avatarUrl,
+          gender: gender || null
         } as any);
       }
-      toast.success('Welcome to Lumatha! Account created.');
-      navigate('/');
+      toast.success('Account created!');
+      setSignupUserId(data.user?.id || '');
+      setShowWelcome(true);
     } catch (error: any) {
-      if (error.message?.includes('already registered')) {
-        toast.error('This email is already registered. Please login instead.');
-      } else {
-        toast.error(error.message || 'Registration failed');
-      }
-    } finally {
-      setLoading(false);
-    }
+      if (error.message?.includes('already registered')) toast.error('This email is already registered. Please login instead.');
+      else toast.error(error.message || 'Registration failed');
+    } finally { setLoading(false); }
   };
+
+  // --- Input style constants for navy dark background ---
+  const inputClass = "h-[52px] rounded-xl text-[15px] text-white placeholder:text-slate-400 border focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-200" +
+    " bg-[#1e293b]/60 border-white/10 focus:border-blue-500/50 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]";
+  const labelClass = "text-[13px] font-medium tracking-wide" + " text-slate-300";
 
   const renderSignupStep = () => {
     switch (step) {
       case 1:
         return (
-          <div className="space-y-4 animate-fade-in">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-foreground">What's your name?</h2>
-              <p className="text-sm text-muted-foreground mt-1">This is how you'll appear on Lumatha</p>
+          <div className="space-y-5 animate-fade-in">
+            {/* First Name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="firstName" className={labelClass}>First Name</Label>
+              <Input id="firstName" placeholder="Your first name" value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className={inputClass} autoFocus />
             </div>
-            <div className="space-y-3">
-              <Input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)}
-                className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12" autoFocus />
-              <Input placeholder="Last name (optional)" value={lastName} onChange={(e) => setLastName(e.target.value)}
-                className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12" />
+
+            {/* Last Name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="lastName" className={labelClass}>Last Name (optional)</Label>
+              <Input id="lastName" placeholder="Your last name" value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className={inputClass} />
+            </div>
+
+            {/* Username */}
+            <div className="space-y-1.5">
+              <Label htmlFor="username" className={labelClass}>Username</Label>
               <div className="relative">
-                <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                <Input placeholder="Username *" value={username}
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] select-none" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>@</span>
+                <Input id="username" placeholder="yourname" value={username}
                   onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12 pl-10" />
+                  className={inputClass + " pl-9"} />
                 {username.length >= 3 && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {checkingUsername ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-white/40" />
-                    ) : usernameAvailable ? (
-                      <Check className="w-4 h-4 text-green-400" />
-                    ) : usernameAvailable === false ? (
-                      <X className="w-4 h-4 text-red-400" />
-                    ) : null}
+                    {checkingUsername ? <Loader2 className="w-4 h-4 animate-spin text-[#94A3B8]" />
+                      : usernameAvailable ? <Check className="w-4 h-4 text-[#10B981]" />
+                      : usernameAvailable === false ? <X className="w-4 h-4 text-red-400" /> : null}
                   </div>
                 )}
               </div>
               {username.length >= 3 && usernameAvailable === false && (
-                <p className="text-xs text-red-400">Username is taken</p>
+                <p className="text-xs text-red-400 mt-1">Username taken</p>
               )}
             </div>
+
+            {/* Gender */}
+            <div className="space-y-2">
+              <Label className={labelClass}>I identify as</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: 'male', label: '👨 Male' },
+                  { value: 'female', label: '👩 Female' },
+                  { value: 'undisclosed', label: '🤝 Other' },
+                ].map((g) => (
+                  <button key={g.value} type="button"
+                    onClick={() => setGender(g.value)}
+                    className="h-11 rounded-xl text-[13px] font-medium transition-all duration-200 border"
+                    style={{
+                      background: gender === g.value ? 'linear-gradient(135deg, #7C3AED, #3B82F6)' : '#1e293b',
+                      borderColor: gender === g.value ? 'transparent' : '#374151',
+                      color: gender === g.value ? '#fff' : '#94A3B8',
+                      transform: gender === g.value ? 'scale(1.03)' : 'scale(1)',
+                      fontFamily: "'Inter', sans-serif",
+                    }}>
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         );
-      case 2:
+      case 2: {
+        const age = calculateAge();
+        const isUnder13 = age !== null && age < 13;
+
+        const dayItems = DAYS.map(d => ({ value: String(d), display: String(d) }));
+        const monthItems = MONTHS.map((m, i) => ({ value: String(i + 1), display: m }));
+        const yearItems = YEARS.map(y => ({ value: String(y), display: String(y) }));
+
         return (
           <div className="space-y-4 animate-fade-in">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-white">When were you born?</h2>
-              <p className="text-sm text-white/50 mt-1">This helps personalize your experience</p>
+            <div className="text-center mb-4">
+              <h2 className="text-[22px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>When were you born?</h2>
+              <p className="text-[13px] mt-1" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>We use this to personalize your experience</p>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Select value={birthMonth} onValueChange={setBirthMonth}>
-                <SelectTrigger className="bg-white/5 border-white/20 text-white h-12"><SelectValue placeholder="Month" /></SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/20 max-h-60">
-                  {MONTHS.map((month, i) => (<SelectItem key={month} value={String(i + 1)} className="text-white">{month}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              <Select value={birthDay} onValueChange={setBirthDay}>
-                <SelectTrigger className="bg-white/5 border-white/20 text-white h-12"><SelectValue placeholder="Day" /></SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/20 max-h-60">
-                  {DAYS.map((day) => (<SelectItem key={day} value={String(day)} className="text-white">{day}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              <Select value={birthYear} onValueChange={setBirthYear}>
-                <SelectTrigger className="bg-white/5 border-white/20 text-white h-12"><SelectValue placeholder="Year" /></SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/20 max-h-60">
-                  {YEARS.map((year) => (<SelectItem key={year} value={String(year)} className="text-white">{year}</SelectItem>))}
-                </SelectContent>
-              </Select>
+
+            <div className="flex gap-1 overflow-hidden" style={{
+              background: '#1e293b',
+              borderRadius: 16,
+              padding: 8,
+            }}>
+              <ScrollWheelColumn items={dayItems} value={birthDay} onChange={setBirthDay} />
+              <div className="w-px" style={{ background: '#374151' }} />
+              <ScrollWheelColumn items={monthItems} value={birthMonth} onChange={setBirthMonth} />
+              <div className="w-px" style={{ background: '#374151' }} />
+              <ScrollWheelColumn items={yearItems} value={birthYear} onChange={setBirthYear} />
             </div>
+
+            {isUnder13 && (
+              <p className="text-center text-sm text-red-400 font-medium">You must be 13+ to use Lumatha</p>
+            )}
           </div>
         );
+      }
       case 3:
         return (
           <div className="space-y-4 animate-fade-in">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-white">Detecting your location</h2>
-              <p className="text-sm text-white/50 mt-1">We use this for regional content & auto theme</p>
+            <div className="text-center mb-4">
+              <h2 className="text-[22px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Where are you based?</h2>
+              <p className="text-[13px] mt-1" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>For local content and nearby people</p>
             </div>
-            <div className="flex flex-col items-center gap-4 py-6">
+
+            <div className="flex flex-col items-center gap-4 py-4">
+              {/* Pulsing map pin */}
+              <div className="w-[80px] h-[80px] rounded-full flex items-center justify-center"
+                style={{
+                  background: 'rgba(124, 58, 237, 0.1)',
+                  animation: 'auth-pulse-glow 2s ease-in-out infinite',
+                }}>
+                <span className="text-[60px] leading-none select-none">📍</span>
+              </div>
+
               {detectingLocation ? (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="w-12 h-12 animate-spin text-violet-400" />
-                  <p className="text-white/60 text-sm">Detecting your location...</p>
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin" style={{ color: '#7C3AED' }} />
+                  <p className="text-[13px]" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>Detecting your location...</p>
                 </div>
               ) : locationDetected ? (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <MapPin className="w-8 h-8 text-green-400" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-white font-semibold text-lg">{detectedCity}{detectedCity && detectedCountry ? ', ' : ''}{detectedCountry}</p>
-                    <p className="text-white/40 text-xs mt-1">{detectedTimezone}</p>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={handleDetectLocation}
-                    className="border-white/20 text-white/60 hover:text-white mt-2">
-                    Re-detect
-                  </Button>
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-[22px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{detectedCity || 'Unknown City'}</p>
+                  <p className="text-[14px]" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>{detectedCountry || 'Unknown Country'}</p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center">
-                    <MapPin className="w-8 h-8 text-orange-400" />
-                  </div>
-                  <p className="text-white/60 text-sm">Location detection failed</p>
-                  <Button type="button" variant="outline" size="sm" onClick={handleDetectLocation}
-                    className="border-white/20 text-white/60 hover:text-white">
-                    Try Again
-                  </Button>
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-[16px] font-medium text-white">Location not detected</p>
+                  <p className="text-[13px]" style={{ color: '#94A3B8' }}>Search your city below</p>
+                </div>
+              )}
+
+              {/* City search input */}
+              {showCitySearch && (
+                <div className="w-full space-y-2 animate-fade-in">
+                  <Input
+                    placeholder="Search your city..."
+                    value={manualCity}
+                    onChange={(e) => setManualCity(e.target.value)}
+                    className={inputClass}
+                    autoFocus
+                  />
+                  {manualCity.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetectedCity(manualCity.trim());
+                        setLocationDetected(true);
+                        setShowCitySearch(false);
+                      }}
+                      className="w-full h-11 rounded-xl text-white text-[14px] font-medium transition-all duration-200"
+                      style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', fontFamily: "'Inter', sans-serif" }}>
+                      Set as "{manualCity.trim()}"
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              {!showCitySearch && (
+                <div className="flex gap-3 w-full mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCitySearch(true)}
+                    className="flex-1 h-[48px] rounded-xl text-white text-[15px] transition-all duration-200 hover:border-[#7C3AED]"
+                    style={{ background: 'transparent', border: '1px solid #374151', fontFamily: "'Inter', sans-serif" }}>
+                    Change Location
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNextStep()}
+                    disabled={!locationDetected && !detectedCity}
+                    className="flex-1 h-[48px] rounded-xl text-white text-[15px] font-bold transition-all duration-200 hover:opacity-[0.88] disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', fontFamily: "'Inter', sans-serif" }}>
+                    Confirm Location
+                  </button>
                 </div>
               )}
             </div>
           </div>
         );
-      case 4:
+      case 4: {
+        const initials = `${firstName.charAt(0)}${lastName.charAt(0) || ''}`.toUpperCase() || '?';
+        const avatarGradients = [
+          { id: 'purple-blue', gradient: 'linear-gradient(135deg, #7C3AED, #3B82F6)' },
+          { id: 'teal-green', gradient: 'linear-gradient(135deg, #0F766E, #065F46)' },
+          { id: 'amber-orange', gradient: 'linear-gradient(135deg, #B45309, #92400E)' },
+          { id: 'pink-rose', gradient: 'linear-gradient(135deg, #BE185D, #9D174D)' },
+        ];
+
         return (
-          <div className="space-y-4 animate-fade-in">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-white">Add a profile picture</h2>
-              <p className="text-sm text-white/50 mt-1">Help others recognize you</p>
+          <div className="space-y-5 animate-fade-in">
+            <div className="text-center mb-2">
+              <h2 className="text-[22px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Add your photo</h2>
+              <p className="text-[13px] mt-1" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>Help others recognize you</p>
             </div>
-            <div className="flex flex-col items-center gap-4">
-              <div onClick={() => fileInputRef.current?.click()} className="relative cursor-pointer group">
-                <Avatar className="w-32 h-32 border-4 border-white/20 group-hover:border-violet-500 transition-colors">
-                  <AvatarImage src={profilePic || undefined} />
-                  <AvatarFallback className="bg-white/10 text-white text-3xl"><User className="w-12 h-12 text-white/40" /></AvatarFallback>
-                </Avatar>
-                <div className="absolute bottom-1 right-1 w-10 h-10 rounded-full bg-violet-600 flex items-center justify-center shadow-lg">
-                  <Camera className="w-5 h-5 text-white" />
-                </div>
+
+            <div className="flex flex-col items-center gap-3">
+              {/* Upload circle */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="relative w-[120px] h-[120px] rounded-full flex items-center justify-center cursor-pointer group transition-all duration-200 hover:border-[#7C3AED]"
+                style={{
+                  background: profilePic ? 'transparent' : selectedAvatarGradient || '#1e293b',
+                  border: profilePic || selectedAvatarGradient ? 'none' : '2px dashed #374151',
+                  overflow: 'hidden',
+                }}
+              >
+                {profilePic ? (
+                  <img src={profilePic} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                ) : selectedAvatarGradient ? (
+                  <span className="text-white font-bold text-[28px] select-none" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{initials}</span>
+                ) : (
+                  <Camera className="w-8 h-8" style={{ color: '#94A3B8' }} />
+                )}
+                {/* Camera overlay for changing */}
+                {(profilePic || selectedAvatarGradient) && (
+                  <div className="absolute bottom-1 right-1 w-8 h-8 rounded-full flex items-center justify-center shadow-lg" style={{ background: '#7C3AED' }}>
+                    <Camera className="w-4 h-4 text-white" />
+                  </div>
+                )}
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleProfilePicChange} className="hidden" />
-              <p className="text-xs text-white/40">Tap to upload your photo</p>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => { handleProfilePicChange(e); setSelectedAvatarGradient(null); }} className="hidden" />
+
+              {/* OR divider */}
+              <p className="text-[13px]" style={{ color: '#4B5563', fontFamily: "'Inter', sans-serif" }}>OR</p>
+
+              {/* Generate avatar button */}
+              {!showAvatarOptions ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarOptions(true)}
+                  className="px-6 py-3 rounded-xl text-[15px] transition-all duration-200 hover:bg-[#7C3AED]/10"
+                  style={{ border: '1px solid #7C3AED', color: '#7C3AED', fontFamily: "'Inter', sans-serif" }}>
+                  ✨ Generate Avatar
+                </button>
+              ) : (
+                <div className="grid grid-cols-4 gap-3 animate-fade-in">
+                  {avatarGradients.map((ag) => (
+                    <button
+                      key={ag.id}
+                      type="button"
+                      onClick={() => { setSelectedAvatarGradient(ag.gradient); setProfilePic(null); setProfilePicFile(null); }}
+                      className="w-[72px] h-[72px] rounded-full flex items-center justify-center transition-all duration-200"
+                      style={{
+                        background: ag.gradient,
+                        boxShadow: selectedAvatarGradient === ag.gradient ? '0 0 0 3px #7C3AED, 0 0 0 5px rgba(124,58,237,0.3)' : 'none',
+                        transform: selectedAvatarGradient === ag.gradient ? 'scale(1.05)' : 'scale(1)',
+                      }}>
+                      <span className="text-white font-bold text-[24px] select-none" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{initials}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Skip link */}
+              <button
+                type="button"
+                onClick={() => handleNextStep()}
+                className="text-[13px] mt-1 transition-colors hover:text-white"
+                style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>
+                Skip for now
+              </button>
             </div>
           </div>
         );
-      case 5:
+      }
+      case 5: {
+        const hasUppercase = /[A-Z]/.test(password);
+        const hasLowercase = /[a-z]/.test(password);
+        const strengthScore = [passwordChecks.minLength, passwordChecks.hasNumber, passwordChecks.hasSpecial, hasUppercase && hasLowercase, password.length >= 12].filter(Boolean).length;
+        const strengthConfig = strengthScore <= 1
+          ? { width: '25%', color: '#EF4444', label: 'Too short' }
+          : strengthScore === 2
+          ? { width: '50%', color: '#F97316', label: 'Weak' }
+          : strengthScore <= 3
+          ? { width: '75%', color: '#EAB308', label: 'Good' }
+          : { width: '100%', color: '#10B981', label: 'Strong ✓' };
+        const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
+        const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
+        const step5Valid = isPasswordValid && passwordsMatch && email.trim().length > 0;
+
         return (
           <div className="space-y-4 animate-fade-in">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-white">Create your account</h2>
-              <p className="text-sm text-white/50 mt-1">Set up your email and password</p>
+            <div className="text-center mb-4">
+              <h2 className="text-[22px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Almost there!</h2>
+              <p className="text-[13px] mt-1" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>Set your email and password</p>
             </div>
             <div className="space-y-3">
+              {/* Email */}
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-white/80 text-sm">Email</Label>
-                <Input id="email" type="email" placeholder="your@email.com" value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12" required />
+                <Label htmlFor="email" className={labelClass}>Email</Label>
+                <Input id="email" type="email" placeholder="you@email.com" value={email}
+                  onChange={(e) => setEmail(e.target.value)} className={inputClass} required />
               </div>
+
+              {/* Password */}
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-white/80 text-sm">Password</Label>
+                <Label htmlFor="password" className={labelClass}>Password</Label>
                 <div className="relative">
                   <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="Create a strong password" value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40 pr-10 h-12" required />
-                  <Button type="button" variant="ghost" size="sm"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 p-0 text-white/60 hover:text-white"
+                    onChange={(e) => setPassword(e.target.value)} className={inputClass + " pr-12"} required />
+                  <button type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
+                    style={{ color: '#94A3B8' }}
                     onClick={() => setShowPassword(!showPassword)}>
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </Button>
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
+
+                {/* Strength bar */}
                 {password.length > 0 && (
-                  <div className="mt-2 p-3 rounded-lg bg-white/5 border border-white/10 space-y-1.5">
-                    {[
-                      { check: passwordChecks.minLength, label: 'At least 8 characters' },
-                      { check: passwordChecks.hasNumber, label: 'Contains a number' },
-                      { check: passwordChecks.hasSpecial, label: 'Contains special character' },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        {item.check ? (
-                          <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center"><Check className="w-3 h-3 text-white" /></div>
-                        ) : (
-                          <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center"><X className="w-3 h-3 text-white/40" /></div>
-                        )}
-                        <span className={`text-xs ${item.check ? 'text-green-400' : 'text-white/40'}`}>{item.label}</span>
+                  <div className="space-y-2 mt-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#1e293b' }}>
+                        <div className="h-full rounded-full transition-all duration-300 ease-out"
+                          style={{ width: strengthConfig.width, background: strengthConfig.color }} />
                       </div>
-                    ))}
+                      <span className="text-[12px] ml-3 min-w-[60px] text-right" style={{ color: strengthConfig.color, fontFamily: "'Inter', sans-serif" }}>
+                        {strengthConfig.label}
+                      </span>
+                    </div>
+
+                    {/* Requirements */}
+                    <div className="space-y-1">
+                      {[
+                        { check: passwordChecks.minLength, label: 'At least 8 characters' },
+                        { check: passwordChecks.hasNumber, label: 'Contains a number' },
+                        { check: passwordChecks.hasSpecial, label: 'Contains a special character' },
+                      ].map((item, i) => (
+                        <div key={i} className="flex items-center gap-2 transition-all duration-200">
+                          {item.check
+                            ? <Check className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#10B981' }} />
+                            : <X className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#4B5563' }} />}
+                          <span className="text-[12px] transition-colors duration-200"
+                            style={{ color: item.check ? '#10B981' : '#4B5563', fontFamily: "'Inter', sans-serif" }}>
+                            {item.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+              </div>
+
+              {/* Confirm Password */}
+              <div className="space-y-1.5">
+                <Label htmlFor="confirmPassword" className={labelClass}>Confirm Password</Label>
+                <div className="relative">
+                  <Input id="confirmPassword" type={showPassword ? 'text' : 'password'} placeholder="Confirm your password" value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass + " pr-12"} required />
+                  {passwordsMatch && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: '#10B981' }} />}
+                  {passwordsMismatch && <X className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-400" />}
+                </div>
+                {passwordsMismatch && (
+                  <p className="text-[12px] text-red-400 mt-1" style={{ fontFamily: "'Inter', sans-serif" }}>Passwords don't match</p>
                 )}
               </div>
             </div>
           </div>
         );
+      }
       default: return null;
     }
   };
 
+  if (showWelcome) {
+    return <WelcomeScreen userId={signupUserId} firstName={firstName} city={detectedCity} />;
+  }
+
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 overflow-hidden relative">
-      <div className="fixed inset-0" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)' }}>
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full blur-3xl opacity-10"
-          style={{ background: 'radial-gradient(circle, #c9a227 0%, transparent 70%)' }} />
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-hidden relative bg-[#0B0D1F]">
+      {/* Injected keyframes */}
+      <style>{floatingDotsStyle}</style>
+
+      {/* Navy gradient orbs for dark background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-30"
+          style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%)' }} />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full opacity-25"
+          style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-10"
+          style={{ background: 'radial-gradient(circle, rgba(30,58,95,0.3) 0%, transparent 70%)' }} />
       </div>
-      <Card className="w-full max-w-md bg-black/50 backdrop-blur-xl border border-white/10 shadow-2xl relative z-10">
-        <CardHeader className="text-center space-y-4 pb-4">
-          <div className="mx-auto">
-            <img src={lumathaLogo} alt="Lumatha" className="w-16 h-16 object-contain rounded-xl mx-auto"
-              style={{ boxShadow: '0 0 30px rgba(201, 162, 39, 0.2)' }} />
-          </div>
-          <CardTitle className="text-2xl font-bold text-white">
-            {isLogin ? 'Welcome Back' : 'Create Account'}
-          </CardTitle>
-          <CardDescription className="text-white/50">
-            {isLogin ? 'Sign in to continue your journey' : `Step ${step} of 5`}
-          </CardDescription>
-          {!isLogin && (
-            <div className="flex gap-1 mt-2">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${s <= step ? 'bg-violet-500' : 'bg-white/20'}`} />
-              ))}
-            </div>
-          )}
-        </CardHeader>
-        <CardContent className="pt-0">
-          {isLogin ? (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="login-email" className="text-white/80 text-sm">Email</Label>
-                <Input id="login-email" type="email" placeholder="your@email.com" value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40 h-12" required />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="login-password" className="text-white/80 text-sm">Password</Label>
-                <div className="relative">
-                  <Input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="Your password" value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40 pr-10 h-12" required />
-                  <Button type="button" variant="ghost" size="sm"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 p-0 text-white/60 hover:text-white"
-                    onClick={() => setShowPassword(!showPassword)}>
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </Button>
+
+      {/* Navy Card */}
+      <div className={`w-full relative z-10 ${isLogin ? 'max-w-[420px]' : 'max-w-[440px]'}`}
+        style={{
+          background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 100%)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 20,
+          padding: 40,
+          boxShadow: '0 25px 60px rgba(0,0,0,0.4), 0 0 40px rgba(59,130,246,0.1)',
+          animation: 'auth-card-in 0.5s 0.3s cubic-bezier(0.4,0,0.2,1) both',
+        }}>
+
+        {isLogin ? (
+          <>
+            {/* Logo with Ring */}
+            <div className="mb-6 flex justify-center">
+              <div className="relative">
+                {/* Outer glow ring */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400/30 via-purple-400/30 to-blue-400/30 blur-xl" />
+                {/* White ring border */}
+                <div className="absolute -inset-2 rounded-full border-2 border-white/40 bg-white/5 backdrop-blur-sm" />
+                {/* Logo container */}
+                <div className="relative rounded-full overflow-hidden bg-[#0B1120] shadow-2xl">
+                  <img
+                    src={logo}
+                    alt="Lumatha"
+                    className="w-16 h-16 object-contain"
+                  />
                 </div>
               </div>
-              <Button type="submit" disabled={loading}
-                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white">
-                {loading ? (
-                  <span className="flex items-center gap-2"><Loader2 className="w-5 h-5 animate-spin" />Signing in...</span>
-                ) : (
-                  <span className="flex items-center gap-2"><LogIn className="w-5 h-5" />Sign In</span>
-                )}
-              </Button>
+            </div>
+            {/* Login heading */}
+            <div className="text-center mb-6">
+              <h2 className="text-[26px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Welcome Back</h2>
+              <p className="text-[14px] mt-1" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>Sign in to continue</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="login-email" className={labelClass}>Email</Label>
+                <Input id="login-email" type="email" placeholder="you@email.com" value={email}
+                  onChange={(e) => setEmail(e.target.value)} className={inputClass} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="login-password" className={labelClass}>Password</Label>
+                <div className="relative">
+                  <Input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="Your password" value={password}
+                    onChange={(e) => setPassword(e.target.value)} className={inputClass + " pr-12"} required />
+                  <button type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 transition-colors"
+                    style={{ color: '#94A3B8' }}
+                    onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Sign In button */}
+              <button type="submit" disabled={loading}
+                className="w-full h-[52px] rounded-xl text-white font-bold text-[16px] flex items-center justify-center gap-2 transition-all duration-200 hover:opacity-[0.88] hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50"
+                style={{
+                  background: 'linear-gradient(135deg, #7C3AED, #3B82F6)',
+                  fontFamily: "'Inter', sans-serif",
+                  animation: 'auth-fade-in 0.5s 0.5s cubic-bezier(0.4,0,0.2,1) both',
+                }}>
+                {loading ? <><Loader2 className="w-5 h-5 animate-spin" />Signing in...</>
+                  : <>Sign In <ArrowRight className="w-5 h-5" /></>}
+              </button>
+
             </form>
-          ) : (
+          </>
+        ) : (
+          <>
+            {/* Logo with Ring */}
+            <div className="mb-6 flex justify-center">
+              <div className="relative">
+                {/* Outer glow ring */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400/30 via-purple-400/30 to-blue-400/30 blur-xl" />
+                {/* White ring border */}
+                <div className="absolute -inset-2 rounded-full border-2 border-white/40 bg-white/5 backdrop-blur-sm" />
+                {/* Logo container */}
+                <div className="relative rounded-full overflow-hidden bg-[#0B1120] shadow-2xl">
+                  <img
+                    src={logo}
+                    alt="Lumatha"
+                    className="w-16 h-16 object-contain"
+                  />
+                </div>
+              </div>
+            </div>
+            {/* Progress bar + heading */}
+            <div className="mb-6">
+              <div className="flex gap-1.5 mb-5">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <div key={s} className="h-1 flex-1 rounded transition-all duration-500"
+                    style={{
+                      background: s < step ? '#10B981' : s === step ? 'linear-gradient(90deg, #7C3AED, #3B82F6)' : '#1e293b',
+                    }} />
+                ))}
+              </div>
+              <div className="text-center">
+                <h2 className="text-[24px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Create Account</h2>
+                <p className="text-[13px] mt-1" style={{ color: '#94A3B8', fontFamily: "'Inter', sans-serif" }}>Step {step} of 5</p>
+              </div>
+            </div>
+
             <form onSubmit={step === 5 ? handleSignup : (e) => { e.preventDefault(); handleNextStep(); }}>
               {renderSignupStep()}
               <div className="flex gap-3 mt-6">
                 {step > 1 && (
-                  <Button type="button" variant="outline" onClick={handlePrevStep}
-                    className="flex-1 h-12 border-white/20 text-white hover:bg-white/10">
-                    <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                  </Button>
+                  <button type="button" onClick={handlePrevStep}
+                    className="flex-1 h-[52px] rounded-xl flex items-center justify-center gap-2 text-white text-[15px] transition-all duration-200"
+                    style={{ border: '1px solid #374151', background: 'transparent' }}>
+                    <ArrowLeft className="w-4 h-4" /> Back
+                  </button>
                 )}
-                <Button type="submit" disabled={loading || (step === 5 && !isPasswordValid) || (step === 1 && usernameAvailable === false)}
-                  className={`h-12 text-base font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white ${step > 1 ? 'flex-1' : 'w-full'}`}>
-                  {loading ? (
-                    <span className="flex items-center gap-2"><Loader2 className="w-5 h-5 animate-spin" />Creating...</span>
-                  ) : step === 5 ? (
-                    <span className="flex items-center gap-2"><UserPlus className="w-5 h-5" />Create Account</span>
-                  ) : (
-                    <span className="flex items-center gap-2">Next<ArrowRight className="w-5 h-5" /></span>
-                  )}
-                </Button>
+                <button type="submit" disabled={loading || (step === 5 && (!isPasswordValid || !email.trim() || password !== confirmPassword || !confirmPassword)) || (step === 1 && (usernameAvailable === false || !firstName.trim() || !username.trim() || username.length < 3 || !gender)) || (step === 2 && (!birthDay || !birthMonth || !birthYear || (calculateAge() !== null && calculateAge()! < 13)))}
+                  className={`h-[52px] rounded-xl text-white font-bold text-[16px] flex items-center justify-center gap-2 transition-all duration-200 hover:opacity-[0.88] hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 ${step > 1 ? 'flex-1' : 'w-full'}`}
+                  style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', fontFamily: "'Inter', sans-serif" }}>
+                  {loading ? <><Loader2 className="w-5 h-5 animate-spin" />Creating...</>
+                    : step === 5 ? <><UserPlus className="w-5 h-5" />Create Account</>
+                    : <>Next <ArrowRight className="w-5 h-5" /></>}
+                </button>
               </div>
             </form>
-          )}
-          <div className="mt-6 text-center">
-            <button type="button" onClick={() => { setIsLogin(!isLogin); setStep(1); setFormErrors({}); }}
-              className="text-sm text-violet-400 hover:text-violet-300 transition-colors">
-              {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+          </>
+        )}
+
+        {/* Bottom toggle */}
+        <div className="mt-6 text-center" style={{ fontFamily: "'Inter', sans-serif" }}>
+          <button type="button" onClick={() => { setIsLogin(!isLogin); setStep(1); setFormErrors({}); }}
+            className="text-[14px] transition-colors group text-slate-400 hover:text-slate-300">
+            {isLogin ? "Don't have an account? " : 'Already have an account? '}
+            <span 
+              className="font-semibold transition-all text-blue-400 hover:text-blue-300"
+            >
+              {isLogin ? 'Sign Up' : 'Sign In'}
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

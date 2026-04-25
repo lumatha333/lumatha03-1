@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
@@ -10,6 +10,13 @@ import { useAuth } from '@/contexts/AuthContext';
 export function useChatProtection() {
   const { profile } = useAuth();
   const [isBlurred, setIsBlurred] = useState(false);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setBlurTemporarily = useCallback(() => {
+    setIsBlurred(true);
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    blurTimerRef.current = setTimeout(() => setIsBlurred(false), 2000);
+  }, []);
 
   useEffect(() => {
     // Visibility change → blur
@@ -35,23 +42,23 @@ export function useChatProtection() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'PrintScreen') {
         e.preventDefault();
-        setIsBlurred(true);
-        setTimeout(() => setIsBlurred(false), 2000);
+        setBlurTemporarily();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
         e.preventDefault();
       }
       if (e.metaKey && e.shiftKey && ['3', '4', '5'].includes(e.key)) {
-        setIsBlurred(true);
-        setTimeout(() => setIsBlurred(false), 2000);
+        setBlurTemporarily();
       }
     };
     document.addEventListener('keydown', onKeyDown);
 
-    // CSS protection
-    const style = document.createElement('style');
-    style.id = 'chat-privacy-protection';
-    style.textContent = `
+    // CSS protection — only inject once per page load
+    const existingStyle = document.getElementById('chat-privacy-protection');
+    const style = existingStyle || document.createElement('style');
+    if (!existingStyle) {
+      style.id = 'chat-privacy-protection';
+      style.textContent = `
       .chat-protected {
         -webkit-user-select: none !important;
         user-select: none !important;
@@ -78,7 +85,8 @@ export function useChatProtection() {
         }
       }
     `;
-    document.head.appendChild(style);
+      document.head.appendChild(style);
+    }
 
     return () => {
       document.removeEventListener('visibilitychange', onVisChange);
@@ -86,18 +94,21 @@ export function useChatProtection() {
       window.removeEventListener('beforeprint', onBeforePrint);
       window.removeEventListener('afterprint', onAfterPrint);
       document.removeEventListener('keydown', onKeyDown);
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
       document.getElementById('chat-privacy-protection')?.remove();
     };
-  }, []);
+  }, []);  // setBlurTemporarily has no deps (stable), so this effect only runs on mount/unmount
 
   return { isBlurred, username: profile?.name || 'User' };
 }
 
 interface WatermarkOverlayProps {
   username: string;
+  enabled?: boolean;
 }
 
-export function WatermarkOverlay({ username }: WatermarkOverlayProps) {
+export function WatermarkOverlay({ username, enabled = true }: WatermarkOverlayProps) {
+  if (!enabled) return null;
   const stamp = `${username} • ${new Date().toLocaleDateString()}`;
 
   return (

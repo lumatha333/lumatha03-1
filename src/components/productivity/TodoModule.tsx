@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Check, Plus, RotateCcw, Flame, Trash2, History, Bell, Folder, TrendingUp, Sparkles } from 'lucide-react';
+import { Plus, RotateCcw, Trash2, Bell, Folder, Sun, CalendarDays, CalendarRange, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TODO_CATEGORIES, TodoCategory, getDefaultTodos } from '@/data/defaultTodos';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { TodoFolderView } from './todo/TodoFolderView';
 import { TodoProgressView } from './todo/TodoProgressView';
 import { TodoReminderDialog, getReminders } from './TodoReminderDialog';
@@ -17,6 +17,23 @@ interface Todo {
   completed: boolean;
   category: TodoCategory;
   created_at: string;
+  completed_at?: string;
+}
+
+interface TodoStats {
+  totalCompleted: number;
+  totalCreated: number;
+  streakDays: number;
+  lastActiveDate: string;
+  categoryStats: Record<TodoCategory, { completed: number; total: number }>;
+}
+
+interface TodoHistoryItem {
+  id: string;
+  text: string;
+  category: TodoCategory;
+  completed_at: string;
+  completed_date: string; // YYYY-MM-DD format
 }
 
 interface CustomFolder {
@@ -28,18 +45,28 @@ interface CustomFolder {
 const STORAGE_KEY = 'lumatha_todos_v2';
 const CUSTOM_FOLDERS_KEY = 'lumatha_custom_folders_v2';
 const STREAK_KEY = 'lumatha_streak';
+const STATS_KEY = 'todo_stats';
+const HISTORY_KEY = 'lumatha_todo_history';
+const LAST_RESET_KEY = 'lumatha_todo_last_reset';
 
-// Category accent colors
-const CATEGORY_ACCENTS: Record<string, string> = {
-  daily: 'accent-card-coral',
-  weekly: 'accent-card-teal',
-  monthly: 'accent-card-violet',
-  yearly: 'accent-card-amber',
-  lifetime: 'accent-card-rose',
+const parseJsonSafe = <T,>(raw: string | null, fallback: T): T => {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 };
 
 export function TodoModule() {
   const { user } = useAuth();
+  const todosStorageKey = user?.id ? `${STORAGE_KEY}:${user.id}` : STORAGE_KEY;
+  const customFoldersStorageKey = user?.id ? `${CUSTOM_FOLDERS_KEY}:${user.id}` : CUSTOM_FOLDERS_KEY;
+  const streakStorageKey = user?.id ? `${STREAK_KEY}:${user.id}` : STREAK_KEY;
+  const historyStorageKey = user?.id ? `${HISTORY_KEY}:${user.id}` : HISTORY_KEY;
+  const statsStorageKey = user?.id ? `${STATS_KEY}:${user.id}` : STATS_KEY;
+  const lastResetStorageKey = user?.id ? `${LAST_RESET_KEY}:${user.id}` : LAST_RESET_KEY;
+  const isMobile = useIsMobile();
   const [view, setView] = useState<'main' | 'progress' | 'custom'>('main');
   const [activeCategory, setActiveCategory] = useState<TodoCategory>('daily');
   const [todos, setTodos] = useState<Record<TodoCategory, Todo[]>>({
@@ -54,13 +81,167 @@ export function TodoModule() {
   const [streak, setStreak] = useState(0);
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
   const [reminderTask, setReminderTask] = useState<{ id: string; text: string } | null>(null);
+  const [celebratingId, setCelebratingId] = useState<string | null>(null);
+  const [xpFloatId, setXpFloatId] = useState<string | null>(null);
+  const [stats, setStats] = useState<TodoStats>({
+    totalCompleted: 0,
+    totalCreated: 0,
+    streakDays: 0,
+    lastActiveDate: new Date().toISOString().split('T')[0],
+    categoryStats: { daily: { completed: 0, total: 0 }, weekly: { completed: 0, total: 0 }, monthly: { completed: 0, total: 0 }, yearly: { completed: 0, total: 0 }, lifetime: { completed: 0, total: 0 }, custom: { completed: 0, total: 0 } }
+  });
+  const [history, setHistory] = useState<TodoHistoryItem[]>([]);
+  const [showStats, setShowStats] = useState(false);
+
   const reminders = getReminders();
 
-  useEffect(() => { loadTodos(); loadCustomFolders(); loadStreak(); }, [user]);
+  useEffect(() => { loadTodos(); loadCustomFolders(); loadStreak(); loadStats(); loadHistory(); checkAndAutoReset(); }, [user?.id]);
+
+  // Auto-save stats whenever todos change
+  useEffect(() => { saveStats(); }, [todos]);
+
+  // Check and auto-reset daily/weekly/monthly todos
+  const checkAndAutoReset = () => {
+    const lastReset = localStorage.getItem(lastResetStorageKey);
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (!lastReset) {
+      localStorage.setItem(lastResetStorageKey, today);
+      return;
+    }
+    
+    if (lastReset !== today) {
+      // It's a new day - auto reset daily todos and archive completed ones
+      const lastResetDate = new Date(lastReset);
+      const currentDate = new Date(today);
+      const daysDiff = Math.floor((currentDate.getTime() - lastResetDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDiff >= 1) {
+        archiveCompletedTodos('daily');
+        // Reset daily todos
+        const updated = { ...todos };
+        updated.daily = updated.daily.filter(t => !t.completed).map(t => ({ ...t, completed: false }));
+        setTodos(updated);
+        localStorage.setItem(todosStorageKey, JSON.stringify(updated));
+      }
+      
+      // Check weekly (reset on Monday)
+      const currentDay = currentDate.getDay();
+      if (currentDay === 1 && daysDiff >= 1) { // Monday
+        archiveCompletedTodos('weekly');
+        const updated = { ...todos };
+        updated.weekly = updated.weekly.filter(t => !t.completed).map(t => ({ ...t, completed: false }));
+        setTodos(updated);
+        localStorage.setItem(todosStorageKey, JSON.stringify(updated));
+      }
+      
+      // Check monthly (reset on 1st of month)
+      if (currentDate.getDate() === 1 && daysDiff >= 1) {
+        archiveCompletedTodos('monthly');
+        const updated = { ...todos };
+        updated.monthly = updated.monthly.filter(t => !t.completed).map(t => ({ ...t, completed: false }));
+        setTodos(updated);
+        localStorage.setItem(todosStorageKey, JSON.stringify(updated));
+      }
+      
+      localStorage.setItem(lastResetStorageKey, today);
+      toast.success('Auto-reset completed! Yesterday\'s tasks archived.');
+    }
+  };
+
+  const archiveCompletedTodos = (category: TodoCategory) => {
+    const completedTodos = todos[category].filter(t => t.completed);
+    if (completedTodos.length === 0) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const historyItems: TodoHistoryItem[] = completedTodos.map(t => ({
+      id: t.id,
+      text: t.text,
+      category: t.category,
+      completed_at: t.completed_at || new Date().toISOString(),
+      completed_date: today
+    }));
+    
+    const updatedHistory = [...history, ...historyItems];
+    setHistory(updatedHistory);
+    localStorage.setItem(historyStorageKey, JSON.stringify(updatedHistory));
+  };
+
+  const loadStats = () => {
+    const saved = localStorage.getItem(statsStorageKey);
+    if (saved) {
+      try {
+        setStats(JSON.parse(saved));
+      } catch {
+        // Invalid stats, keep default
+      }
+    }
+  };
+
+  const loadHistory = () => {
+    const saved = localStorage.getItem(historyStorageKey);
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch {
+        // Invalid history, keep default
+      }
+    }
+  };
+
+  const saveStats = () => {
+    const newStats: TodoStats = {
+      totalCompleted: Object.values(todos).flat().filter(t => t.completed).length + history.length,
+      totalCreated: Object.values(todos).flat().length + history.length,
+      streakDays: streak,
+      lastActiveDate: new Date().toISOString().split('T')[0],
+      categoryStats: {
+        daily: { completed: todos.daily.filter(t => t.completed).length, total: todos.daily.length },
+        weekly: { completed: todos.weekly.filter(t => t.completed).length, total: todos.weekly.length },
+        monthly: { completed: todos.monthly.filter(t => t.completed).length, total: todos.monthly.length },
+        yearly: { completed: todos.yearly.filter(t => t.completed).length, total: todos.yearly.length },
+        lifetime: { completed: todos.lifetime.filter(t => t.completed).length, total: todos.lifetime.length },
+        custom: { completed: todos.custom.filter(t => t.completed).length, total: todos.custom.length },
+      }
+    };
+    setStats(newStats);
+    localStorage.setItem(statsStorageKey, JSON.stringify(newStats));
+  };
+
+  const clearHistory = () => {
+    if (confirm('Clear all task history? This cannot be undone.')) {
+      setHistory([]);
+      localStorage.removeItem(historyStorageKey);
+      toast.success('History cleared');
+    }
+  };
+
+  const addTodoItem = (text: string, category: TodoCategory) => {
+    const todo: Todo = { id: `${category}-${Date.now()}-${Math.random()}`, text, completed: false, category, created_at: new Date().toISOString() };
+    const updated = { ...todos };
+    updated[category] = [...updated[category], todo];
+    setTodos(updated); localStorage.setItem(todosStorageKey, JSON.stringify(updated));
+    saveStats();
+    toast.success('Task added!');
+  };
 
   const loadTodos = () => {
-    const cached = localStorage.getItem(STORAGE_KEY);
-    if (cached) setTodos(JSON.parse(cached)); else initializeDefaults();
+    const cached = localStorage.getItem(todosStorageKey) || localStorage.getItem(STORAGE_KEY);
+    if (cached) {
+      const parsed = parseJsonSafe<Record<TodoCategory, Todo[]>>(cached, {
+        daily: [], weekly: [], monthly: [], yearly: [], lifetime: [], custom: [],
+      });
+      setTodos({
+        daily: Array.isArray(parsed.daily) ? parsed.daily : [],
+        weekly: Array.isArray(parsed.weekly) ? parsed.weekly : [],
+        monthly: Array.isArray(parsed.monthly) ? parsed.monthly : [],
+        yearly: Array.isArray(parsed.yearly) ? parsed.yearly : [],
+        lifetime: Array.isArray(parsed.lifetime) ? parsed.lifetime : [],
+        custom: Array.isArray(parsed.custom) ? parsed.custom : [],
+      });
+    } else {
+      initializeDefaults();
+    }
   };
 
   const initializeDefaults = () => {
@@ -73,20 +254,27 @@ export function TodoModule() {
       custom: []
     };
     setTodos(defaults);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
+    localStorage.setItem(todosStorageKey, JSON.stringify(defaults));
   };
 
-  const loadCustomFolders = () => { const saved = localStorage.getItem(CUSTOM_FOLDERS_KEY); if (saved) setCustomFolders(JSON.parse(saved)); };
-  const saveCustomFolders = (folders: CustomFolder[]) => { setCustomFolders(folders); localStorage.setItem(CUSTOM_FOLDERS_KEY, JSON.stringify(folders)); };
-  const loadStreak = () => { const saved = localStorage.getItem(STREAK_KEY); if (saved) setStreak(JSON.parse(saved).count || 0); };
-
-  const [celebratingId, setCelebratingId] = useState<string | null>(null);
+  const loadCustomFolders = () => {
+    const saved = localStorage.getItem(customFoldersStorageKey) || localStorage.getItem(CUSTOM_FOLDERS_KEY);
+    setCustomFolders(parseJsonSafe<CustomFolder[]>(saved, []));
+  };
+  const saveCustomFolders = (folders: CustomFolder[]) => {
+    setCustomFolders(folders);
+    localStorage.setItem(customFoldersStorageKey, JSON.stringify(folders));
+  };
+  const loadStreak = () => {
+    const saved = localStorage.getItem(streakStorageKey) || localStorage.getItem(STREAK_KEY);
+    const parsed = parseJsonSafe<{ count?: number }>(saved, {});
+    setStreak(parsed.count || 0);
+  };
 
   const saveToHistory = (category: string, taskText: string, completing: boolean) => {
     if (!completing) return;
-    const HISTORY_KEY = 'lumatha_todo_history';
-    const saved = localStorage.getItem(HISTORY_KEY);
-    const history: Record<string, any> = saved ? JSON.parse(saved) : {};
+    const saved = localStorage.getItem(historyStorageKey) || localStorage.getItem('lumatha_todo_history');
+    const history: Record<string, any> = parseJsonSafe<Record<string, any>>(saved, {});
     const today = new Date().toDateString();
     if (!history[today]) history[today] = {};
     if (!history[today][category]) history[today][category] = { completed: 0, total: 0, items: [] };
@@ -96,13 +284,12 @@ export function TodoModule() {
     history[today][category].completed += 1;
     if (!history[today][category].items) history[today][category].items = [];
     history[today][category].items.push(taskText);
-    // Keep 400 days
     const keys = Object.keys(history);
     if (keys.length > 400) {
       keys.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
       keys.slice(0, keys.length - 400).forEach(k => delete history[k]);
     }
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    localStorage.setItem(historyStorageKey, JSON.stringify(history));
   };
 
   const toggleTodo = (category: TodoCategory, todoId: string) => {
@@ -112,11 +299,16 @@ export function TodoModule() {
     const wasCompleted = updated[category][idx].completed;
     updated[category][idx].completed = !wasCompleted;
     setTodos(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(todosStorageKey, JSON.stringify(updated));
     if (!wasCompleted) {
       setCelebratingId(todoId);
-      setTimeout(() => setCelebratingId(null), 900);
+      setXpFloatId(todoId);
+      // Longer celebration window for the dopamine hit
+      setTimeout(() => setCelebratingId(null), 1200);
+      setTimeout(() => setXpFloatId(null), 1500);
       saveToHistory(category, updated[category][idx].text, true);
+      // Haptic feedback if available
+      if (navigator.vibrate) navigator.vibrate(30);
     }
   };
 
@@ -125,21 +317,21 @@ export function TodoModule() {
     const todo: Todo = { id: `${activeCategory}-${Date.now()}`, text: newTodo.trim(), completed: false, category: activeCategory, created_at: new Date().toISOString() };
     const updated = { ...todos };
     updated[activeCategory] = [...updated[activeCategory], todo];
-    setTodos(updated); localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    setTodos(updated); localStorage.setItem(todosStorageKey, JSON.stringify(updated));
     setNewTodo(''); toast.success('Task added!');
   };
 
   const deleteTodo = (category: TodoCategory, todoId: string) => {
     const updated = { ...todos };
     updated[category] = updated[category].filter(t => t.id !== todoId);
-    setTodos(updated); localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); toast.success('Task deleted');
+    setTodos(updated); localStorage.setItem(todosStorageKey, JSON.stringify(updated)); toast.success('Task deleted');
   };
 
   const resetCategory = (category: TodoCategory) => {
     const defaults = getDefaultTodos(category);
     const updated = { ...todos };
     updated[category] = defaults.map((text, i) => ({ id: `${category}-${i}`, text, completed: false, category, created_at: new Date().toISOString() }));
-    setTodos(updated); localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); toast.success('Reset to defaults!');
+    setTodos(updated); localStorage.setItem(todosStorageKey, JSON.stringify(updated)); toast.success('Reset to defaults!');
   };
 
   const createFolder = () => {
@@ -168,197 +360,257 @@ export function TodoModule() {
     );
   }
 
-  // Calculate overall progress
   const totalAll = Object.values(todos).flat().length;
   const completedAll = Object.values(todos).flat().filter(t => t.completed).length;
   const overallProgress = totalAll > 0 ? Math.round((completedAll / totalAll) * 100) : 0;
 
+
+  const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+    daily: <Sun className="w-4 h-4" />,
+    weekly: <CalendarDays className="w-4 h-4" />,
+    monthly: <CalendarRange className="w-4 h-4" />,
+    custom: <Pencil className="w-4 h-4" />,
+  };
+
+  const CATEGORY_EMOJIS: Record<string, string> = {
+    daily: '☀️', weekly: '📅', monthly: '🗓️', yearly: '📆', lifetime: '⭐',
+  };
+
+  // On mobile, only show daily/weekly/monthly/custom
+  const visibleCategories = isMobile
+    ? categoryCards.filter(c => ['daily', 'weekly', 'monthly'].includes(c.id))
+    : categoryCards;
+
+  const activeTodos = todos[activeCategory];
+  const allDone = activeTodos.length > 0 && activeTodos.every(t => t.completed);
+  const isEmpty = activeTodos.length === 0;
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greetEmoji = hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙';
+
   return (
-    <div className="space-y-4 page-enter">
-      {/* Stats Bar — enhanced gradient card */}
-      <Card className="gradient-border rounded-2xl overflow-hidden" style={{ background: 'var(--gradient-warm)' }}>
-        <div className="h-1 bg-gradient-to-r from-orange-500 via-rose-500 to-violet-500" />
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg" style={{ boxShadow: '0 4px 15px hsl(12 80% 62% / 0.3)' }}>
-                <Flame className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{streak}</p>
-                <p className="text-xs text-muted-foreground">Day Streak</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setView('progress')} className="gap-1.5 rounded-xl">
-                <TrendingUp className="w-4 h-4" />
-                <span className="hidden sm:inline">Progress</span>
-              </Button>
-            </div>
+    <div className="page-enter">
+      {/* Compact Streak + Stats Row */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 flex-1 rounded-xl p-3" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+          <span className="text-lg">🔥</span>
+          <div>
+            <p className="text-xl font-black leading-none" style={{ fontFamily: "'Space Grotesk', sans-serif", color: streak > 0 ? '#F59E0B' : '#64748B' }}>{streak}</p>
+            <p className="text-[10px]" style={{ color: '#64748B' }}>streak</p>
           </div>
-
-          {/* Overall progress bar with percentage */}
-          <div className="mt-3 space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">Overall Progress</span>
-              <span className="text-sm font-bold gradient-text">{overallProgress}%</span>
-            </div>
-            <div className="h-2.5 bg-background/30 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-orange-400 via-rose-400 to-violet-400 rounded-full transition-all duration-700 relative"
-                style={{ width: `${overallProgress}%` }}
-              >
-                <div className="absolute inset-0 bg-white/20 animate-shimmer" />
-              </div>
-            </div>
-            <div className="flex justify-between text-[9px] text-muted-foreground">
-              <span>{completedAll} done</span>
-              <span>{totalAll - completedAll} remaining</span>
-            </div>
+        </div>
+        <button onClick={() => setView('progress')} className="flex items-center gap-1.5 rounded-xl p-3 h-full transition-all hover:scale-105" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+          <span className="text-sm">📊</span>
+          <span className="text-xs text-white font-medium">Stats</span>
+        </button>
+        <div className="flex-1 rounded-xl p-3" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px]" style={{ color: '#64748B' }}>Progress</span>
+            <span className="text-xs font-bold" style={{ color: '#7C3AED' }}>{overallProgress}%</span>
           </div>
+          <div className="h-1 rounded-full overflow-hidden" style={{ background: '#1e293b' }}>
+            <div className="h-full rounded-full" style={{ width: `${overallProgress}%`, background: 'linear-gradient(90deg, #7C3AED, #3B82F6)', transition: 'width 1s' }} />
+          </div>
+        </div>
+      </div>
 
-          {/* Category mini-bars */}
-          <div className="mt-3 grid grid-cols-5 gap-1.5">
-            {categoryCards.map(cat => {
-              const completed = getCompletedCount(cat.id);
-              const total = getTotalCount(cat.id);
-              const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-              const colors: Record<string, string> = {
-                daily: 'from-blue-400 to-blue-500',
-                weekly: 'from-teal-400 to-teal-500',
-                monthly: 'from-violet-400 to-violet-500',
-                yearly: 'from-amber-400 to-amber-500',
-                lifetime: 'from-rose-400 to-rose-500',
-              };
+      {/* Main content: left column */}
+      <div className="flex gap-4 items-start">
+        {/* Left column */}
+        <div className="flex-1 min-w-0 space-y-3">
+          {/* Category Pill Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-1 pb-1">
+            {visibleCategories.map(cat => {
+              const isActive = activeCategory === cat.id;
               return (
-                <div key={cat.id} className="text-center">
-                  <div className="h-1 bg-background/20 rounded-full overflow-hidden mb-0.5">
-                    <div className={`h-full bg-gradient-to-r ${colors[cat.id] || 'from-primary to-secondary'} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-[8px] text-muted-foreground">{pct}%</span>
+                <div key={cat.id} className="flex items-center gap-0.5 shrink-0">
+                  <button onClick={() => setActiveCategory(cat.id)}
+                    className={cn("flex items-center gap-1.5 whitespace-nowrap rounded-full transition-all duration-200 shrink-0 font-semibold",
+                      isMobile ? "w-10 h-10 justify-center p-0" : "px-4 py-2.5 text-[13px]",
+                      isActive ? "text-white scale-105" : "text-[#94A3B8] hover:text-white"
+                    )}
+                    style={isActive
+                      ? { background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', border: 'none' }
+                      : { background: '#111827', border: '1px solid #1f2937' }
+                    }
+                    title={cat.label}
+                  >
+                    {isMobile ? (
+                      <span className={isActive ? 'text-white' : 'text-[#94A3B8]'}>{CATEGORY_ICONS[cat.id] || <span className="text-sm">{CATEGORY_EMOJIS[cat.id]}</span>}</span>
+                    ) : (
+                      <>
+                        <span>{CATEGORY_EMOJIS[cat.id] || '📋'}</span>
+                        <span>{cat.label}</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               );
             })}
+            <button onClick={() => setView('custom')}
+              className={cn("flex items-center gap-1.5 whitespace-nowrap rounded-full font-semibold text-[#94A3B8] hover:text-white transition-all duration-200 shrink-0",
+                isMobile ? "w-10 h-10 justify-center p-0" : "px-4 py-2.5 text-[13px]"
+              )}
+              style={{ background: '#111827', border: '1px solid #1f2937' }}
+              title="Custom"
+            >
+              {isMobile ? <Pencil className="w-4 h-4" /> : <><span>✏️</span><span>Custom</span></>}
+            </button>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Category Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 animate-stagger">
-        {categoryCards.map(cat => {
-          const completed = getCompletedCount(cat.id);
-          const total = getTotalCount(cat.id);
-          const progress = total > 0 ? (completed / total) * 100 : 0;
-          const isActive = activeCategory === cat.id;
-          const CatIcon = cat.icon;
-          const accentClass = CATEGORY_ACCENTS[cat.id] || '';
-          return (
-            <Card key={cat.id} className={cn(
-              "cursor-pointer transition-all duration-300 rounded-2xl border hover-lift",
-              isActive ? `ring-2 ring-primary shadow-lg ${accentClass}` : "hover:border-primary/30"
-            )} onClick={() => setActiveCategory(cat.id)}>
-              <CardContent className="p-3.5">
-                <div className="flex items-center gap-2 mb-2.5">
-                  <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", isActive ? "bg-primary/20" : "bg-muted/40")}>
-                    <CatIcon className={cn("w-4 h-4", isActive ? "text-primary" : "text-muted-foreground")} />
-                  </div>
-                  <span className="font-medium text-sm">{cat.label}</span>
-                </div>
-                <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden mb-1.5">
-                  <div className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
-                </div>
-                <p className="text-[10px] text-muted-foreground">{completed}/{total} done</p>
-              </CardContent>
-            </Card>
-          );
-        })}
-        <Card className="cursor-pointer transition-all duration-300 hover-lift border-dashed rounded-2xl hover:border-primary/30" onClick={() => setView('custom')}>
-          <CardContent className="p-3.5">
-            <div className="flex items-center gap-2 mb-2.5">
-              <div className="w-8 h-8 rounded-lg bg-muted/40 flex items-center justify-center">
-                <Folder className="w-4 h-4 text-muted-foreground" />
-              </div>
-              <span className="font-medium text-sm">Custom</span>
-            </div>
-            <p className="text-[10px] text-muted-foreground">{customFolders.length} folders</p>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Add Task Input Bar — below categories, above task list */}
+          <div className="flex gap-3 mb-3 rounded-full px-4 py-2" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+            <input
+              value={newTodo}
+              onChange={(e) => setNewTodo(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addTodo()}
+              placeholder="Add a task..."
+              className="flex-1 px-2 py-1 text-[15px] text-white placeholder:text-[#4B5563] outline-none bg-transparent"
+            />
+            <button
+              onClick={addTodo}
+              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-110"
+              style={{ background: '#7C3AED' }}
+            >
+              <Plus className="w-4 h-4 text-white" />
+            </button>
+          </div>
 
-      {/* Active Category Tasks */}
-      <Card className={cn("rounded-2xl border", CATEGORY_ACCENTS[activeCategory] || '')}>
-        <CardHeader className="pb-3 px-4 pt-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              {(() => { const ActiveIcon = TODO_CATEGORIES.find(c => c.id === activeCategory)?.icon; return ActiveIcon ? <ActiveIcon className="w-4 h-4 text-primary" /> : null; })()}
-              {TODO_CATEGORIES.find(c => c.id === activeCategory)?.label}
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => resetCategory(activeCategory)} className="gap-1 text-xs h-7">
+          {/* Category header + reset */}
+          <div className="flex items-center justify-between px-1">
+            <p className="text-[12px]" style={{ color: '#94A3B8' }}>
+              {getCompletedCount(activeCategory)}/{getTotalCount(activeCategory)} done
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => resetCategory(activeCategory)} className="gap-1 text-xs h-7 text-[#94A3B8] hover:text-white hover:bg-white/5">
               <RotateCcw className="w-3.5 h-3.5" />Reset
             </Button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-1.5 px-4 pb-4">
-          {todos[activeCategory].map(todo => {
-            const isCelebrating = celebratingId === todo.id;
-            return (
-              <div key={todo.id} className={cn(
-                "group flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 relative",
-                todo.completed ? "bg-primary/5 border-primary/15" : "border-border/40 hover:border-primary/20",
-                isCelebrating && "animate-task-complete"
-              )}>
-                <button
-                  onClick={() => toggleTodo(activeCategory, todo.id)}
-                  className={cn(
-                    "w-5.5 h-5.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300",
-                    todo.completed ? "bg-primary border-primary" : "border-muted-foreground/40 hover:border-primary/60",
-                    isCelebrating && "animate-checkbox-fill"
-                  )}
-                  style={{ width: 22, height: 22 }}
-                >
-                  {todo.completed && (
-                    <svg className="w-3 h-3 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 13l4 4L19 7" className={isCelebrating ? "animate-checkmark-draw" : ""} />
-                    </svg>
-                  )}
-                </button>
-                <span className={cn("flex-1 text-sm transition-all duration-300", todo.completed && "line-through text-muted-foreground/60")}>{todo.text}</span>
 
-                {isCelebrating && (
-                  <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
-                    {[...Array(8)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="absolute w-1.5 h-1.5 rounded-full animate-confetti-burst"
-                        style={{
-                          left: '12px', top: '50%',
-                          backgroundColor: ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(45, 100%, 60%)', 'hsl(330, 80%, 60%)', 'hsl(150, 70%, 50%)', 'hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(45, 100%, 60%)'][i],
-                          animationDelay: `${i * 40}ms`,
-                          '--confetti-x': `${Math.cos((i / 8) * Math.PI * 2) * 40}px`,
-                          '--confetti-y': `${Math.sin((i / 8) * Math.PI * 2) * 25}px`,
-                        } as React.CSSProperties}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openReminder(todo.id, todo.text)}>
-                    <Bell className={cn("w-3 h-3", reminders[todo.id] ? "text-primary" : "text-muted-foreground")} />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteTodo(activeCategory, todo.id)}>
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+          {/* Task Items */}
+          {(allDone || isEmpty) ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-3">
+              <span className="text-5xl">{isEmpty ? '📝' : '✅'}</span>
+              <p className="text-[18px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                {isEmpty ? 'No tasks yet' : 'All done for today!'}
+              </p>
+              <p className="text-[14px]" style={{ color: '#94A3B8' }}>
+                {isEmpty ? 'Add your first task below' : 'You crushed it 🎉'}
+              </p>
+              {allDone && (
+                <div className="absolute pointer-events-none">
+                  {[...Array(12)].map((_, i) => (
+                    <div key={i} className="absolute w-2 h-2 rounded-full animate-confetti-burst" style={{
+                      backgroundColor: ['#7C3AED', '#3B82F6', '#FBBF24', '#EC4899', '#10B981', '#F59E0B'][i % 6],
+                      left: '50%', top: '50%',
+                      animationDelay: `${i * 80}ms`,
+                      '--confetti-x': `${Math.cos((i / 12) * Math.PI * 2) * 80}px`,
+                      '--confetti-y': `${Math.sin((i / 12) * Math.PI * 2) * 60}px`,
+                    } as React.CSSProperties} />
+                  ))}
                 </div>
-              </div>
-            );
-          })}
-          <div className="flex gap-2 pt-2">
-            <Input placeholder="Add a new task..." value={newTodo} onChange={(e) => setNewTodo(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTodo()} className="rounded-xl" />
-            <Button onClick={addTodo} size="icon" className="rounded-xl shrink-0"><Plus className="w-4 h-4" /></Button>
-          </div>
-        </CardContent>
-      </Card>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {activeTodos.map(todo => {
+                const isCelebrating = celebratingId === todo.id;
+                const showXp = xpFloatId === todo.id;
+                return (
+                  <div key={todo.id} className={cn(
+                    "group flex items-center gap-3 rounded-[14px] p-4 transition-all duration-300 relative",
+                    isCelebrating && "todo-celebrate"
+                  )} style={{
+                    background: '#111827',
+                    border: todo.completed ? '1px solid rgba(124,58,237,0.2)' : '1px solid #1f2937',
+                  }}>
+                    {/* Checkbox with ring pulse */}
+                    <button
+                      onClick={() => toggleTodo(activeCategory, todo.id)}
+                      className="relative shrink-0 transition-all duration-300"
+                      style={{ width: 28, height: 28 }}
+                    >
+                      {isCelebrating && (
+                        <div className="absolute inset-0 rounded-full ring-pulse" style={{
+                          background: 'rgba(124, 58, 237, 0.3)',
+                        }} />
+                      )}
+                      <div className={cn(
+                        "w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all duration-200",
+                        todo.completed ? "border-transparent" : "border-[#374151] hover:border-[#7C3AED]/60",
+                        isCelebrating && "animate-checkbox-fill"
+                      )} style={todo.completed ? { background: 'linear-gradient(135deg, #7C3AED, #3B82F6)' } : {}}>
+                        {todo.completed && (
+                          <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 13l4 4L19 7" className={isCelebrating ? "animate-checkmark-draw" : ""} />
+                          </svg>
+                        )}
+                      </div>
+                      {showXp && (
+                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 xp-float pointer-events-none whitespace-nowrap" style={{ color: '#A78BFA' }}>
+                          +3 XP
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Task text with animated strikethrough */}
+                    <div className="flex-1 min-w-0 relative">
+                      <span className={cn(
+                        "text-[15px] transition-all duration-500 block",
+                        todo.completed ? "text-[#4B5563]" : "text-white"
+                      )}>
+                        {todo.text}
+                      </span>
+                      {todo.completed && (
+                        <div className="absolute top-1/2 left-0 h-[1.5px] -translate-y-1/2" style={{
+                          background: 'linear-gradient(90deg, #7C3AED, #3B82F6)',
+                          width: isCelebrating ? '0%' : '100%',
+                          animation: isCelebrating ? 'none' : undefined,
+                          transition: 'width 400ms ease-out 200ms',
+                          ...(isCelebrating ? {} : { width: '100%' }),
+                        }} />
+                      )}
+                    </div>
+
+                    {/* Confetti burst */}
+                    {isCelebrating && (
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[14px]">
+                        {[...Array(12)].map((_, i) => {
+                          const angle = (i / 12) * Math.PI * 2;
+                          const distance = 30 + Math.random() * 30;
+                          const size = 4 + Math.random() * 4;
+                          return (
+                            <div key={i} className="absolute rounded-full animate-confetti-burst" style={{
+                              left: '28px', top: '50%',
+                              width: size, height: size,
+                              backgroundColor: ['#7C3AED', '#3B82F6', '#FBBF24', '#EC4899', '#10B981', '#F59E0B', '#A78BFA', '#06B6D4', '#F43F5E', '#8B5CF6', '#34D399', '#FCD34D'][i],
+                              animationDelay: `${i * 30}ms`,
+                              '--confetti-x': `${Math.cos(angle) * distance}px`,
+                              '--confetti-y': `${Math.sin(angle) * distance}px`,
+                              '--confetti-r': `${Math.random() * 360}deg`,
+                            } as React.CSSProperties} />
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-white/5" onClick={() => openReminder(todo.id, todo.text)}>
+                        <Bell className={cn("w-3 h-3", reminders[todo.id] ? "text-[#7C3AED]" : "text-[#4B5563]")} />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:bg-white/5" onClick={() => deleteTodo(activeCategory, todo.id)}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+      </div>
 
       {reminderTask && (
         <TodoReminderDialog open={reminderDialogOpen} onOpenChange={setReminderDialogOpen} taskId={reminderTask.id} taskText={reminderTask.text} />

@@ -11,7 +11,7 @@ import {
   ExternalLink, Download, Trash2, Play, Pause, File, Edit3,
   Volume2, VolumeX, Maximize, X, FolderPlus
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, encodeFileUrl } from '@/lib/utils';
 import { Database } from '@/integrations/supabase/types';
 
 type Document = Database['public']['Tables']['documents']['Row'];
@@ -128,7 +128,7 @@ export function EducationDocCard({
                     <ExternalLink className="w-4 h-4 mr-2" />Preview
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={onOpen}>
+                <DropdownMenuItem onClick={() => window.open(encodeFileUrl(doc.file_url), '_blank')}>
                   <ExternalLink className="w-4 h-4 mr-2" />Open in browser
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => {
@@ -169,7 +169,7 @@ export function EducationDocCard({
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
                   const a = document.createElement('a'); a.href = doc.file_url; a.download = doc.file_name; a.target = '_blank'; a.click();
                 }}><Download className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpen}><ExternalLink className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(encodeFileUrl(doc.file_url), '_blank')}><ExternalLink className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPreviewOpen(false)}><X className="w-4 h-4" /></Button>
               </div>
             </div>

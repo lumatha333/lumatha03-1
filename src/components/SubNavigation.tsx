@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Home, Lock, Bell, User, Video, Search } from 'lucide-react';
+import { 
+  Home, Lock, Bell, User, Search, Heart, MessageSquare, 
+  Mountain, ShoppingCart, Gamepad2, BarChart3, Trophy,
+  Ghost, CheckSquare, StickyNote, Compass, Library, UserCircle
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,20 +14,195 @@ interface SubNavigationProps {
   visible?: boolean;
 }
 
-const tabs = [
-  { id: 'feed', icon: Home, path: '/', label: 'Feed', color: 'text-blue-500' },
-  { id: 'videos', icon: Video, path: '/?filter=videos', label: 'VDOs', color: 'text-red-500' },
-  { id: 'search', icon: Search, path: '/search', label: 'Search', color: 'text-cyan-500' },
-  { id: 'private', icon: Lock, path: '/private', label: 'Private', color: 'text-green-500' },
-  { id: 'notifications', icon: Bell, path: '/notifications', label: 'Alerts', color: 'text-orange-500' },
-  { id: 'profile', icon: User, path: null, label: 'Profile', color: 'text-teal-500' },
+type TabConfig = {
+  id: string;
+  icon: React.ElementType;
+  path: string | null;
+  label: string;
+};
+
+// Layout 1: Classic (Default)
+const classicTabs: TabConfig[] = [
+  { id: 'feed', icon: Home, path: '/', label: 'Feed' },
+  { id: 'search', icon: Search, path: '/search', label: 'Search' },
+  { id: 'private', icon: Lock, path: '/private', label: 'Private' },
+  { id: 'notifications', icon: Bell, path: '/notifications', label: 'Alerts' },
+  { id: 'profile', icon: User, path: null, label: 'Profile' },
 ];
 
-export function SubNavigation({ visible = true }: SubNavigationProps) {
+const ZONE_STORAGE_KEY = 'lumatha_active_zone';
+
+// Zone configurations with their subsections for Layout 2 & 3
+type SubSection = {
+  id: string;
+  icon: React.ElementType;
+  path: string;
+  label: string;
+};
+
+type ZoneConfig = {
+  id: string;
+  label: string;
+  color: string;
+  subsections: SubSection[];
+};
+
+// Layout 2: Private × Neutral × Public
+const layout2Zones: ZoneConfig[] = [
+  {
+    id: 'private',
+    label: 'Private',
+    color: 'text-purple-400',
+    subsections: [
+      { id: 'private', icon: Lock, path: '/private', label: 'Private Zone' },
+      { id: 'todo', icon: CheckSquare, path: '/education?tab=todo', label: 'To Do' },
+      { id: 'notes', icon: StickyNote, path: '/education?tab=notes', label: 'Notes' },
+      { id: 'quests', icon: Mountain, path: '/music-adventure', label: 'Quests' },
+      { id: 'challenges', icon: Trophy, path: '/music-adventure?tab=challenges', label: 'Challenges' },
+      { id: 'messages', icon: MessageSquare, path: '/chat', label: 'Messages' },
+      { id: 'funpun', icon: Gamepad2, path: '/funpun', label: 'FunPun' },
+    ]
+  },
+  {
+    id: 'public',
+    label: 'Public',
+    color: 'text-green-400',
+    subsections: [
+      { id: 'feed', icon: Home, path: '/', label: 'Feed' },
+      { id: 'docs', icon: Library, path: '/education?tab=docs', label: 'Docs' },
+      { id: 'stories', icon: Ghost, path: '/create?mode=ghost', label: 'Stories' },
+      { id: 'market', icon: ShoppingCart, path: '/marketplace', label: 'Marketplace' },
+      { id: 'profile', icon: UserCircle, path: '/profile/me', label: 'Profile' },
+    ]
+  },
+  {
+    id: 'neutral',
+    label: 'Neutral',
+    color: 'text-blue-400',
+    subsections: [
+      { id: 'explore', icon: Compass, path: '/search', label: 'Explore Places' },
+      { id: 'connect', icon: Heart, path: '/random-connect', label: 'Random Connect' },
+      { id: 'notifications', icon: Bell, path: '/notifications', label: 'Notify' },
+      { id: 'stats', icon: BarChart3, path: '/education?tab=stats', label: 'Stats' },
+      { id: 'ranking', icon: Trophy, path: '/music-adventure?tab=ranking', label: 'Ranking' },
+    ]
+  }
+];
+
+// Layout 3: Social × Education × Neutral
+const layout3Zones: ZoneConfig[] = [
+  {
+    id: 'social',
+    label: 'Social',
+    color: 'text-pink-400',
+    subsections: [
+      { id: 'feed', icon: Home, path: '/', label: 'Feed' },
+      { id: 'quest', icon: Mountain, path: '/music-adventure', label: 'Quest' },
+      { id: 'explore', icon: Compass, path: '/search', label: 'Explore Places' },
+      { id: 'connect', icon: Heart, path: '/random-connect', label: 'Random Connect' },
+      { id: 'market', icon: ShoppingCart, path: '/marketplace', label: 'Marketplace' },
+      { id: 'profile', icon: UserCircle, path: '/profile/me', label: 'Profile' },
+    ]
+  },
+  {
+    id: 'education',
+    label: 'Education',
+    color: 'text-green-400',
+    subsections: [
+      { id: 'private', icon: Lock, path: '/private', label: 'Private Zone' },
+      { id: 'todo', icon: CheckSquare, path: '/education?tab=todo', label: 'To Do' },
+      { id: 'notes', icon: StickyNote, path: '/education?tab=notes', label: 'Notes' },
+      { id: 'docs', icon: Library, path: '/education?tab=docs', label: 'Docs' },
+      { id: 'messages', icon: MessageSquare, path: '/chat', label: 'Messages' },
+    ]
+  },
+  {
+    id: 'neutral',
+    label: 'Neutral',
+    color: 'text-blue-400',
+    subsections: [
+      { id: 'stories', icon: Ghost, path: '/create?mode=ghost', label: 'Stories' },
+      { id: 'funpun', icon: Gamepad2, path: '/funpun', label: 'FunPun' },
+      { id: 'notifications', icon: Bell, path: '/notifications', label: 'Notify' },
+      { id: 'stats', icon: BarChart3, path: '/education?tab=stats', label: 'Stats' },
+      { id: 'ranking', icon: Trophy, path: '/music-adventure?tab=ranking', label: 'Ranking' },
+    ]
+  }
+];
+
+export function SubNavigation({ visible = true }: { visible?: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [layoutMode, setLayoutMode] = useState<number>(1);
+  const [activeZone, setActiveZone] = useState<string>('public');
+
+  // Get current zone and its subsections based on path
+  const getCurrentZoneFromPath = (): { zoneId: string; zone: ZoneConfig | null } => {
+    const path = location.pathname;
+    const search = location.search;
+    const fullPath = path + search;
+    
+    if (layoutMode === 2) {
+      for (const zone of layout2Zones) {
+        const match = zone.subsections.find(sub => 
+          fullPath === sub.path || 
+          (sub.path.includes('?') && fullPath.startsWith(sub.path.split('?')[0]) && search === sub.path.split('?')[1]?.replace('?', ''))
+        );
+        if (match) return { zoneId: zone.id, zone };
+      }
+    } else if (layoutMode === 3) {
+      for (const zone of layout3Zones) {
+        const match = zone.subsections.find(sub => 
+          fullPath === sub.path || 
+          (sub.path.includes('?') && fullPath.startsWith(sub.path.split('?')[0]) && search === sub.path.split('?')[1]?.replace('?', ''))
+        );
+        if (match) return { zoneId: zone.id, zone };
+      }
+    }
+    
+    // Default zones based on saved preference
+    const savedZone = localStorage.getItem(ZONE_STORAGE_KEY);
+    if (layoutMode === 2) {
+      const zone = layout2Zones.find(z => z.id === savedZone) || layout2Zones[2]; // Default to public
+      return { zoneId: zone.id, zone };
+    } else if (layoutMode === 3) {
+      const zone = layout3Zones.find(z => z.id === savedZone) || layout3Zones[1]; // Default to social
+      return { zoneId: zone.id, zone };
+    }
+    
+    return { zoneId: 'public', zone: null };
+  };
+
+  // Load layout mode from localStorage
+  useEffect(() => {
+    const loadSettings = () => {
+      const savedLayout = localStorage.getItem('lumatha_layout_mode');
+      if (savedLayout) {
+        setLayoutMode(parseInt(savedLayout, 10));
+      }
+    };
+    loadSettings();
+    
+    // Listen for layout changes
+    const handleLayoutChange = (e: CustomEvent) => {
+      setLayoutMode(e.detail);
+    };
+    window.addEventListener('lumatha_layout_change', handleLayoutChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('lumatha_layout_change', handleLayoutChange as EventListener);
+    };
+  }, []);
+  
+  // Update active zone based on current path
+  useEffect(() => {
+    const { zoneId } = getCurrentZoneFromPath();
+    setActiveZone(zoneId);
+    localStorage.setItem(ZONE_STORAGE_KEY, zoneId);
+  }, [location.pathname, location.search, layoutMode]);
+
 
   useEffect(() => {
     if (!user) return;
@@ -40,92 +219,114 @@ export function SubNavigation({ visible = true }: SubNavigationProps) {
       .channel('sub-nav-notifications')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => fetchUnreadCount())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
-  const handleTabClick = (tab: typeof tabs[0]) => {
-    // Always scroll to top on navigation
+  // Get current tabs for bottom navigation
+  const getCurrentTabs = (): TabConfig[] => {
+    const { zone } = getCurrentZoneFromPath();
+    
+    switch (layoutMode) {
+      case 2:
+      case 3:
+        // Show subsections of current zone
+        if (zone) {
+          return zone.subsections.map(sub => ({
+            id: sub.id,
+            icon: sub.icon,
+            path: sub.path,
+            label: sub.label
+          }));
+        }
+        return classicTabs;
+      case 1:
+      default:
+        return classicTabs;
+    }
+  };
+
+  const currentTabs = getCurrentTabs();
+
+  const handleTabClick = (tab: TabConfig) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    if (tab.id === 'videos') {
-      localStorage.setItem('lumatha_feed_filter', 'videos');
-      navigate('/');
-      window.dispatchEvent(new CustomEvent('feedFilterChange', { detail: 'videos' }));
-    } else if (tab.id === 'search') {
-      navigate('/search');
-    } else if (tab.path) {
+    if (tab.path) {
       if (tab.id === 'feed') {
         localStorage.setItem('lumatha_feed_filter', 'all');
         window.dispatchEvent(new CustomEvent('feedFilterChange', { detail: 'all' }));
       }
       navigate(tab.path);
-    } else if (tab.id === 'profile' && user) {
+    } else if ((tab.id === 'profile' || tab.id === 'user') && user) {
       navigate(`/profile/${user.id}`);
     }
   };
 
-  const isActive = (tab: typeof tabs[0]) => {
-    if (tab.id === 'videos') {
-      return location.pathname === '/' && localStorage.getItem('lumatha_feed_filter') === 'videos';
-    }
-    if (tab.id === 'feed') {
-      return location.pathname === '/' && localStorage.getItem('lumatha_feed_filter') !== 'videos';
-    }
+  const isActive = (tab: TabConfig) => {
+    if (tab.id === 'feed') return location.pathname === '/' && !location.search.includes('videos');
     if (tab.id === 'search') return location.pathname === '/search';
-    if (tab.path) return location.pathname === tab.path;
+    if (tab.path) {
+      if (tab.path.includes('?')) {
+        return location.pathname + location.search === tab.path;
+      }
+      return location.pathname === tab.path;
+    }
     if (tab.id === 'profile') return location.pathname.startsWith('/profile');
     return false;
   };
 
-  if (!visible) return null;
 
   return (
-    <div className="flex items-center justify-around w-full px-2 py-1 glass-card border-t border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/40 pb-safe">
-      {tabs.map((tab) => {
+    <div
+      className={cn(
+        "fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between px-1 safe-area-bottom border-t transition-all duration-300 ease-in-out",
+        visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
+      )}
+      style={{
+        background: 'var(--bg-card)',
+        borderColor: 'var(--border-c)',
+        height: 68,
+      }}
+    >
+      {currentTabs.map((tab) => {
         const Icon = tab.icon;
         const active = isActive(tab);
-        const showBadge = tab.id === 'notifications' && unreadCount > 0;
+        const showBadge = (tab.id === 'notifications' || tab.id === 'notify') && unreadCount > 0;
         const isProfileTab = tab.id === 'profile';
 
         return (
           <button
             key={tab.id}
             onClick={() => handleTabClick(tab)}
-            className={cn(
-              "flex flex-col items-center justify-center flex-1 py-1 rounded-2xl transition-all duration-300 active:scale-90 relative group",
-              active ? "text-primary" : "text-muted-foreground hover:text-primary"
-            )}
+            className="flex flex-col items-center justify-center flex-1 h-full relative transition-all active:scale-90"
+            style={{ minWidth: 36 }}
             title={tab.label}
           >
-            <div className="relative p-1.5 rounded-xl transition-all group-hover:bg-primary/10">
+            <div className="relative">
               {isProfileTab ? (
-                <Avatar className={cn(
-                  "w-6 h-6 transition-all duration-500",
-                  active ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110" : "grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100"
-                )}>
+                <Avatar
+                  className={cn('w-6 h-6 transition-all', active ? 'ring-2 ring-offset-1 ring-offset-background' : '')}
+                  style={active ? { boxShadow: '0 0 0 2px var(--accent)' } : undefined}
+                >
                   <AvatarImage src={profile?.avatar_url || undefined} />
-                  <AvatarFallback className="bg-gradient-to-br from-primary to-primary/60 text-primary-foreground text-[10px] font-bold">
+                  <AvatarFallback className="text-[9px] font-bold text-white" style={{ background: 'var(--grad-1)' }}>
                     {profile?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                   </AvatarFallback>
                 </Avatar>
               ) : (
-                <Icon className={cn("w-5 h-5 transition-transform duration-300", active ? "text-primary scale-110" : "group-hover:scale-110")} />
+                <Icon className="w-[22px] h-[22px]" style={{ color: active ? 'var(--accent)' : 'var(--text-3)' }} />
               )}
               {showBadge && (
-                <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[8px] font-black rounded-full min-w-[16px] h-[16px] flex items-center justify-center border-2 border-background animate-in zoom-in duration-300">
+                <span
+                  className="absolute -top-1 -right-1.5 text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 text-white"
+                  style={{ background: 'var(--danger)' }}
+                >
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </div>
-            <span className={cn(
-              "text-[8px] font-black uppercase tracking-widest transition-all duration-300 mt-0.5",
-              active ? "text-primary opacity-100" : "text-muted-foreground opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0"
-            )}>
-              {tab.label}
-            </span>
-            {active && (
-              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary shadow-glow-primary animate-pulse" />
-            )}
+            {active && <div className="w-1 h-1 rounded-full mt-1.5" style={{ background: 'var(--accent)' }} />}
           </button>
         );
       })}

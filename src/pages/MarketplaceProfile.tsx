@@ -1,68 +1,69 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingBag, Briefcase, Home as HomeIcon, MapPin, Calendar, Award, MessageCircle, Heart, Bookmark, ArrowLeft, Edit3, Filter } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { MapPin, ArrowLeft, Edit3, ChevronRight, MessageCircle, Phone, ExternalLink, Star } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  getTrustScore, SellerProfile, RESPONSE_TIMES, AVAILABILITY_OPTIONS, DEFAULT_SELLER,
+} from '@/lib/marketplaceTrust';
 
 export default function MarketplaceProfile() {
   const { userId } = useParams();
-  const { user, profile: myProfile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const isOwner = user?.id === userId;
 
   const [profile, setProfile] = useState<any>(null);
   const [mpProfile, setMpProfile] = useState<any>(null);
   const [listings, setListings] = useState<any[]>([]);
+  const [stats, setStats] = useState({ total: 0, sell: 0, job: 0, rent: 0 });
+  const [activeTab, setActiveTab] = useState('listings');
   const [savedListings, setSavedListings] = useState<any[]>([]);
-  const [likedListings, setLikedListings] = useState<any[]>([]);
-  const [chatUsers, setChatUsers] = useState<any[]>([]);
-  const [stats, setStats] = useState({ sell: 0, job: 0, rent: 0 });
-  const [editOpen, setEditOpen] = useState(false);
-  const [editBio, setEditBio] = useState('');
-  const [editQualification, setEditQualification] = useState('');
+  const [seller, setSeller] = useState<SellerProfile | null>(null);
   const [filter, setFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState('posts');
 
   useEffect(() => {
     if (!userId) return;
-    fetchProfile();
-    fetchListings();
-    if (isOwner) {
-      fetchSaved();
-      fetchLiked();
-      fetchChats();
-    }
+    fetchAll();
   }, [userId]);
 
-  const fetchProfile = async () => {
-    const { data: p } = await supabase.from('profiles').select('*').eq('id', userId).single();
+  const fetchAll = async () => {
+    const [{ data: p }, { data: mp }, { data: lData }] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('marketplace_profiles').select('*').eq('user_id', userId!).maybeSingle(),
+      supabase.from('marketplace_listings').select('*').eq('user_id', userId!).eq('status', 'active').order('created_at', { ascending: false }),
+    ]);
     setProfile(p);
-    const { data: mp } = await supabase.from('marketplace_profiles').select('*').eq('user_id', userId!).maybeSingle();
     setMpProfile(mp);
-    if (mp) {
-      setEditBio(mp.bio || '');
-      setEditQualification(mp.qualification || '');
-    }
-  };
-
-  const fetchListings = async () => {
-    const { data } = await supabase.from('marketplace_listings').select('*').eq('user_id', userId!).eq('status', 'active').order('created_at', { ascending: false });
-    if (data) {
-      setListings(data);
-      const s = { sell: 0, job: 0, rent: 0 };
-      data.forEach(l => { if (l.type in s) (s as any)[l.type]++; });
+    if (lData) {
+      setListings(lData);
+      const s = { total: lData.length, sell: 0, job: 0, rent: 0 };
+      lData.forEach(l => { if (l.type in s) (s as any)[l.type]++; });
       setStats(s);
     }
+    // Build seller from DB data
+    const stored: SellerProfile = {
+      displayName: (mp as any)?.username || p?.first_name || p?.name || '',
+      sellerType: (mp as any)?.seller_type || 'individual',
+      bio: mp?.bio || '',
+      qualification: mp?.qualification || '',
+      phone: (mp as any)?.phone || '',
+      whatsappSame: (mp as any)?.whatsapp_same ?? true,
+      whatsapp: (mp as any)?.whatsapp || '',
+      location: mp?.location || p?.location || '',
+      area: (mp as any)?.area || '',
+      paymentMethods: (mp as any)?.payment_methods || ['💵 Cash'],
+      responseTime: (mp as any)?.response_time || 'few_hours',
+      availability: (mp as any)?.availability || [],
+      sellingCategories: (mp as any)?.selling_categories || [],
+      showPhoneTo: (mp as any)?.show_phone_to || 'Everyone',
+      allowReviews: (mp as any)?.allow_reviews ?? true,
+      isPhoneVerified: (mp as any)?.is_phone_verified ?? false,
+    };
+    setSeller(stored);
+    if (isOwner && user) fetchSaved();
   };
 
   const fetchSaved = async () => {
@@ -74,238 +75,230 @@ export default function MarketplaceProfile() {
     }
   };
 
-  const fetchLiked = async () => {
-    if (!user) return;
-    const { data: liked } = await supabase.from('marketplace_likes').select('listing_id').eq('user_id', user.id);
-    if (liked?.length) {
-      const { data } = await supabase.from('marketplace_listings').select('*').in('id', liked.map(l => l.listing_id));
-      setLikedListings(data || []);
-    }
-  };
+  if (!profile || !seller) return <div className="min-h-screen" style={{ background: 'var(--bg-base, #0a0f1e)' }} />;
 
-  const fetchChats = async () => {
-    if (!user) return;
-    const { data: msgs } = await supabase.from('messages').select('sender_id, receiver_id').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(30);
-    if (msgs) {
-      const otherIds = [...new Set(msgs.map(m => m.sender_id === user.id ? m.receiver_id : m.sender_id))].slice(0, 10);
-      if (otherIds.length) {
-        const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, username').in('id', otherIds);
-        setChatUsers(profiles || []);
-      }
-    }
-  };
-
-  const saveProfile = async () => {
-    if (!user) return;
-    const payload = { user_id: user.id, bio: editBio.slice(0, 120), qualification: editQualification };
-    if (mpProfile) {
-      await supabase.from('marketplace_profiles').update(payload).eq('user_id', user.id);
-    } else {
-      await supabase.from('marketplace_profiles').insert(payload);
-    }
-    setEditOpen(false);
-    fetchProfile();
-  };
-
+  const trust = getTrustScore(seller, profile.avatar_url);
+  const whatsappNumber = seller.whatsappSame ? seller.phone : seller.whatsapp;
+  const canShowPhone = seller.showPhoneTo === '🌍 Everyone' || (seller.showPhoneTo === '👥 Verified only');
+  const responseLabel = RESPONSE_TIMES.find(r => r.id === seller.responseTime)?.label || '';
+  const availLabel = seller.availability.map(a => AVAILABILITY_OPTIONS.find(o => o.id === a)?.label || a).join(' • ');
+  const joinedDate = profile.created_at ? format(new Date(profile.created_at), 'MMM yyyy') : '--';
   const filteredListings = filter === 'all' ? listings : listings.filter(l => l.type === filter);
 
-  const typeColors: Record<string, string> = {
-    sell: 'from-emerald-500/20 to-emerald-600/5 border-emerald-500/30',
-    job: 'from-violet-500/20 to-violet-600/5 border-violet-500/30',
-    rent: 'from-amber-500/20 to-amber-600/5 border-amber-500/30',
-  };
-
-  if (!profile) return null;
-
   return (
-    <div className="space-y-4 pb-24">
-      {/* Back */}
-      <Button variant="ghost" size="sm" onClick={() => navigate('/marketplace')} className="gap-1 -ml-2">
-        <ArrowLeft className="w-4 h-4" />Back to Marketplace
-      </Button>
+    <div className="min-h-screen pb-24" style={{ background: 'var(--bg-base, #0a0f1e)' }}>
+      {/* Top bar */}
+      <div className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3" style={{ background: 'rgba(10,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
+        <button onClick={() => navigate('/marketplace')} className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'var(--bg-elevated, #1e293b)' }}>
+          <ArrowLeft className="w-5 h-5 text-white" />
+        </button>
+        <h1 className="text-[16px] font-bold text-white flex-1 truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          {seller.displayName || profile.name}
+        </h1>
+      </div>
 
-      {/* Profile Header */}
-      <Card className="border-0 bg-gradient-to-br from-primary/10 via-secondary/5 to-accent/10 backdrop-blur-xl overflow-hidden">
-        <CardContent className="py-5">
+      {/* Profile header card */}
+      <div className="px-4 pt-4">
+        <div className="rounded-b-[24px] p-5" style={{ background: 'var(--bg-card, #111827)' }}>
+          {/* Avatar + name row */}
           <div className="flex items-start gap-4">
-            <div className="relative">
-              <Avatar className="w-16 h-16 ring-2 ring-primary/30">
-                <AvatarImage src={profile.avatar_url || undefined} />
-                <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-xl font-bold">{profile.name?.[0]}</AvatarFallback>
-              </Avatar>
-            </div>
+            <Avatar className="w-[72px] h-[72px] shrink-0" style={{ border: '3px solid #374151' }}>
+              <AvatarImage src={profile.avatar_url || undefined} />
+              <AvatarFallback className="text-2xl font-bold" style={{ background: '#1e293b', color: '#94A3B8' }}>
+                {seller.displayName?.[0] || '?'}
+              </AvatarFallback>
+            </Avatar>
             <div className="flex-1 min-w-0">
-              <h2 className="font-bold text-lg">{profile.name}</h2>
-              {profile.username && <p className="text-xs text-muted-foreground">@{profile.username}</p>}
-              {(mpProfile?.bio || profile.bio) && (
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{mpProfile?.bio || profile.bio}</p>
-              )}
-              <div className="flex flex-wrap gap-2 mt-2">
-                {(mpProfile?.location || profile.detected_city) && (
-                  <Badge variant="outline" className="text-[10px] gap-1"><MapPin className="w-3 h-3" />{mpProfile?.location || `${profile.detected_city}${profile.country ? `, ${profile.country}` : ''}`}</Badge>
-                )}
-                {mpProfile?.qualification && (
-                  <Badge variant="outline" className="text-[10px] gap-1"><Award className="w-3 h-3" />{mpProfile.qualification}</Badge>
-                )}
-                <Badge variant="outline" className="text-[10px] gap-1"><Calendar className="w-3 h-3" />Joined {formatDistanceToNow(new Date(profile.created_at), { addSuffix: true })}</Badge>
-              </div>
+              <h2 className="text-[20px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                {seller.displayName || profile.name}
+              </h2>
+              {/* Trust label */}
+              <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold mt-1" style={{ background: `${trust.trustColor}15`, border: `1px solid ${trust.trustColor}30`, color: trust.trustColor }}>
+                {trust.trustLabel}
+              </span>
+              {/* Seller type */}
+              <span className="inline-block ml-2 px-2.5 py-1 rounded-full text-[11px] font-medium mt-1" style={{ background: 'rgba(124,58,237,0.1)', color: '#A78BFA' }}>
+                {seller.sellerType === 'business' ? '🏪 Small Business' : '👤 Individual'}
+              </span>
             </div>
           </div>
-          {isOwner && (
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="mt-3 w-full gap-1 text-xs border-primary/20">
-              <Edit3 className="w-3 h-3" />Edit Marketplace Profile
-            </Button>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { label: 'Sell', value: stats.sell, icon: ShoppingBag, gradient: 'from-emerald-500/20 to-emerald-600/5' },
-          { label: 'Jobs', value: stats.job, icon: Briefcase, gradient: 'from-violet-500/20 to-violet-600/5' },
-          { label: 'Rent', value: stats.rent, icon: HomeIcon, gradient: 'from-amber-500/20 to-amber-600/5' },
-        ].map(s => (
-          <Card key={s.label} className={`border-0 bg-gradient-to-br ${s.gradient} backdrop-blur-sm`}>
-            <CardContent className="py-3 text-center">
-              <s.icon className="w-5 h-5 mx-auto text-foreground/70" />
-              <p className="text-lg font-bold mt-1">{s.value}</p>
-              <p className="text-[10px] text-muted-foreground">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+          {/* Trust badges row */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {/* Phone badge */}
+            {seller.isPhoneVerified ? (
+              <span className="px-3 py-1.5 rounded-full text-[12px] font-semibold" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#10B981' }}>✅ Verified</span>
+            ) : (
+              <span className="px-3 py-1.5 rounded-full text-[12px] opacity-60" style={{ background: 'var(--bg-elevated, #1e293b)', border: '1px solid var(--border, #1f2937)', color: '#94A3B8' }}>📱 Unverified</span>
+            )}
+            {/* Location badge */}
+            {seller.location && (
+              <span className="px-3 py-1.5 rounded-full text-[12px] text-white" style={{ background: 'var(--bg-elevated, #1e293b)', border: '1px solid var(--border, #1f2937)' }}>📍 {seller.location.split(',')[0]}</span>
+            )}
+            {/* Rating badge */}
+            <span className="px-3 py-1.5 rounded-full text-[12px]" style={{ background: 'var(--bg-elevated, #1e293b)', border: '1px solid var(--border, #1f2937)', color: '#94A3B8' }}>⭐ New Seller</span>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-3 text-center mt-4 pt-4" style={{ borderTop: '1px solid var(--border, #1f2937)' }}>
+            {[
+              { icon: '📦', value: stats.total, label: 'Listings' },
+              { icon: '✅', value: 0, label: 'Deals' },
+              { icon: '📅', value: joinedDate, label: 'Joined' },
+            ].map(s => (
+              <div key={s.label}>
+                <p className="text-[18px] font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{s.value}</p>
+                <p className="text-[11px]" style={{ color: '#94A3B8' }}>{s.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bio section */}
+        {seller.bio && (
+          <div className="mt-4 px-1">
+            <p className="text-[14px] font-semibold text-white mb-1">About</p>
+            <p className="text-[15px] leading-relaxed" style={{ color: '#94A3B8' }}>{seller.bio}</p>
+          </div>
+        )}
+
+        {/* Contact / Owner action buttons */}
+        {!isOwner ? (
+          <div className="flex gap-2 mt-4">
+            <button onClick={() => navigate(`/chat/${userId}`)} className="flex-1 h-[44px] rounded-[12px] text-[14px] font-semibold text-white flex items-center justify-center gap-2 active:scale-95 transition-all"
+              style={{ background: 'linear-gradient(135deg, var(--accent, #7C3AED), #6366F1)' }}>
+              <MessageCircle className="w-4 h-4" /> 💬 Message
+            </button>
+            {whatsappNumber && (
+              <a href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer"
+                className="h-[44px] px-5 rounded-[12px] text-[14px] font-semibold flex items-center justify-center gap-1 active:scale-95 transition-all"
+                style={{ background: '#25D366', color: 'white' }}>
+                📱 WhatsApp
+              </a>
+            )}
+            {canShowPhone && seller.phone && (
+              <a href={`tel:${seller.phone}`} className="h-[44px] px-4 rounded-[12px] flex items-center justify-center active:scale-95 transition-all"
+                style={{ background: 'var(--bg-elevated, #1e293b)', border: '1px solid var(--border, #374151)' }}>
+                <Phone className="w-4 h-4 text-white" />
+              </a>
+            )}
+          </div>
+        ) : (
+          <button onClick={() => navigate('/marketplace/edit-profile')} className="w-full mt-4 py-2.5 rounded-[12px] text-[13px] font-semibold text-white flex items-center justify-center gap-2 active:scale-95 transition-all"
+            style={{ background: 'var(--bg-elevated, #1e293b)', border: '1px solid var(--border, #374151)' }}>
+            <Edit3 className="w-4 h-4" /> Edit Seller Profile
+          </button>
+        )}
+
+        {/* Details card */}
+        <div className="mt-4 rounded-[16px] p-4 space-y-3" style={{ background: 'var(--bg-card, #111827)', border: '1px solid var(--border, #1f2937)' }}>
+          {[
+            seller.location && { icon: '📍', label: 'Location', value: seller.location },
+            seller.area && { icon: '🤝', label: 'Meetup', value: seller.area },
+            responseLabel && { icon: '⚡', label: 'Response', value: responseLabel },
+            availLabel && { icon: '🕐', label: 'Available', value: availLabel },
+            seller.paymentMethods.length > 0 && { icon: '💳', label: 'Payment', value: seller.paymentMethods.join(' | ') },
+          ].filter(Boolean).map((row: any) => (
+            <div key={row.label} className="flex items-start justify-between">
+              <span className="text-[13px] shrink-0" style={{ color: '#94A3B8' }}>{row.icon} {row.label}</span>
+              <span className="text-[13px] text-white text-right ml-3 leading-snug">{row.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Categories */}
+        {seller.sellingCategories.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[13px] font-semibold text-white mb-2">Sells</p>
+            <div className="flex flex-wrap gap-2">
+              {seller.sellingCategories.map(c => (
+                <span key={c} className="px-3 py-1.5 rounded-full text-[12px]" style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', color: '#A78BFA' }}>{c}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Social profile link */}
+        <button onClick={() => navigate(`/profile/${userId}`)} className="mt-4 flex items-center gap-2 text-[13px] font-medium" style={{ color: '#A78BFA' }}>
+          <ExternalLink className="w-3.5 h-3.5" /> View {profile.name} on Lumatha →
+        </button>
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className={`w-full grid ${isOwner ? 'grid-cols-4' : 'grid-cols-1'}`}>
-          <TabsTrigger value="posts" className="text-xs gap-1"><ShoppingBag className="w-3.5 h-3.5" />Posts</TabsTrigger>
-          {isOwner && <TabsTrigger value="chats" className="text-xs gap-1"><MessageCircle className="w-3.5 h-3.5" />Chats</TabsTrigger>}
-          {isOwner && <TabsTrigger value="saved" className="text-xs gap-1"><Bookmark className="w-3.5 h-3.5" />Saved</TabsTrigger>}
-          {isOwner && <TabsTrigger value="liked" className="text-xs gap-1"><Heart className="w-3.5 h-3.5" />Liked</TabsTrigger>}
-        </TabsList>
+      <div className="flex gap-1 px-5 mt-6">
+        {[
+          { id: 'listings', label: 'Listings' },
+          { id: 'reviews', label: 'Reviews' },
+          ...(isOwner ? [{ id: 'saved', label: 'Saved' }] : []),
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className="flex-1 py-2.5 rounded-full text-[13px] font-semibold transition-all"
+            style={{
+              background: activeTab === tab.id ? 'var(--accent, #7C3AED)' : 'var(--bg-card, #111827)',
+              color: activeTab === tab.id ? 'white' : '#94A3B8',
+              border: activeTab === tab.id ? 'none' : '1px solid var(--border, #1f2937)',
+            }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-        <TabsContent value="posts" className="mt-3 space-y-3">
-          {/* Filter */}
-          <div className="flex gap-2">
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-32 h-8 text-xs"><Filter className="w-3 h-3 mr-1" /><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="sell">Buy/Sell</SelectItem>
-                <SelectItem value="job">Jobs</SelectItem>
-                <SelectItem value="rent">Rent</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {filteredListings.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8">No listings yet</p>
-          ) : filteredListings.map(l => (
-            <ListingMiniCard key={l.id} listing={l} onChat={() => navigate(`/chat/${l.user_id}`)} isOwner={isOwner} />
+      {/* Filter pills for listings tab */}
+      {activeTab === 'listings' && (
+        <div className="flex gap-2 px-5 mt-3">
+          {['all', 'sell', 'job', 'rent'].map(f => (
+            <button key={f} onClick={() => setFilter(f)} className="px-3 py-1.5 rounded-full text-[12px] font-medium"
+              style={{
+                background: filter === f ? 'var(--accent, #7C3AED)' : 'var(--bg-card, #111827)',
+                color: filter === f ? 'white' : '#94A3B8',
+                border: filter === f ? 'none' : '1px solid var(--border, #1f2937)',
+              }}>
+              {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
           ))}
-        </TabsContent>
+        </div>
+      )}
 
-        {isOwner && (
-          <TabsContent value="chats" className="mt-3 space-y-2">
-            {chatUsers.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">No marketplace chats yet</p>
-            ) : chatUsers.map(u => (
-              <Card key={u.id} className="border-border/30 bg-gradient-to-r from-card/80 to-card/40 cursor-pointer hover:from-primary/5 transition-all" onClick={() => navigate(`/chat/${u.id}`)}>
-                <CardContent className="py-2.5 px-3 flex items-center gap-3">
-                  <Avatar className="w-9 h-9">
-                    <AvatarImage src={u.avatar_url || undefined} />
-                    <AvatarFallback className="bg-primary/20 text-primary text-xs">{u.name?.[0]}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{u.name}</p>
-                    {u.username && <p className="text-[10px] text-muted-foreground">@{u.username}</p>}
-                  </div>
-                  <MessageCircle className="w-4 h-4 text-primary" />
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
+      {/* Content */}
+      <div className="px-5 mt-4 space-y-2.5">
+        {activeTab === 'listings' && filteredListings.map(l => (
+          <ListingRow key={l.id} listing={l} onTap={() => navigate(`/marketplace?listing=${l.id}`)} />
+        ))}
+        {activeTab === 'listings' && filteredListings.length === 0 && (
+          <p className="text-center py-12 text-[14px]" style={{ color: '#94A3B8' }}>No listings yet</p>
         )}
-
-        {isOwner && (
-          <TabsContent value="saved" className="mt-3 space-y-2">
-            {savedListings.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">No saved listings</p>
-            ) : savedListings.map(l => (
-              <ListingMiniCard key={l.id} listing={l} onChat={() => navigate(`/chat/${l.user_id}`)} isOwner={false} />
-            ))}
-          </TabsContent>
-        )}
-
-        {isOwner && (
-          <TabsContent value="liked" className="mt-3 space-y-2">
-            {likedListings.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">No liked listings</p>
-            ) : likedListings.map(l => (
-              <ListingMiniCard key={l.id} listing={l} onChat={() => navigate(`/chat/${l.user_id}`)} isOwner={false} />
-            ))}
-          </TabsContent>
-        )}
-      </Tabs>
-
-      {/* Edit Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Marketplace Profile</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium">Bio (max 120 chars)</label>
-              <Textarea value={editBio} onChange={e => setEditBio(e.target.value.slice(0, 120))} placeholder="What you do on the marketplace..." rows={2} maxLength={120} />
-              <p className="text-[10px] text-muted-foreground text-right">{editBio.length}/120</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium">Qualification</label>
-              <Input value={editQualification} onChange={e => setEditQualification(e.target.value)} placeholder="e.g. Certified Mechanic, MBA" />
-            </div>
-            <Button onClick={saveProfile} className="w-full">Save</Button>
+        {activeTab === 'reviews' && (
+          <div className="text-center py-12">
+            <Star className="w-10 h-10 mx-auto mb-3 opacity-20" style={{ color: '#94A3B8' }} />
+            <p className="text-[14px]" style={{ color: '#94A3B8' }}>No reviews yet</p>
+            <p className="text-[12px] mt-1" style={{ color: '#4B5563' }}>Reviews will appear after deals</p>
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
+        {activeTab === 'saved' && savedListings.map(l => (
+          <ListingRow key={l.id} listing={l} onTap={() => navigate(`/marketplace?listing=${l.id}`)} />
+        ))}
+        {activeTab === 'saved' && savedListings.length === 0 && (
+          <p className="text-center py-12 text-[14px]" style={{ color: '#94A3B8' }}>No saved listings</p>
+        )}
+      </div>
     </div>
   );
 }
 
-function ListingMiniCard({ listing, onChat, isOwner }: { listing: any; onChat: () => void; isOwner: boolean }) {
-  const typeIcons: Record<string, any> = { sell: ShoppingBag, job: Briefcase, rent: HomeIcon };
-  const TypeIcon = typeIcons[listing.type] || ShoppingBag;
-  const typeLabels: Record<string, string> = { sell: 'Buy/Sell', job: 'Job', rent: 'Rent' };
-  const typeBg: Record<string, string> = {
-    sell: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-    job: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
-    rent: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
-  };
-
+function ListingRow({ listing: l, onTap }: { listing: any; onTap: () => void }) {
   return (
-    <Card className="border-border/30 bg-gradient-to-r from-card/80 to-card/40 overflow-hidden">
-      <CardContent className="p-0">
-        <div className="flex gap-3 p-3">
-          {listing.media_urls?.[0] && (
-            <img src={listing.media_urls[0]} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" alt="" />
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <h4 className="text-sm font-semibold truncate">{listing.title}</h4>
-              <Badge className={`text-[9px] shrink-0 ${typeBg[listing.type] || ''}`}>
-                <TypeIcon className="w-3 h-3 mr-0.5" />{typeLabels[listing.type] || listing.type}
-              </Badge>
-            </div>
-            {listing.description && <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{listing.description}</p>}
-            <div className="flex items-center gap-2 mt-1">
-              {listing.price != null && <span className="text-xs font-medium text-primary">NPR {listing.price.toLocaleString()}</span>}
-              {listing.location && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><MapPin className="w-3 h-3" />{listing.location}</span>}
-            </div>
-            <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-0.5"><Heart className="w-3 h-3" />{listing.likes_count || 0}</span>
-              <span className="flex items-center gap-0.5"><MessageCircle className="w-3 h-3" />{listing.comments_count || 0}</span>
-            </div>
-          </div>
+    <button onClick={onTap} className="w-full flex gap-3 p-3 rounded-[16px] text-left active:scale-[0.98] transition-all"
+      style={{ background: 'var(--bg-card, #111827)', border: '1px solid var(--border, #1f2937)' }}>
+      {l.media_urls?.[0] && <img src={l.media_urls[0]} className="w-16 h-16 rounded-[12px] object-cover shrink-0" alt="" />}
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] font-semibold text-white truncate">{l.title}</p>
+        {l.price != null && <p className="text-[13px] font-bold mt-0.5" style={{ color: '#10B981' }}>NPR {l.price.toLocaleString()}</p>}
+        <div className="flex items-center gap-2 mt-1 text-[11px]" style={{ color: '#94A3B8' }}>
+          {l.location && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{l.location.split(',')[0]}</span>}
+          <span>{formatDistanceToNow(new Date(l.created_at), { addSuffix: true }).replace('about ', '')}</span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      <ChevronRight className="w-4 h-4 shrink-0 self-center" style={{ color: '#94A3B8' }} />
+    </button>
   );
 }

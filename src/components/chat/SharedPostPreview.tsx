@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Play, Image as ImageIcon, FileText } from 'lucide-react';
+import { Play, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
 
 interface PostData {
   id: string;
@@ -25,6 +26,7 @@ const postCache = new Map<string, PostData | null>();
 export function SharedPostPreview({ postId, className }: SharedPostPreviewProps) {
   const [post, setPost] = useState<PostData | null>(postCache.get(postId) || null);
   const [loading, setLoading] = useState(!postCache.has(postId));
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   useEffect(() => {
     if (postCache.has(postId)) {
@@ -37,7 +39,7 @@ export function SharedPostPreview({ postId, className }: SharedPostPreviewProps)
       try {
         const { data, error } = await supabase
           .from('posts')
-          .select('id, title, content, media_urls, media_types, file_url, file_type, user_id')
+          .select('id, title, content, media_urls, media_types, file_url, file_type, user_id, profiles(name, avatar_url)')
           .eq('id', postId)
           .single();
 
@@ -47,13 +49,10 @@ export function SharedPostPreview({ postId, className }: SharedPostPreviewProps)
           return;
         }
 
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('name, avatar_url')
-          .eq('id', data.user_id)
-          .single();
-
-        const postData: PostData = { ...data, profile: profile || undefined };
+        const postData: PostData = {
+          ...data,
+          profile: (data as any).profiles || undefined,
+        };
         postCache.set(postId, postData);
         setPost(postData);
       } catch {
@@ -68,11 +67,11 @@ export function SharedPostPreview({ postId, className }: SharedPostPreviewProps)
 
   if (loading) {
     return (
-      <div className={cn('rounded-2xl overflow-hidden border border-border/30 bg-muted/20', className)}>
-        <div className="h-36 bg-muted animate-pulse" />
-        <div className="p-3 space-y-2">
-          <div className="h-3 bg-muted animate-pulse rounded w-3/4" />
-          <div className="h-2.5 bg-muted animate-pulse rounded w-1/2" />
+      <div className={cn('w-full overflow-hidden', className)}>
+        <div className="h-40 bg-muted/50 animate-pulse rounded-lg" />
+        <div className="pt-2 space-y-1">
+          <div className="h-3 bg-muted/50 animate-pulse rounded w-1/3" />
+          <div className="h-2.5 bg-muted/50 animate-pulse rounded w-3/4" />
         </div>
       </div>
     );
@@ -80,7 +79,7 @@ export function SharedPostPreview({ postId, className }: SharedPostPreviewProps)
 
   if (!post) {
     return (
-      <div className={cn('rounded-2xl border border-border/30 bg-muted/20 p-3', className)}>
+      <div className={cn('w-full p-2', className)}>
         <p className="text-xs text-muted-foreground">Post unavailable</p>
       </div>
     );
@@ -92,69 +91,88 @@ export function SharedPostPreview({ postId, className }: SharedPostPreviewProps)
   const isVideo = mediaType?.startsWith('video');
   const isImage = mediaType?.startsWith('image');
 
+  const mediaUrls = post.media_urls?.length ? post.media_urls.filter(Boolean) : (post.file_url ? [post.file_url] : []);
+  const mediaTypes = post.media_types?.length ? post.media_types : (post.file_type ? [post.file_type] : mediaUrls.map(() => 'image'));
+
   const handleClick = () => {
-    // Navigate inline instead of opening new tab
-    window.location.href = `/?post=${post.id}`;
+    if (mediaUrls.length === 0) return;
+    setViewerOpen(true);
   };
 
-  return (
-    <button
-      onClick={handleClick}
-      className={cn(
-        'block w-full rounded-2xl overflow-hidden border border-border/30 bg-card/60 hover:bg-card/90 transition-all text-left',
-        'shadow-sm hover:shadow-md',
-        className
-      )}
-    >
-      {/* Thumbnail */}
-      {thumbnail && (
-        <div className="relative w-full h-40 overflow-hidden bg-muted">
-          {isVideo ? (
-            <>
-              <video
-                src={thumbnail}
-                className="w-full h-full object-cover"
-                preload="metadata"
-                muted
-              />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <Play className="w-6 h-6 text-white fill-white ml-0.5" />
-                </div>
-              </div>
-            </>
-          ) : isImage ? (
-            <img
-              src={thumbnail}
-              alt={post.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <FileText className="w-10 h-10 text-muted-foreground/40" />
-            </div>
-          )}
-        </div>
-      )}
+  const summary = (post.content || '').trim();
+  const shortSummary = summary.length > 110 ? `${summary.slice(0, 110).trim()}...` : summary;
+  const publicPostUrl = `/public?post=${post.id}`;
 
-      {/* Info */}
-      <div className="p-3 space-y-1">
-        {post.profile && (
-          <p className="text-[10px] text-muted-foreground font-medium">
-            {post.profile.name}
-          </p>
+  return (
+    <>
+    <div className={cn('w-full text-left rounded-xl overflow-hidden', className)}>
+      {/* Cover - Click for video/image viewer only */}
+      <button
+        onClick={handleClick}
+        className="block w-full overflow-hidden bg-transparent transition-all text-left relative group"
+      >
+        {thumbnail && (
+          <div className="relative w-full aspect-square overflow-hidden bg-[#0f172a]">
+            {isVideo ? (
+              <>
+                <video
+                  src={thumbnail}
+                  className="w-full h-full object-cover"
+                  preload="metadata"
+                  muted
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                  <div className="w-14 h-14 rounded-full bg-white/25 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Play className="w-7 h-7 text-white fill-white ml-0.5" />
+                  </div>
+                </div>
+              </>
+            ) : isImage ? (
+              <img
+                src={thumbnail}
+                alt={post.title}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <FileText className="w-10 h-10 text-muted-foreground/40" />
+              </div>
+            )}
+          </div>
         )}
-        <p className="text-sm font-semibold leading-snug line-clamp-2 text-foreground">
-          {post.title}
+      </button>
+
+      {/* Details - Name + Description + See More */}
+      <div className="pt-2 space-y-0.5">
+        <p className="text-[12px] font-semibold text-white">
+          {post.profile?.name || 'Unknown'}
         </p>
-        {post.content && (
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {post.content}
+        {shortSummary ? (
+          <p className="text-[13px] text-[#94A3B8] leading-snug">
+            {shortSummary}
+            {summary.length > 110 && (
+              <a href={publicPostUrl} className="text-[13px] text-[#7C3AED] hover:text-[#A78BFA] ml-1">
+                ...see more
+              </a>
+            )}
           </p>
+        ) : (
+          <a href={publicPostUrl} className="text-[13px] text-[#7C3AED] hover:text-[#A78BFA]">
+            View full post →
+          </a>
         )}
       </div>
-    </button>
+    </div>
+    <FullScreenMediaViewer
+      open={viewerOpen}
+      onOpenChange={setViewerOpen}
+      mediaUrls={mediaUrls}
+      mediaTypes={mediaTypes}
+      title={post.title}
+      minimal
+    />
+    </>
   );
 }
 

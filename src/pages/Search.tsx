@@ -1,5 +1,1145 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Search as SearchIcon, User, FileText, Image, Calendar, 
-  Play, X, Heart, MessageCircle, Share2, Clock, Trash2, MapPin,\n  UserPlus, UserCheck\n} from 'lucide-react';\nimport { Input } from '@/components/ui/input';\nimport { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';\nimport { Card, CardContent } from '@/components/ui/card';\nimport { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';\nimport { Badge } from '@/components/ui/badge';\nimport { Button } from '@/components/ui/button';\nimport { Dialog, DialogContent } from '@/components/ui/dialog';\nimport { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';\nimport { Skeleton } from '@/components/ui/skeleton';\nimport { supabase } from '@/integrations/supabase/client';\nimport { useAuth } from '@/contexts/AuthContext';\nimport { format, parseISO, isValid, parse, subDays } from 'date-fns';\nimport { cn } from '@/lib/utils';\nimport { CommentsDialog } from '@/components/CommentsDialog';\nimport { ShareDialog } from '@/components/ShareDialog';\nimport { toast } from 'sonner';\n\ninterface RecentSearch {\n  type: 'user' | 'keyword' | 'date';\n  value: string;\n  label: string;\n  timestamp: number;\n}\n\nexport default function Search() {\n  const navigate = useNavigate();\n  const { user } = useAuth();\n  const [searchQuery, setSearchQuery] = useState('');\n  const [activeTab, setActiveTab] = useState('all');\n  const [dateQuery, setDateQuery] = useState('');\n  const [users, setUsers] = useState<any[]>([]);\n  const [posts, setPosts] = useState<any[]>([]);\n  const [loading, setLoading] = useState(false);\n  const [isFocused, setIsFocused] = useState(false);\n  const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: string } | null>(null);\n  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);\n  const [following, setFollowing] = useState<Set<string>>(new Set());\n  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());\n  const [commentsOpen, setCommentsOpen] = useState(false);\n  const [selectedPostId, setSelectedPostId] = useState('');\n  const [selectedPostTitle, setSelectedPostTitle] = useState('');\n  const [shareOpen, setShareOpen] = useState(false);\n  const [shareContent, setShareContent] = useState({ id: '', title: '', content: '' });\n\n  useEffect(() => {\n    const saved = localStorage.getItem('lumatha_recent_searches');\n    if (saved) {\n      try { setRecentSearches(JSON.parse(saved).slice(0, 10)); } catch {}\n    }\n  }, []);\n\n  useEffect(() => {\n    const timer = setTimeout(() => {\n      if (searchQuery.length >= 2) performSearch();\n      else { setUsers([]); setPosts([]); }\n    }, 300);\n    return () => clearTimeout(timer);\n  }, [searchQuery, activeTab]);\n\n  useEffect(() => {\n    if (dateQuery && activeTab === 'date') searchByDate();\n  }, [dateQuery]);\n\n  useEffect(() => {\n    if (user) {\n      supabase.from('likes').select('post_id').eq('user_id', user.id)\n        .then(({ data }) => { if (data) setLikedPosts(new Set(data.map(l => l.post_id))); });\n      supabase.from('follows').select('following_id').eq('follower_id', user.id)\n        .then(({ data }) => { if (data) setFollowing(new Set(data.map(f => f.following_id))); });\n    }\n  }, [user]);\n\n  const addRecentSearch = (type: RecentSearch['type'], value: string, label: string) => {\n    const newSearch: RecentSearch = { type, value, label, timestamp: Date.now() };\n    const updated = [newSearch, ...recentSearches.filter(s => !(s.type === type && s.value === value))].slice(0, 10);\n    setRecentSearches(updated);\n    localStorage.setItem('lumatha_recent_searches', JSON.stringify(updated));\n  };\n\n  const removeRecentSearch = (index: number) => {\n    const updated = recentSearches.filter((_, i) => i !== index);\n    setRecentSearches(updated);\n    localStorage.setItem('lumatha_recent_searches', JSON.stringify(updated));\n  };\n\n  const clearRecentSearches = () => {\n    setRecentSearches([]);\n    localStorage.removeItem('lumatha_recent_searches');\n  };\n\n  const parseNaturalDate = (input: string): Date | null => {\n    const lower = input.toLowerCase().trim();\n    if (lower === 'today') return new Date();\n    if (lower === 'yesterday') return subDays(new Date(), 1);\n    const formats = ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy', 'd MMM yyyy', 'MMM d, yyyy', 'd MMMM yyyy'];\n    for (const fmt of formats) {\n      const parsed = parse(input, fmt, new Date());\n      if (isValid(parsed)) return parsed;\n    }\n    const isoDate = parseISO(input);\n    if (isValid(isoDate)) return isoDate;\n    return null;\n  };\n\n  const performSearch = async () => {\n    if (!searchQuery.trim()) return;\n    setLoading(true);\n    try {\n      addRecentSearch('keyword', searchQuery, searchQuery);\n\n      // Search users by name AND username\n      if (activeTab === 'all' || activeTab === 'users') {\n        const { data: usersData } = await supabase\n          .from('profiles')\n          .select('*')\n          .or(`name.ilike.%${searchQuery}%,username.ilike.%${searchQuery}%,first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%`)\n          .limit(20);\n        setUsers(usersData || []);\n      }\n\n      // Search posts - use updated_at for freshness, exclude ghost\n      if (activeTab === 'all' || activeTab === 'posts' || activeTab === 'media') {\n        let query = supabase\n          .from('posts')\n          .select('*, profiles(*)')\n          .eq('visibility', 'public')\n          .neq('category', 'ghost')\n          .order('updated_at', { ascending: false })\n          .limit(50);\n\n        if (activeTab === 'posts') {\n          query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`).is('file_url', null);\n        } else if (activeTab === 'media') {\n          query = query.not('file_url', 'is', null).or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);\n        } else {\n          query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);\n        }\n\n        const { data: postsData } = await query;\n        setPosts(postsData || []);\n      }\n    } catch (error) {\n      console.error('Search error:', error);\n    } finally {\n      setLoading(false);\n    }\n  };\n\n  const searchByDate = async () => {\n    if (!dateQuery) return;\n    setLoading(true);\n    try {\n      let searchDate = parseNaturalDate(dateQuery);\n      if (!searchDate) searchDate = parseISO(dateQuery);\n      if (!isValid(searchDate)) {\n        toast.error('Invalid date. Try: today, yesterday, or 2024-12-31');\n        setLoading(false); return;\n      }\n\n      const formattedDate = format(searchDate, 'MMMM d, yyyy');\n      addRecentSearch('date', dateQuery, formattedDate);\n\n      const startOfDay = new Date(searchDate); startOfDay.setHours(0, 0, 0, 0);\n      const endOfDay = new Date(searchDate); endOfDay.setHours(23, 59, 59, 999);\n\n      const { data: postsData } = await supabase\n        .from('posts').select('*, profiles(*)').eq('visibility', 'public').neq('category', 'ghost')\n        .gte('created_at', startOfDay.toISOString()).lte('created_at', endOfDay.toISOString())\n        .order('created_at', { ascending: false }).limit(100);\n\n      setPosts(postsData || []); setUsers([]);\n    } catch (error) {\n      console.error('Date search error:', error);\n    } finally { setLoading(false); }\n  };\n\n  const toggleLike = async (postId: string) => {\n    if (!user) return;\n    if (likedPosts.has(postId)) {\n      await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', user.id);\n      setLikedPosts(prev => { const next = new Set(prev); next.delete(postId); return next; });\n    } else {\n      await supabase.from('likes').insert({ post_id: postId, user_id: user.id });\n      setLikedPosts(prev => new Set(prev).add(postId));\n    }\n  };\n\n  const toggleFollow = async (profileId: string) => {\n    if (!user || user.id === profileId) return;\n    try {\n      if (following.has(profileId)) {\n        await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', profileId);\n        setFollowing(prev => { const next = new Set(prev); next.delete(profileId); return next; });\n      } else {\n        await supabase.from('follows').insert({ follower_id: user.id, following_id: profileId });\n        setFollowing(prev => new Set(prev).add(profileId));\n      }\n    } catch {}\n  };\n\n  const openComments = (id: string, title: string) => {\n    setSelectedPostId(id); setSelectedPostTitle(title); setCommentsOpen(true);\n  };\n\n  const openShare = (post: any) => {\n    setShareContent({ id: post.id, title: post.title, content: post.content || '' }); setShareOpen(true);\n  };\n\n  const mediaPosts = posts.filter(p => p.file_url || (p.media_urls && p.media_urls.length > 0));\n  const textPosts = posts.filter(p => !p.file_url && (!p.media_urls || p.media_urls.length === 0));\n\n  const openMedia = (url: string, type: string) => { setSelectedMedia({ url, type }); };\n\n  const renderSkeleton = () => (\n    <div className=\"space-y-3\">\n      {[1, 2, 3].map(i => (\n        <Card key={i} className=\"glass-card\"><CardContent className=\"p-4\">\n          <div className=\"flex items-center gap-3\">\n            <Skeleton className=\"w-12 h-12 rounded-full\" />\n            <div className=\"flex-1 space-y-2\"><Skeleton className=\"h-4 w-32\" /><Skeleton className=\"h-3 w-48\" /></div>\n          </div>\n        </CardContent></Card>\n      ))}\n    </div>\n  );\n\n  const renderUserCard = (profile: any, i: number) => {\n    const isFollowingUser = following.has(profile.id);\n    const isSelf = user?.id === profile.id;\n    return (\n      <Card key={profile.id} className=\"glass-card transition-all duration-200 hover:bg-muted/30 animate-in fade-in slide-in-from-left\" style={{ animationDelay: `${i * 40}ms` }}>\n        <CardContent className=\"p-3 flex items-center gap-3\">\n          <Avatar className=\"w-14 h-14 ring-2 ring-primary/20 cursor-pointer\" onClick={() => { addRecentSearch('user', profile.id, profile.name); navigate(`/profile/${profile.id}`); }}>\n            <AvatarImage src={profile.avatar_url} />\n            <AvatarFallback className=\"bg-gradient-to-br from-primary to-primary/60 text-primary-foreground text-lg\">{profile.name?.[0]?.toUpperCase()}</AvatarFallback>\n          </Avatar>\n          <div className=\"flex-1 min-w-0 cursor-pointer\" onClick={() => { addRecentSearch('user', profile.id, profile.name); navigate(`/profile/${profile.id}`); }}>\n            <p className=\"font-semibold truncate\">{profile.first_name && profile.last_name ? `${profile.first_name} ${profile.last_name}` : profile.name}</p>\n            {profile.username && <p className=\"text-[10px] text-primary/70\">@{profile.username}</p>}\n            <p className=\"text-xs text-muted-foreground truncate\">{profile.bio || 'Lumatha User'}</p>\n            {profile.location && (\n              <p className=\"text-[10px] text-muted-foreground mt-0.5 flex items-center gap-0.5\">\n                <MapPin className=\"w-2.5 h-2.5\" /> {profile.location}\n              </p>\n            )}\n          </div>\n          {!isSelf && (\n            <Button size=\"sm\" variant={isFollowingUser ? \"outline\" : \"default\"} className=\"h-8 text-xs gap-1\" onClick={(e) => { e.stopPropagation(); toggleFollow(profile.id); }}>\n              {isFollowingUser ? <><UserCheck className=\"w-3 h-3\" /> Following</> : <><UserPlus className=\"w-3 h-3\" /> Follow</>}\n            </Button>\n          )}\n        </CardContent>\n      </Card>\n    );\n  };\n\n  const renderPostCard = (post: any, i: number) => {\n    const isLiked = likedPosts.has(post.id);\n    const isUpdated = post.updated_at && post.created_at && new Date(post.updated_at).getTime() - new Date(post.created_at).getTime() > 60000;\n    return (\n      <Card key={post.id} className=\"glass-card transition-all duration-200 animate-in fade-in slide-in-from-right\" style={{ animationDelay: `${i * 40}ms` }}>\n        <CardContent className=\"p-3\">\n          <div className=\"flex items-center gap-2 mb-2 cursor-pointer\" onClick={() => navigate(`/profile/${post.user_id}`)}>\n            <Avatar className=\"w-8 h-8\">\n              <AvatarImage src={post.profiles?.avatar_url} />\n              <AvatarFallback className=\"text-[10px]\">{post.profiles?.name?.[0]}</AvatarFallback>\n            </Avatar>\n            <div className=\"flex-1 min-w-0\">\n              <p className=\"text-xs font-medium truncate\">\n                {post.profiles?.first_name && post.profiles?.last_name \n                  ? `${post.profiles.first_name} ${post.profiles.last_name}` \n                  : post.profiles?.name}\n              </p>\n              <p className=\"text-[9px] text-muted-foreground\">\n                {format(new Date(post.updated_at || post.created_at), 'MMM d, yyyy')}\n                {isUpdated && <span className=\"text-primary ml-1\">· Edited</span>}\n              </p>\n            </div>\n            <Badge variant=\"outline\" className=\"text-[8px] ml-auto\">{post.category}</Badge>\n          </div>\n          <p className=\"text-sm font-medium\">{post.title}</p>\n          {post.content && <p className=\"text-xs text-muted-foreground line-clamp-2 mt-1\">{post.content}</p>}\n          {post.file_url && (\n            <div className=\"mt-2 rounded-lg overflow-hidden cursor-pointer\" onClick={() => openMedia(post.file_url, post.file_type)}>\n              {post.file_type?.includes('video') ? (\n                <div className=\"relative\">\n                  <video src={post.file_url} className=\"w-full h-40 object-cover\" />\n                  <div className=\"absolute inset-0 flex items-center justify-center bg-black/20\"><Play className=\"w-10 h-10 text-white\" /></div>\n                </div>\n              ) : (\n                <img src={post.file_url} alt=\"\" className=\"w-full h-40 object-cover hover:scale-105 transition-transform\" />\n              )}\n            </div>\n          )}\n          <div className=\"flex items-center gap-4 mt-3 pt-2 border-t border-border/50\">\n            <button onClick={() => toggleLike(post.id)} className={cn(\"flex items-center gap-1.5 text-xs transition-colors\", isLiked ? \"text-red-500\" : \"text-muted-foreground hover:text-foreground\")}>\n              <Heart className={cn(\"w-4 h-4\", isLiked && \"fill-current\")} /><span>{post.likes_count || 0}</span>\n            </button>\n            <button onClick={() => openComments(post.id, post.title)} className=\"flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground\">\n              <MessageCircle className=\"w-4 h-4\" />Comment\n            </button>\n            <button onClick={() => openShare(post)} className=\"flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground\">\n              <Share2 className=\"w-4 h-4\" />\n            </button>\n          </div>\n        </CardContent>\n      </Card>\n    );\n  };\n\n  return (\n    <div className=\"space-y-4 pb-20 scroll-smooth\">\n      <div className={cn(\"relative transition-all duration-300\", isFocused && \"transform scale-[1.01]\")}>\n        <SearchIcon className={cn(\"absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-200\", isFocused ? \"text-primary\" : \"text-muted-foreground\")} />\n        <Input placeholder=\"Search people, posts, @username...\" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}\n          onFocus={() => setIsFocused(true)} onBlur={() => setIsFocused(false)}\n          className={cn(\"pl-10 h-12 glass-card transition-all duration-300 border-2\", isFocused ? \"border-primary shadow-lg shadow-primary/10\" : \"border-transparent\")} autoFocus />\n        {searchQuery && (\n          <Button variant=\"ghost\" size=\"icon\" className=\"absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7\" onClick={() => setSearchQuery('')}>\n            <X className=\"w-4 h-4\" />\n          </Button>\n        )}\n      </div>\n\n      <Tabs value={activeTab} onValueChange={setActiveTab}>\n        <ScrollArea className=\"w-full\">\n          <TabsList className=\"w-full inline-flex h-auto p-1 glass-card\">\n            {[\n              { value: 'all', label: 'All' },\n              { value: 'users', label: 'Users', icon: User },\n              { value: 'posts', label: 'Posts', icon: FileText },\n              { value: 'media', label: 'Media', icon: Image },\n              { value: 'date', label: 'Date', icon: Calendar },\n            ].map(tab => (\n              <TabsTrigger key={tab.value} value={tab.value}\n                className={cn(\"text-[11px] py-2 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all gap-1\",\n                  tab.value === 'date' && \"data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-blue-500 data-[state=active]:text-white\"\n                )}>\n                {tab.icon && <tab.icon className=\"w-3 h-3\" />}{tab.label}\n              </TabsTrigger>\n            ))}\n          </TabsList>\n          <ScrollBar orientation=\"horizontal\" />\n        </ScrollArea>\n\n        {/* ALL TAB */}\n        <TabsContent value=\"all\" className=\"space-y-4 mt-3 animate-in fade-in slide-in-from-bottom-2 duration-300\">\n          {loading ? renderSkeleton() : (\n            <>\n              {users.length > 0 && (\n                <div className=\"space-y-2\">\n                  <div className=\"flex items-center justify-between\">\n                    <p className=\"text-xs font-medium text-muted-foreground flex items-center gap-1\"><User className=\"w-3 h-3\" /> People</p>\n                    {users.length > 5 && <Button variant=\"ghost\" size=\"sm\" className=\"h-6 text-[10px]\" onClick={() => setActiveTab('users')}>See more</Button>}\n                  </div>\n                  {users.slice(0, 5).map((profile, i) => renderUserCard(profile, i))}\n                </div>\n              )}\n              {posts.length > 0 && (\n                <div className=\"space-y-2\">\n                  <div className=\"flex items-center justify-between\">\n                    <p className=\"text-xs font-medium text-muted-foreground flex items-center gap-1\"><FileText className=\"w-3 h-3\" /> Posts</p>\n                    {posts.length > 5 && <Button variant=\"ghost\" size=\"sm\" className=\"h-6 text-[10px]\" onClick={() => setActiveTab('posts')}>See more</Button>}\n                  </div>\n                  {posts.slice(0, 5).map((post, i) => renderPostCard(post, i))}\n                </div>\n              )}\n              {mediaPosts.length > 0 && (\n                <div className=\"space-y-2\">\n                  <div className=\"flex items-center justify-between\">\n                    <p className=\"text-xs font-medium text-muted-foreground flex items-center gap-1\"><Image className=\"w-3 h-3\" /> Media</p>\n                    {mediaPosts.length > 4 && <Button variant=\"ghost\" size=\"sm\" className=\"h-6 text-[10px]\" onClick={() => setActiveTab('media')}>See more</Button>}\n                  </div>\n                  <div className=\"grid grid-cols-2 gap-2\">\n                    {mediaPosts.slice(0, 4).map((post, i) => (\n                      <Card key={post.id} className=\"glass-card overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform animate-in fade-in zoom-in\" style={{ animationDelay: `${i * 40}ms` }}\n                        onClick={() => openMedia(post.file_url || post.media_urls?.[0], post.file_type)}>\n                        <div className=\"aspect-square relative\">\n                          {post.file_type?.includes('video') ? (\n                            <><video src={post.file_url} className=\"w-full h-full object-cover\" /><div className=\"absolute inset-0 flex items-center justify-center bg-black/30\"><Play className=\"w-8 h-8 text-white\" /></div></>\n                          ) : (\n                            <img src={post.file_url || post.media_urls?.[0]} alt=\"\" className=\"w-full h-full object-cover\" />\n                          )}\n                        </div>\n                      </Card>\n                    ))}\n                  </div>\n                </div>\n              )}\n              {!loading && users.length === 0 && posts.length === 0 && searchQuery.length >= 2 && (\n                <Card className=\"glass-card\"><CardContent className=\"py-12 text-center\">\n                  <SearchIcon className=\"w-12 h-12 mx-auto text-muted-foreground/30 mb-3\" />\n                  <p className=\"font-medium\">Nothing found</p><p className=\"text-xs text-muted-foreground mt-1\">Try another word or date</p>\n                </CardContent></Card>\n              )}\n            </>\n          )}\n        </TabsContent>\n\n        <TabsContent value=\"users\" className=\"space-y-2 mt-3 animate-in fade-in slide-in-from-bottom-2 duration-300\">\n          {loading ? renderSkeleton() : (\n            <>\n              {users.map((profile, i) => renderUserCard(profile, i))}\n              {users.length === 0 && searchQuery.length >= 2 && (\n                <Card className=\"glass-card\"><CardContent className=\"py-12 text-center\"><User className=\"w-10 h-10 mx-auto text-muted-foreground/30 mb-2\" /><p className=\"text-sm text-muted-foreground\">No users found</p></CardContent></Card>\n              )}\n            </>\n          )}\n        </TabsContent>\n\n        <TabsContent value=\"posts\" className=\"space-y-2 mt-3 animate-in fade-in slide-in-from-bottom-2 duration-300\">\n          {loading ? renderSkeleton() : (\n            <>\n              {textPosts.map((post, i) => renderPostCard(post, i))}\n              {textPosts.length === 0 && searchQuery.length >= 2 && (\n                <Card className=\"glass-card\"><CardContent className=\"py-12 text-center\"><FileText className=\"w-10 h-10 mx-auto text-muted-foreground/30 mb-2\" /><p className=\"text-sm text-muted-foreground\">No posts found</p></CardContent></Card>\n              )}\n            </>\n          )}\n        </TabsContent>\n\n        <TabsContent value=\"media\" className=\"mt-3 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300\">\n          {loading ? (\n            <div className=\"space-y-3\">{[1,2,3].map(i => <Skeleton key={i} className=\"h-72 w-full rounded-xl\" />)}</div>\n          ) : (\n            <>\n              {mediaPosts.map((post, i) => {\n                const mediaUrl = post.file_url || post.media_urls?.[0];\n                const isVideo = post.file_type?.includes('video');\n                const isLiked = likedPosts.has(post.id);\n                return (\n                  <Card key={post.id} className=\"glass-card overflow-hidden animate-in fade-in slide-in-from-bottom-2\" style={{ animationDelay: `${i * 40}ms` }}>\n                    <CardContent className=\"p-3\">\n                      <div className=\"flex items-center gap-2 mb-2 cursor-pointer\" onClick={() => navigate(`/profile/${post.user_id}`)}>\n                        <Avatar className=\"w-8 h-8\"><AvatarImage src={post.profiles?.avatar_url} /><AvatarFallback className=\"text-[10px]\">{post.profiles?.name?.[0]}</AvatarFallback></Avatar>\n                        <div className=\"flex-1 min-w-0\">\n                          <p className=\"text-xs font-medium truncate\">{post.profiles?.name}</p>\n                          <p className=\"text-[9px] text-muted-foreground\">{format(new Date(post.updated_at || post.created_at), 'MMM d, yyyy')}</p>\n                        </div>\n                        <Badge variant=\"outline\" className=\"text-[8px]\">{post.category}</Badge>\n                      </div>\n                      <p className=\"text-sm font-medium mb-2\">{post.title}</p>\n                      {post.content && <p className=\"text-xs text-muted-foreground line-clamp-2 mb-2\">{post.content}</p>}\n                      {mediaUrl && (\n                        <div className=\"rounded-lg overflow-hidden\">\n                          {isVideo ? (\n                            <video src={mediaUrl} controls playsInline preload=\"metadata\" className=\"w-full rounded-lg max-h-[70vh] bg-black\" onClick={(e) => e.stopPropagation()} />\n                          ) : (\n                            <img src={mediaUrl} alt={post.title} className=\"w-full rounded-lg cursor-pointer hover:opacity-95 transition-opacity\" onClick={() => openMedia(mediaUrl, post.file_type)} />\n                          )}\n                        </div>\n                      )}\n                      <div className=\"flex items-center gap-4 mt-3 pt-2 border-t border-border/50\">\n                        <button onClick={() => toggleLike(post.id)} className={cn(\"flex items-center gap-1.5 text-xs transition-colors\", isLiked ? \"text-red-500\" : \"text-muted-foreground hover:text-foreground\")}>\n                          <Heart className={cn(\"w-4 h-4\", isLiked && \"fill-current\")} /><span>{post.likes_count || 0}</span>\n                        </button>\n                        <button onClick={() => openComments(post.id, post.title)} className=\"flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground\"><MessageCircle className=\"w-4 h-4\" />Comment</button>\n                        <button onClick={() => openShare(post)} className=\"flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground\"><Share2 className=\"w-4 h-4\" /></button>\n                      </div>\n                    </CardContent>\n                  </Card>\n                );\n              })}\n              {mediaPosts.length === 0 && searchQuery.length >= 2 && (\n                <Card className=\"glass-card\"><CardContent className=\"py-12 text-center\"><Image className=\"w-10 h-10 mx-auto text-muted-foreground/30 mb-2\" /><p className=\"text-sm text-muted-foreground\">No media found</p></CardContent></Card>\n              )}\n            </>\n          )}\n        </TabsContent>\n\n        <TabsContent value=\"date\" className=\"space-y-4 mt-3 animate-in fade-in slide-in-from-bottom-2 duration-300\">\n          <Card className=\"glass-card border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent overflow-hidden\">\n            <CardContent className=\"p-5 text-center relative\">\n              <div className=\"w-14 h-14 mx-auto mb-3 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center\">\n                <Calendar className=\"w-7 h-7 text-white\" />\n              </div>\n              <h3 className=\"font-bold text-lg mb-1 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent\">Date Search</h3>\n              <p className=\"text-xs text-muted-foreground mb-4\">Find all posts from any day!</p>\n              <Input type=\"text\" value={dateQuery} onChange={(e) => setDateQuery(e.target.value)} placeholder=\"today, yesterday, or 2024-12-31\"\n                className=\"glass-card border-2 border-primary/20 focus:border-primary text-center\" onKeyPress={(e) => e.key === 'Enter' && searchByDate()} />\n              <p className=\"text-[10px] text-muted-foreground mt-3 flex items-center justify-center gap-2\">\n                Or pick: <input type=\"date\" className=\"bg-transparent border border-primary/50 rounded px-2 py-0.5 text-primary text-[10px]\" onChange={(e) => setDateQuery(e.target.value)} />\n              </p>\n            </CardContent>\n          </Card>\n          {loading && <div className=\"flex items-center justify-center py-8\"><div className=\"w-8 h-8 rounded-full bg-primary/20 animate-pulse\" /></div>}\n          {dateQuery && posts.length > 0 && !loading && (\n            <div className=\"space-y-3\">\n              <div className=\"flex items-center justify-between\">\n                <p className=\"text-sm font-medium text-muted-foreground flex items-center gap-2\">\n                  <Calendar className=\"w-4 h-4 text-primary\" />Posts from {(() => { const d = parseNaturalDate(dateQuery); return d ? format(d, 'MMMM d, yyyy') : dateQuery; })()}\n                </p>\n                <Badge variant=\"outline\" className=\"bg-primary/10 text-primary\">{posts.length} found</Badge>\n              </div>\n              {posts.map((post, i) => renderPostCard(post, i))}\n            </div>\n          )}\n          {dateQuery && posts.length === 0 && !loading && (\n            <Card className=\"glass-card\"><CardContent className=\"py-12 text-center\"><Calendar className=\"w-12 h-12 mx-auto text-muted-foreground/30 mb-3\" /><p className=\"text-muted-foreground\">No activity on this day</p></CardContent></Card>\n          )}\n        </TabsContent>\n      </Tabs>\n\n      {/* Recent Searches */}\n      {searchQuery.length < 2 && activeTab !== 'date' && recentSearches.length > 0 && (\n        <Card className=\"glass-card animate-in fade-in duration-300\">\n          <CardContent className=\"p-4\">\n            <div className=\"flex items-center justify-between mb-3\">\n              <p className=\"text-xs font-medium text-muted-foreground flex items-center gap-1\"><Clock className=\"w-3 h-3\" /> Recent</p>\n              <Button variant=\"ghost\" size=\"sm\" className=\"h-6 text-[10px] text-muted-foreground hover:text-destructive\" onClick={clearRecentSearches}>\n                <Trash2 className=\"w-3 h-3 mr-1\" /> Clear\n              </Button>\n            </div>\n            <div className=\"space-y-1\">\n              {recentSearches.map((search, i) => (\n                <div key={i} className=\"flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/30 cursor-pointer group\"\n                  onClick={() => { setSearchQuery(search.value); if (search.type === 'user') navigate(`/profile/${search.value}`); }}>\n                  {search.type === 'user' ? <User className=\"w-3.5 h-3.5 text-muted-foreground\" /> : <Calendar className=\"w-3.5 h-3.5 text-primary\" />}\n                  <span className=\"text-sm flex-1 truncate\">{search.label}</span>\n                  <Button variant=\"ghost\" size=\"icon\" className=\"h-5 w-5 opacity-0 group-hover:opacity-100\" onClick={(e) => { e.stopPropagation(); removeRecentSearch(i); }}>\n                    <X className=\"w-2.5 h-2.5\" />\n                  </Button>\n                </div>\n              ))}\n            </div>\n          </CardContent>\n        </Card>\n      )}\n\n      {/* Media Viewer */}\n      <Dialog open={!!selectedMedia} onOpenChange={() => setSelectedMedia(null)}>\n        <DialogContent className=\"max-w-4xl p-0 overflow-hidden bg-black border-0\">\n          {selectedMedia && (\n            selectedMedia.type?.includes('video') ? (\n              <video src={selectedMedia.url} controls autoPlay className=\"w-full max-h-[90vh] object-contain\" />\n            ) : (\n              <img src={selectedMedia.url} alt=\"\" className=\"w-full max-h-[90vh] object-contain\" />\n            )\n          )}\n        </DialogContent>\n      </Dialog>\n\n      <CommentsDialog open={commentsOpen} onOpenChange={setCommentsOpen} postId={selectedPostId} postTitle={selectedPostTitle} />\n      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} postId={shareContent.id} postTitle={shareContent.title} postContent={shareContent.content} />\n    </div>\n  );\n}
+  Search as SearchIcon, User, FileText, Image, Calendar, Sparkles, 
+  Play, X, Heart, MessageCircle, Share2, Clock, Trash2, MapPin,
+  UserPlus, UserCheck, TrendingUp
+} from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { format, parseISO, isValid, parse, subDays } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { CommentsDialog } from '@/components/CommentsDialog';
+import { ShareDialog } from '@/components/ShareDialog';
+import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
+import { TravelStories } from '@/components/explore/TravelStories';
+import { toast } from 'sonner';
+import { useRouteLoadTrace } from '@/hooks/useRouteLoadTrace';
+
+interface RecentSearch {
+  type: 'user' | 'keyword' | 'date';
+  value: string;
+  label: string;
+  timestamp: number;
+}
+
+const TRENDING_TOPICS = [
+  { emoji: '🔥', label: 'Trending in Nepal' },
+  { emoji: '🏔️', label: 'Adventure' },
+  { emoji: '🎮', label: 'Gaming' },
+  { emoji: '💼', label: 'Jobs Nepal' },
+  { emoji: '🛒', label: 'Buy Sell' },
+];
+
+const FILTER_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'users', label: '👤 People' },
+  { id: 'date', label: '📅 Date' },
+  { id: 'posts', label: '📝 Posts' },
+  { id: 'travel-stories', label: '✈️ Travel Stories' },
+];
+
+function DeferredVideoTile({ src, className }: { src: string; className?: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setShouldLoad(true);
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: '260px 0px', threshold: 0.01 }
+    );
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className={className}>
+      {shouldLoad ? (
+        <video
+          src={src}
+          className="w-full h-full object-cover"
+          muted
+          loop
+          playsInline
+          preload="none"
+          poster="/placeholder.svg"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-black/70">
+          <Play className="w-6 h-6 text-white/80" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Search() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  // Track route performance for Search page
+  useRouteLoadTrace('Search', 250);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
+  const [dateQuery, setDateQuery] = useState('');
+  const [users, setUsers] = useState<any[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [suggestedPeople, setSuggestedPeople] = useState<any[]>([]);
+  const [explorePosts, setExplorePosts] = useState<any[]>([]);
+  const [marketplaceListings, setMarketplaceListings] = useState<any[]>([]);
+  const [adventureQuests, setAdventureQuests] = useState<any[]>([]);
+  const [showAllExploreImages, setShowAllExploreImages] = useState(false);
+  const [showAllExploreVideos, setShowAllExploreVideos] = useState(false);
+  const [showAllMarketplace, setShowAllMarketplace] = useState(false);
+  const [showAllAdventures, setShowAllAdventures] = useState(false);
+  const [showAllPeople, setShowAllPeople] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+  const [postContentFilter, setPostContentFilter] = useState<'all' | 'pictures' | 'videos' | 'thoughts'>('all');
+  const [postSort, setPostSort] = useState<'latest' | 'oldest' | 'popular'>('latest');
+  const [following, setFollowing] = useState<Set<string>>(new Set());
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [postMetrics, setPostMetrics] = useState<Record<string, { likes: number; comments: number; saves: number; shares: number }>>({});
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState('');
+  const [selectedPostTitle, setSelectedPostTitle] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareContent, setShareContent] = useState({ id: '', title: '', content: '' });
+  const [searchMediaViewer, setSearchMediaViewer] = useState<{
+    open: boolean;
+    urls: string[];
+    types: string[];
+    index: number;
+    post: any | null;
+  }>({
+    open: false,
+    urls: [],
+    types: [],
+    index: 0,
+    post: null,
+  });
+
+  useEffect(() => {
+    const saved = localStorage.getItem('lumatha_recent_searches');
+    if (saved) {
+      try { setRecentSearches(JSON.parse(saved).slice(0, 10)); } catch {}
+    }
+  }, []);
+
+  // Load discovery content
+  useEffect(() => {
+    if (user) {
+      loadDiscoveryContent();
+    }
+  }, [user]);
+
+  const loadDiscoveryContent = async () => {
+    if (!user) return;
+    const [peopleRes, postsRes, followRes, likesRes, marketplaceRes, questsRes] = await Promise.all([
+      supabase.from('profiles').select('*').neq('id', user.id).limit(20),
+      supabase.from('posts').select('*, profiles(*)').eq('visibility', 'public').neq('category', 'ghost').or('file_url.is.not.null,media_urls.is.not.null').order('created_at', { ascending: false }).limit(60),
+      supabase.from('follows').select('following_id').eq('follower_id', user.id),
+      supabase.from('likes').select('post_id').eq('user_id', user.id),
+      supabase.from('marketplace_listings').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(30),
+      supabase.from('custom_quests').select('*').eq('type', 'public').order('created_at', { ascending: false }).limit(30),
+    ]);
+    // Filter out people already followed
+    const followingIds = new Set(followRes.data?.map(f => f.following_id) || []);
+    setFollowing(followingIds);
+    setSuggestedPeople((peopleRes.data || []).filter(p => !followingIds.has(p.id)).slice(0, 10));
+    setExplorePosts(postsRes.data || []);
+    setMarketplaceListings(marketplaceRes.data || []);
+    setAdventureQuests(questsRes.data || []);
+    setLikedPosts(new Set(likesRes.data?.map(l => l.post_id) || []));
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeTab === 'date' || activeTab === 'travel-stories') {
+        setUsers([]);
+        setPosts([]);
+        return;
+      }
+      if (searchQuery.trim().length >= 1) performSearch();
+      else { setUsers([]); setPosts([]); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeTab]);
+
+  useEffect(() => {
+    if (dateQuery && activeTab === 'date') searchByDate();
+  }, [dateQuery]);
+
+  const addRecentSearch = (type: RecentSearch['type'], value: string, label: string) => {
+    const newSearch: RecentSearch = { type, value, label, timestamp: Date.now() };
+    const updated = [newSearch, ...recentSearches.filter(s => !(s.type === type && s.value === value))].slice(0, 10);
+    setRecentSearches(updated);
+    localStorage.setItem('lumatha_recent_searches', JSON.stringify(updated));
+  };
+
+  const removeRecentSearch = (index: number) => {
+    const updated = recentSearches.filter((_, i) => i !== index);
+    setRecentSearches(updated);
+    localStorage.setItem('lumatha_recent_searches', JSON.stringify(updated));
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    localStorage.removeItem('lumatha_recent_searches');
+  };
+
+  const parseNaturalDate = (input: string): Date | null => {
+    const lower = input.toLowerCase().trim();
+    if (lower === 'today') return new Date();
+    if (lower === 'yesterday') return subDays(new Date(), 1);
+    const formats = ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy', 'd MMM yyyy', 'MMM d, yyyy', 'd MMMM yyyy'];
+    for (const fmt of formats) {
+      const parsed = parse(input, fmt, new Date());
+      if (isValid(parsed)) return parsed;
+    }
+    const isoDate = parseISO(input);
+    if (isValid(isoDate)) return isoDate;
+    return null;
+  };
+
+  const loadPostMetrics = useCallback(async (postList: any[]) => {
+    const ids = postList.map((p) => p.id).filter(Boolean);
+    if (!ids.length) {
+      setPostMetrics({});
+      return;
+    }
+
+    const [likesRes, commentsRes, savesRes] = await Promise.all([
+      supabase.from('likes').select('post_id').in('post_id', ids),
+      supabase.from('comments').select('post_id').in('post_id', ids),
+      supabase.from('saved').select('post_id').in('post_id', ids),
+    ]);
+
+    const next: Record<string, { likes: number; comments: number; saves: number; shares: number }> = {};
+    ids.forEach((id) => {
+      const source = postList.find((p) => p.id === id);
+      next[id] = {
+        likes: typeof source?.likes_count === 'number' ? source.likes_count : 0,
+        comments: 0,
+        saves: 0,
+        shares: typeof source?.shares_count === 'number' ? source.shares_count : 0,
+      };
+    });
+
+    likesRes.data?.forEach((row) => {
+      if (!next[row.post_id]) return;
+      next[row.post_id].likes += 1;
+    });
+    commentsRes.data?.forEach((row) => {
+      if (!next[row.post_id]) return;
+      next[row.post_id].comments += 1;
+    });
+    savesRes.data?.forEach((row) => {
+      if (!next[row.post_id]) return;
+      next[row.post_id].saves += 1;
+    });
+
+    setPostMetrics(next);
+  }, []);
+
+  const performSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setLoading(true);
+    try {
+      addRecentSearch('keyword', searchQuery, searchQuery);
+      if (activeTab === 'all' || activeTab === 'users') {
+        const { data: usersData } = await supabase
+          .from('profiles').select('*')
+          .or(`name.ilike.%${searchQuery}%,username.ilike.%${searchQuery}%,first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%`)
+          .limit(20);
+        setUsers(usersData || []);
+      }
+      if (activeTab === 'all' || activeTab === 'posts') {
+        let query = supabase
+          .from('posts')
+          .select('*, profiles(*)')
+          .eq('visibility', 'public')
+          .neq('category', 'ghost')
+          .order('updated_at', { ascending: false })
+          .limit(120);
+
+        if (activeTab === 'all' || activeTab === 'posts') {
+          query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
+        }
+
+        const { data: postsData } = await query;
+        const allPosts = postsData || [];
+
+        const filteredPosts = allPosts.filter((post) => {
+          const matches = postMatchesQuery(post, searchQuery);
+
+          if (!matches) return false;
+          if (activeTab === 'posts') return matchesPostContentFilter(post);
+          return true;
+        });
+
+        const nextPosts = activeTab === 'posts' ? sortPosts(filteredPosts) : filteredPosts;
+        setPosts(nextPosts);
+        loadPostMetrics(nextPosts);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchByDate = async () => {
+    if (!dateQuery) return;
+    setLoading(true);
+    try {
+      let searchDate = parseNaturalDate(dateQuery);
+      if (!searchDate) searchDate = parseISO(dateQuery);
+      if (!isValid(searchDate)) {
+        toast.error('Invalid date. Try: today, yesterday, or 2024-12-31');
+        setLoading(false); return;
+      }
+      const formattedDate = format(searchDate, 'MMMM d, yyyy');
+      addRecentSearch('date', dateQuery, formattedDate);
+      const startOfDay = new Date(searchDate); startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(searchDate); endOfDay.setHours(23, 59, 59, 999);
+      const { data: postsData } = await supabase
+        .from('posts').select('*, profiles(*)').eq('visibility', 'public').neq('category', 'ghost')
+        .gte('created_at', startOfDay.toISOString()).lte('created_at', endOfDay.toISOString())
+        .order('created_at', { ascending: false }).limit(100);
+      setPosts(postsData || []);
+      loadPostMetrics(postsData || []);
+      setUsers([]);
+    } catch (error) {
+      console.error('Date search error:', error);
+    } finally { setLoading(false); }
+  };
+
+  const toggleLike = async (postId: string) => {
+    if (!user) return;
+    if (likedPosts.has(postId)) {
+      await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', user.id);
+      setLikedPosts(prev => { const next = new Set(prev); next.delete(postId); return next; });
+      setPostMetrics((prev) => ({
+        ...prev,
+        [postId]: {
+          likes: Math.max(0, (prev[postId]?.likes || 1) - 1),
+          comments: prev[postId]?.comments || 0,
+          saves: prev[postId]?.saves || 0,
+          shares: prev[postId]?.shares || 0,
+        },
+      }));
+    } else {
+      await supabase.from('likes').insert({ post_id: postId, user_id: user.id });
+      setLikedPosts(prev => new Set(prev).add(postId));
+      setPostMetrics((prev) => ({
+        ...prev,
+        [postId]: {
+          likes: (prev[postId]?.likes || 0) + 1,
+          comments: prev[postId]?.comments || 0,
+          saves: prev[postId]?.saves || 0,
+          shares: prev[postId]?.shares || 0,
+        },
+      }));
+    }
+  };
+
+  const toggleFollow = async (profileId: string) => {
+    if (!user || user.id === profileId) return;
+    try {
+      if (following.has(profileId)) {
+        await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', profileId);
+        setFollowing(prev => { const next = new Set(prev); next.delete(profileId); return next; });
+      } else {
+        await supabase.from('follows').insert({ follower_id: user.id, following_id: profileId });
+        setFollowing(prev => new Set(prev).add(profileId));
+      }
+    } catch {}
+  };
+
+  const openComments = (id: string, title: string) => {
+    setSelectedPostId(id); setSelectedPostTitle(title); setCommentsOpen(true);
+  };
+  const openShare = (post: any) => {
+    setPostMetrics((prev) => ({
+      ...prev,
+      [post.id]: {
+        likes: prev[post.id]?.likes || 0,
+        comments: prev[post.id]?.comments || 0,
+        saves: prev[post.id]?.saves || 0,
+        shares: (prev[post.id]?.shares || 0) + 1,
+      },
+    }));
+    setShareContent({ id: post.id, title: post.title, content: post.content || '' }); setShareOpen(true);
+  };
+
+  const getMediaPayload = (post: any) => {
+    const urls = Array.isArray(post.media_urls) && post.media_urls.length > 0
+      ? post.media_urls.filter(Boolean)
+      : (post.file_url ? [post.file_url] : []);
+
+    const rawTypes = Array.isArray(post.media_types) && post.media_types.length > 0
+      ? post.media_types
+      : (post.file_type ? [post.file_type] : []);
+
+    const types = urls.map((_, index) => {
+      const raw = (rawTypes[index] || rawTypes[0] || 'image').toLowerCase();
+      return raw.includes('video') ? 'video' : 'image';
+    });
+
+    return { urls, types };
+  };
+
+  const isRenderableMediaUrl = (url: string) => {
+    if (!url || typeof url !== 'string') return false;
+    if (url.includes('/placeholder') || url.includes('undefined') || url.includes('null')) return false;
+    return /^https?:\/\//i.test(url);
+  };
+
+  const hasAnyMedia = (post: any) => {
+    const { urls } = getMediaPayload(post);
+    return urls.some((url) => isRenderableMediaUrl(url));
+  };
+
+  const isVideoPost = (post: any) => {
+    const { types } = getMediaPayload(post);
+    return types.some((type) => type.includes('video'));
+  };
+
+  const postMatchesQuery = (post: any, query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+
+    const haystack = [
+      post.title,
+      post.content,
+      post.file_url,
+      ...(Array.isArray(post.media_urls) ? post.media_urls : []),
+      post.profiles?.name,
+      post.profiles?.username,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(q);
+  };
+
+  const matchesPostContentFilter = (post: any) => {
+    const { urls, types } = getMediaPayload(post);
+    const hasMedia = urls.some((url) => isRenderableMediaUrl(url));
+    const isVideo = types.some((type) => type.includes('video'));
+    const isThought = post.post_type === 'thought' || post.category === 'thought';
+
+    if (postContentFilter === 'pictures') return hasMedia && !isVideo;
+    if (postContentFilter === 'videos') return hasMedia && isVideo;
+    if (postContentFilter === 'thoughts') return isThought || !hasMedia;
+    return true;
+  };
+
+  const sortPosts = (items: any[]) => {
+    const next = [...items];
+    if (postSort === 'oldest') {
+      return next.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+    }
+    if (postSort === 'popular') {
+      return next.sort((a, b) => {
+        const aScore = (postMetrics[a.id]?.likes || 0) + (postMetrics[a.id]?.comments || 0) + (postMetrics[a.id]?.shares || 0);
+        const bScore = (postMetrics[b.id]?.likes || 0) + (postMetrics[b.id]?.comments || 0) + (postMetrics[b.id]?.shares || 0);
+        return bScore - aScore;
+      });
+    }
+    return next.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  };
+
+  const openSearchMediaViewer = (post: any, startIndex = 0) => {
+    const { urls, types } = getMediaPayload(post);
+    const validMedia = urls
+      .map((url, idx) => ({ url, type: types[idx] || 'image' }))
+      .filter((item) => isRenderableMediaUrl(item.url));
+
+    if (!validMedia.length) {
+      navigate(`/public?post=${post.id}`);
+      return;
+    }
+
+    setSearchMediaViewer({
+      open: true,
+      urls: validMedia.map((item) => item.url),
+      types: validMedia.map((item) => item.type),
+      index: Math.max(0, Math.min(startIndex, validMedia.length - 1)),
+      post,
+    });
+  };
+
+  const getPrimaryRenderableMediaUrl = (post: any, expectedType: 'image' | 'video' | 'any' = 'any') => {
+    const { urls, types } = getMediaPayload(post);
+
+    for (let idx = 0; idx < urls.length; idx++) {
+      const url = urls[idx];
+      const mediaType = (types[idx] || 'image').toLowerCase();
+      if (!isRenderableMediaUrl(url)) continue;
+      if (expectedType === 'any') return url;
+      if (expectedType === 'video' && mediaType.includes('video')) return url;
+      if (expectedType === 'image' && !mediaType.includes('video')) return url;
+    }
+
+    return null;
+  };
+
+  const mediaPosts = posts.filter((p) => !!getPrimaryRenderableMediaUrl(p, 'image'));
+  const videoPosts = posts.filter((p) => !!getPrimaryRenderableMediaUrl(p, 'video'));
+  const exploreImagePosts = explorePosts.filter((p) => !!getPrimaryRenderableMediaUrl(p, 'image'));
+  const exploreVideoPosts = explorePosts.filter((p) => !!getPrimaryRenderableMediaUrl(p, 'video'));
+  const visiblePosts = activeTab === 'posts'
+    ? sortPosts(posts.filter((post) => matchesPostContentFilter(post)))
+    : posts.filter((post) => !hasAnyMedia(post));
+  const hasResults = activeTab === 'date' || searchQuery.trim().length >= 1;
+  const noResults = hasResults && !loading && users.length === 0 && (activeTab === 'posts' ? visiblePosts.length === 0 : posts.length === 0);
+
+  return (
+    <div className="min-h-screen pb-20" style={{ background: '#0a0f1e' }}>
+      {/* Search Bar */}
+      <div className="sticky top-0 z-30 px-2 py-3" style={{ background: '#0a0f1e' }}>
+        <div className="relative">
+          <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#94A3B8' }} />
+          <input
+            type="text"
+            placeholder="Search people, posts, places..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            className="w-full outline-none text-white placeholder:text-[#94A3B8]"
+            style={{
+              background: '#111827',
+              border: isFocused ? '1px solid #7C3AED' : '1px solid #1f2937',
+              borderRadius: 100,
+              padding: '12px 44px 12px 40px',
+              fontSize: 15,
+              fontFamily: "'Inter', sans-serif",
+              transition: 'border-color 200ms',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center"
+              style={{ background: '#1f2937' }}
+            >
+              <X className="w-3.5 h-3.5 text-white" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="px-2 sm:px-3 pb-2">
+        <div className="flex gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className="shrink-0 transition-all"
+              style={{
+                padding: '8px 14px',
+                fontSize: 14,
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: activeTab === tab.id ? 600 : 400,
+                color: activeTab === tab.id ? 'white' : '#94A3B8',
+                borderBottom: activeTab === tab.id ? '2px solid #7C3AED' : '2px solid transparent',
+                background: 'transparent',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Explore Travel Stories Tab */}
+      {!hasResults && activeTab === 'travel-stories' && (
+        <div className="px-4 pb-4">
+          <TravelStories />
+        </div>
+      )}
+
+      {/* Discovery Mode - when not searching */}
+      {!hasResults && activeTab !== 'date' && activeTab !== 'travel-stories' && (
+        <div className="px-2 space-y-5">
+          {/* Recent Searches */}
+          {recentSearches.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium" style={{ color: '#94A3B8', fontFamily: "'Inter'" }}>Recent</p>
+                <button onClick={clearRecentSearches} className="text-[10px]" style={{ color: '#94A3B8', fontFamily: "'Inter'" }}>Clear</button>
+              </div>
+              <div className="space-y-0.5">
+                {recentSearches.slice(0, 5).map((s, i) => (
+                  <div key={i} className="flex items-center gap-2 py-2 px-3 rounded-xl cursor-pointer group" style={{ transition: 'background 150ms' }}
+                    onClick={() => { setSearchQuery(s.value); if (s.type === 'user') navigate(`/profile/${s.value}`); }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#1e293b')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <Clock className="w-3.5 h-3.5" style={{ color: '#94A3B8' }} />
+                    <span className="text-sm text-white flex-1 truncate" style={{ fontFamily: "'Inter'" }}>{s.label}</span>
+                    <button onClick={(e) => { e.stopPropagation(); removeRecentSearch(i); }} className="opacity-0 group-hover:opacity-100">
+                      <X className="w-3 h-3" style={{ color: '#94A3B8' }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Trending Topics */}
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            {TRENDING_TOPICS.map((topic) => (
+              <button
+                key={topic.label}
+                onClick={() => setSearchQuery(topic.label)}
+                className="shrink-0 flex items-center gap-1.5 transition-all active:scale-95"
+                style={{
+                  background: '#111827',
+                  border: '1px solid #1f2937',
+                  borderRadius: 100,
+                  padding: '8px 14px',
+                  fontSize: 13,
+                  color: 'white',
+                  fontFamily: "'Inter', sans-serif",
+                }}
+              >
+                <span>{topic.emoji}</span> {topic.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Suggested People */}
+          {suggestedPeople.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 16 }}>People you may know</h3>
+                {suggestedPeople.length > 6 && (
+                  <button className="text-xs" style={{ color: '#A78BFA' }} onClick={() => setShowAllPeople((v) => !v)}>
+                    {showAllPeople ? 'Show less' : 'See all'}
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {(showAllPeople ? suggestedPeople : suggestedPeople.slice(0, 6)).map((person) => (
+                  <div
+                    key={person.id}
+                    className="flex flex-col items-center text-center"
+                    style={{
+                      background: '#111827',
+                      border: '1px solid #1f2937',
+                      borderRadius: 16,
+                      padding: 12,
+                    }}
+                  >
+                    <Avatar className="w-14 h-14 mb-2 cursor-pointer" onClick={() => navigate(`/profile/${person.id}`)}>
+                      <AvatarImage src={person.avatar_url} />
+                      <AvatarFallback className="text-lg" style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', color: 'white' }}>
+                        {person.name?.[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <p className="text-white text-sm font-bold truncate w-full" style={{ fontFamily: "'Inter'" }}>{person.first_name || person.name}</p>
+                    {person.username && <p className="text-xs truncate w-full" style={{ color: '#94A3B8', fontFamily: "'Inter'" }}>@{person.username}</p>}
+                    <button
+                      onClick={() => toggleFollow(person.id)}
+                      className="mt-2 transition-all active:scale-95"
+                      style={{
+                        background: 'transparent',
+                        fontSize: 13,
+                        fontFamily: "'Inter', sans-serif",
+                        color: '#F97316',
+                      }}
+                    >
+                      {following.has(person.id) ? 'Following' : 'Follow'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Explore Grid */}
+          {explorePosts.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20 }}>Explore</h3>
+                {exploreImagePosts.length > 6 && (
+                  <button className="text-xs" style={{ color: '#A78BFA' }} onClick={() => setShowAllExploreImages((v) => !v)}>
+                    {showAllExploreImages ? 'Show less' : 'See all'}
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(showAllExploreImages ? exploreImagePosts : exploreImagePosts.slice(0, 6)).map((post) => {
+                  const mediaUrl = getPrimaryRenderableMediaUrl(post, 'image');
+                  if (!mediaUrl) return null;
+                  return (
+                    <div
+                      key={post.id}
+                      className="relative overflow-hidden cursor-pointer group"
+                      style={{ borderRadius: 12, aspectRatio: '1' }}
+                      onClick={() => openSearchMediaViewer(post)}
+                    >
+                      <img
+                        src={mediaUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Videos Section in Explore */}
+          {exploreVideoPosts.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20 }}>Videos</h3>
+                {exploreVideoPosts.length > 6 && (
+                  <button className="text-xs" style={{ color: '#A78BFA' }} onClick={() => setShowAllExploreVideos((v) => !v)}>
+                    {showAllExploreVideos ? 'Show less' : 'See more'}
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(showAllExploreVideos ? exploreVideoPosts : exploreVideoPosts.slice(0, 6)).map((post) => {
+                  const mediaUrl = getPrimaryRenderableMediaUrl(post, 'video');
+                  if (!mediaUrl) return null;
+                  return (
+                    <div
+                      key={post.id}
+                      className="relative overflow-hidden cursor-pointer group"
+                      style={{ borderRadius: 12, aspectRatio: '1' }}
+                      onClick={() => openSearchMediaViewer(post)}
+                    >
+                      <DeferredVideoTile src={mediaUrl} className="w-full h-full object-cover" />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {marketplaceListings.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20 }}>Marketplace</h3>
+                {marketplaceListings.length > 6 && (
+                  <button className="text-xs" style={{ color: '#A78BFA' }} onClick={() => setShowAllMarketplace((v) => !v)}>
+                    {showAllMarketplace ? 'Show less' : 'See all'}
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(showAllMarketplace ? marketplaceListings : marketplaceListings.slice(0, 6)).map((listing) => {
+                  const mediaUrl = Array.isArray(listing.media_urls) && listing.media_urls.length > 0 ? listing.media_urls[0] : null;
+                  return (
+                    <div
+                      key={listing.id}
+                      className="relative overflow-hidden cursor-pointer"
+                      style={{ borderRadius: 12, aspectRatio: '1' }}
+                      onClick={() => navigate('/marketplace')}
+                    >
+                      {mediaUrl ? (
+                        <img src={mediaUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+                          <span className="text-[11px]" style={{ color: '#94A3B8' }}>Product</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Adventure Quests Section */}
+          {adventureQuests.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20 }}>Adventure</h3>
+                {adventureQuests.length > 6 && (
+                  <button className="text-xs" style={{ color: '#A78BFA' }} onClick={() => setShowAllAdventures((v) => !v)}>
+                    {showAllAdventures ? 'Show less' : 'See all'}
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(showAllAdventures ? adventureQuests : adventureQuests.slice(0, 6)).map((quest) => (
+                  <div
+                    key={quest.id}
+                    className="relative overflow-hidden cursor-pointer group"
+                    style={{ borderRadius: 12, aspectRatio: '1' }}
+                    onClick={() => navigate('/music-adventure')}
+                  >
+                    {quest.cover_image ? (
+                      <img src={quest.cover_image} alt={quest.title} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/30 to-blue-600/30" style={{ border: '1px solid #1f2937' }}>
+                        <Sparkles className="w-6 h-6 text-violet-400" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    <div className="absolute bottom-2 left-2 right-2">
+                      <p className="text-white text-xs font-bold truncate">{quest.title}</p>
+                      <p className="text-white/70 text-[10px]">{quest.difficulty || 'Adventure'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Search Results Mode */}
+      {hasResults && (
+        <div className="px-4 space-y-3">
+          {activeTab === 'travel-stories' ? (
+            <TravelStories />
+          ) : loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-2xl" style={{ background: '#111827' }}>
+                  <Skeleton className="w-12 h-12 rounded-full" />
+                  <div className="flex-1 space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-48" /></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {(activeTab === 'posts' || activeTab === 'all') && (
+                <div className="rounded-2xl p-3 space-y-3" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+                  <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'pictures', label: 'Pictures' },
+                      { id: 'videos', label: 'Videos' },
+                      { id: 'thoughts', label: 'Thoughts' },
+                      { id: 'news', label: 'News' },
+                      { id: 'nature', label: 'Nature' },
+                      { id: 'fun', label: 'Fun' },
+                      { id: 'love', label: 'Love' },
+                      { id: 'nepal', label: 'Nepal' },
+                      { id: 'popular', label: 'Popular' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setPostContentFilter(item.id as 'all' | 'pictures' | 'videos' | 'thoughts')}
+                        className="shrink-0 px-3 py-1.5 rounded-full text-xs"
+                        style={{
+                          background: postContentFilter === item.id ? '#7C3AED' : '#0b1220',
+                          color: postContentFilter === item.id ? 'white' : '#94A3B8',
+                          border: postContentFilter === item.id ? '1px solid #7C3AED' : '1px solid #1f2937',
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'latest', label: 'Latest' },
+                        { id: 'oldest', label: 'Oldest' },
+                        { id: 'popular', label: 'Popular' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setPostSort(item.id as 'latest' | 'oldest' | 'popular')}
+                          className="shrink-0 px-3 py-1.5 rounded-full text-xs"
+                          style={{
+                            background: postSort === item.id ? '#334155' : '#0b1220',
+                            color: postSort === item.id ? 'white' : '#94A3B8',
+                            border: postSort === item.id ? '1px solid #334155' : '1px solid #1f2937',
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[11px] text-slate-400 whitespace-nowrap">Posts only</span>
+                  </div>
+                </div>
+              )}
+
+              {/* People Results */}
+              {(activeTab === 'all' || activeTab === 'users') && users.length > 0 && (
+                <div className="space-y-1">
+                  {activeTab === 'all' && <p className="text-xs font-medium mb-2" style={{ color: '#94A3B8' }}>People</p>}
+                  {users.slice(0, activeTab === 'all' ? 5 : 20).map((profile) => (
+                    <div
+                      key={profile.id}
+                      className="flex items-center gap-3 cursor-pointer"
+                      style={{ height: 72, borderBottom: '1px solid #1f2937', padding: '0 4px' }}
+                      onClick={() => navigate(`/profile/${profile.id}`)}
+                    >
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={profile.avatar_url} />
+                        <AvatarFallback style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', color: 'white', fontSize: 16 }}>
+                          {profile.name?.[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-bold truncate" style={{ fontSize: 15, fontFamily: "'Inter'" }}>
+                          {profile.first_name && profile.last_name ? `${profile.first_name} ${profile.last_name}` : profile.name}
+                        </p>
+                        {profile.username && <p style={{ color: '#94A3B8', fontSize: 13, fontFamily: "'Inter'" }}>@{profile.username}</p>}
+                        {profile.location && (
+                          <p style={{ color: '#94A3B8', fontSize: 12, fontFamily: "'Inter'" }} className="flex items-center gap-0.5">
+                            <MapPin className="w-2.5 h-2.5" /> {profile.location}
+                          </p>
+                        )}
+                      </div>
+                      {user?.id !== profile.id && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleFollow(profile.id); }}
+                          className="shrink-0 text-white transition-all active:scale-95"
+                          style={{
+                            background: following.has(profile.id) ? 'transparent' : 'linear-gradient(135deg, #7C3AED, #6366F1)',
+                            border: following.has(profile.id) ? '1px solid #374151' : 'none',
+                            borderRadius: 100,
+                            padding: '6px 14px',
+                            fontSize: 13,
+                            fontFamily: "'Inter'",
+                            color: following.has(profile.id) ? '#94A3B8' : 'white',
+                          }}
+                        >
+                          {following.has(profile.id) ? 'Following' : 'Follow'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Posts Results */}
+              {(activeTab === 'all' || activeTab === 'posts') && visiblePosts.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium mb-2" style={{ color: '#94A3B8' }}>
+                    {activeTab === 'posts' ? 'Posts' : 'Posts'}
+                  </p>
+                  {visiblePosts.map((post) => (
+                    <div key={post.id} className="rounded-2xl p-3" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+                      <div className="flex items-center gap-2 mb-2 cursor-pointer" onClick={() => navigate(`/profile/${post.user_id}`)}>
+                        <Avatar className="w-8 h-8">
+                          <AvatarImage src={post.profiles?.avatar_url} />
+                          <AvatarFallback className="text-[10px]">{post.profiles?.name?.[0]}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-white truncate">{post.profiles?.name}</p>
+                          <p className="text-[9px]" style={{ color: '#4B5563' }}>{format(new Date(post.updated_at || post.created_at), 'MMM d, yyyy')}</p>
+                        </div>
+                      </div>
+                      <p className="text-sm font-medium text-white">{post.title}</p>
+                      {post.content && <p className="text-xs mt-1 line-clamp-2" style={{ color: '#94A3B8' }}>{post.content}</p>}
+                      <div className="flex items-center gap-4 mt-2 pt-2" style={{ borderTop: '1px solid #1f2937' }}>
+                        <button onClick={() => toggleLike(post.id)} className="flex items-center gap-1 text-xs" style={{ color: likedPosts.has(post.id) ? '#ef4444' : '#94A3B8' }}>
+                          <Heart className={cn("w-3.5 h-3.5", likedPosts.has(post.id) && "fill-current")} />
+                        </button>
+                        <button onClick={() => openComments(post.id, post.title)} className="text-xs" style={{ color: '#94A3B8' }}><MessageCircle className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => openShare(post)} className="text-xs" style={{ color: '#94A3B8' }}><Share2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Media Results (Images only) */}
+              {(activeTab === 'all' || activeTab === 'media') && mediaPosts.length > 0 && (
+                <div>
+                  {activeTab === 'all' && <p className="text-xs font-medium mb-2" style={{ color: '#94A3B8' }}>Images</p>}
+                  <div className="grid grid-cols-3 gap-0.5">
+                    {mediaPosts.map((post) => {
+                      const url = getPrimaryRenderableMediaUrl(post, 'image');
+                      if (!url) return null;
+                      return (
+                        <div key={post.id} className="relative overflow-hidden cursor-pointer aspect-square group" style={{ borderRadius: 8 }}
+                          onClick={() => openSearchMediaViewer(post)}>
+                          <img src={url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Videos Results */}
+              {(activeTab === 'all' || activeTab === 'videos') && videoPosts.length > 0 && (
+                <div>
+                  {activeTab === 'all' && <p className="text-xs font-medium mb-2" style={{ color: '#94A3B8' }}>Videos</p>}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {videoPosts.map((post) => {
+                      const url = getPrimaryRenderableMediaUrl(post, 'video');
+                      if (!url) return null;
+                      return (
+                        <div key={post.id} className="relative overflow-hidden cursor-pointer group" style={{ borderRadius: 12, aspectRatio: '9/16' }}
+                          onClick={() => openSearchMediaViewer(post)}>
+                          <DeferredVideoTile src={url} className="w-full h-full" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                            <Play className="w-10 h-10 text-white" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Date tab */}
+              {activeTab === 'date' && (
+                <div className="space-y-3">
+                  <div className="rounded-2xl p-5 text-center" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(236,72,153,0.1))', border: '1px solid rgba(124,58,237,0.3)' }}>
+                    <Sparkles className="w-10 h-10 mx-auto mb-2" style={{ color: '#7C3AED' }} />
+                    <h3 className="text-white font-bold text-lg mb-1" style={{ fontFamily: "'Space Grotesk'" }}>Magic Date Search</h3>
+                    <p className="text-xs mb-3" style={{ color: '#94A3B8' }}>Find posts from any day!</p>
+                    <div className="flex items-center gap-2 mb-3">
+                      <button
+                        onClick={() => {
+                          const today = new Date();
+                          setDateQuery(today.toISOString().slice(0, 10));
+                        }}
+                        className="flex-1 rounded-full px-3 py-2 text-xs"
+                        style={{ background: '#111827', border: '1px solid rgba(124,58,237,0.3)', color: '#fff' }}
+                      >
+                        Today
+                      </button>
+                      <button
+                        onClick={() => {
+                          const yesterday = new Date();
+                          yesterday.setDate(yesterday.getDate() - 1);
+                          setDateQuery(yesterday.toISOString().slice(0, 10));
+                        }}
+                        className="flex-1 rounded-full px-3 py-2 text-xs"
+                        style={{ background: '#111827', border: '1px solid rgba(124,58,237,0.3)', color: '#fff' }}
+                      >
+                        Yesterday
+                      </button>
+                    </div>
+                    <p className="text-sm text-white text-left mb-2">Select Date</p>
+                    <input
+                      type="date"
+                      value={/^\d{4}-\d{2}-\d{2}$/.test(dateQuery) ? dateQuery : ''}
+                      onChange={(e) => setDateQuery(e.target.value)}
+                      className="w-full mb-2 text-white outline-none"
+                      style={{
+                        background: '#111827',
+                        border: '1px solid rgba(124,58,237,0.3)',
+                        borderRadius: 12,
+                        padding: '10px 12px',
+                        fontSize: 14,
+                        color: '#ffffff',
+                        colorScheme: 'dark',
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={dateQuery}
+                      onChange={(e) => setDateQuery(e.target.value)}
+                      placeholder="today, yesterday, or 2024-12-31"
+                      className="w-full text-center text-white outline-none"
+                      style={{ background: '#111827', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 100, padding: '10px 16px', fontSize: 14 }}
+                      onKeyDown={(e) => e.key === 'Enter' && searchByDate()}
+                    />
+                  </div>
+                  {dateQuery && posts.length > 0 && !loading && (
+                    <div className="space-y-2">
+                      {posts.map((post) => (
+                        <div key={post.id} className="rounded-2xl p-3" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+                          <div className="flex items-center gap-2 mb-2 cursor-pointer" onClick={() => navigate(`/profile/${post.user_id}`)}>
+                            <Avatar className="w-8 h-8"><AvatarImage src={post.profiles?.avatar_url} /><AvatarFallback className="text-[10px]">{post.profiles?.name?.[0]}</AvatarFallback></Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-white">{post.profiles?.name}</p>
+                              <p className="text-[9px]" style={{ color: '#4B5563' }}>{format(new Date(post.created_at || ''), 'MMM d, yyyy')}</p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-white font-medium">{post.title}</p>
+                          {post.content && <p className="text-xs mt-1 line-clamp-2" style={{ color: '#94A3B8' }}>{post.content}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* No Results */}
+              {noResults && (
+                <div className="text-center py-12">
+                  <SearchIcon className="w-12 h-12 mx-auto mb-3" style={{ color: '#374151' }} />
+                  <p className="text-white mb-1" style={{ fontFamily: "'Space Grotesk'", fontSize: 18 }}>No results for "{searchQuery}"</p>
+                  <p style={{ color: '#94A3B8', fontSize: 14, fontFamily: "'Inter'" }}>Try different words</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      <CommentsDialog open={commentsOpen} onOpenChange={setCommentsOpen} postId={selectedPostId} postTitle={selectedPostTitle} />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} postId={shareContent.id} postTitle={shareContent.title} postContent={shareContent.content} />
+      <FullScreenMediaViewer
+        open={searchMediaViewer.open}
+        onOpenChange={(open) => setSearchMediaViewer((prev) => ({ ...prev, open }))}
+        mediaUrls={searchMediaViewer.urls}
+        mediaTypes={searchMediaViewer.types}
+        initialIndex={searchMediaViewer.index}
+        title={searchMediaViewer.post?.title || ''}
+        isLiked={searchMediaViewer.post ? likedPosts.has(searchMediaViewer.post.id) : false}
+        likesCount={searchMediaViewer.post ? (postMetrics[searchMediaViewer.post.id]?.likes || 0) : 0}
+        commentsCount={searchMediaViewer.post ? (postMetrics[searchMediaViewer.post.id]?.comments || 0) : 0}
+        repostsCount={searchMediaViewer.post ? (postMetrics[searchMediaViewer.post.id]?.saves || 0) : 0}
+        sharesCount={searchMediaViewer.post ? (postMetrics[searchMediaViewer.post.id]?.shares || 0) : 0}
+        onLike={() => {
+          if (searchMediaViewer.post?.id) {
+            toggleLike(searchMediaViewer.post.id);
+          }
+        }}
+        onSave={() => {
+          if (!searchMediaViewer.post?.id) return;
+          setPostMetrics((prev) => ({
+            ...prev,
+            [searchMediaViewer.post.id]: {
+              likes: prev[searchMediaViewer.post.id]?.likes || 0,
+              comments: prev[searchMediaViewer.post.id]?.comments || 0,
+              saves: (prev[searchMediaViewer.post.id]?.saves || 0) + 1,
+              shares: prev[searchMediaViewer.post.id]?.shares || 0,
+            },
+          }));
+        }}
+        onComment={() => {
+          if (!searchMediaViewer.post?.id) return;
+          setSearchMediaViewer((prev) => ({ ...prev, open: false }));
+          openComments(searchMediaViewer.post.id, searchMediaViewer.post.title || 'Post');
+        }}
+        onShare={() => {
+          if (!searchMediaViewer.post) return;
+          setSearchMediaViewer((prev) => ({ ...prev, open: false }));
+          openShare(searchMediaViewer.post);
+        }}
+      />
+    </div>
+  );
+}

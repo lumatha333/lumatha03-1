@@ -58,16 +58,18 @@ export function ForwardMessageDialog({ open, onOpenChange, messageContent, media
     if (!user || selected.size === 0) return;
     setSending(true);
     try {
-      for (const receiverId of selected) {
-        await supabase.from('messages').insert({
+      const rows = Array.from(selected).map((receiverId) => ({
           sender_id: user.id,
           receiver_id: receiverId,
           content: messageContent || ' ',
           media_url: mediaUrl || null,
           media_type: mediaType || null,
           is_forwarded: true,
-        });
-      }
+      }));
+
+      const { error } = await supabase.from('messages').insert(rows);
+      if (error) throw error;
+
       toast.success(`Forwarded to ${selected.size} chat${selected.size > 1 ? 's' : ''}`);
       onOpenChange(false);
     } catch {

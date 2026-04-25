@@ -1,0 +1,1 @@
+ALTER TABLE public.random_connect_queue ADD COLUMN IF NOT EXISTS interests text[] DEFAULT ARRAY[]::text[];

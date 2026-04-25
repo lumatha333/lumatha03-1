@@ -1,10 +1,10 @@
-import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
 
 interface ChatImageGridProps {
   urls: string[];
   isOwn?: boolean;
+  /** Called when user taps an image – parent opens the shared viewer */
+  onImageTap?: (url: string) => void;
 }
 
 /**
@@ -15,16 +15,8 @@ interface ChatImageGridProps {
  * 4 → 2×2
  * 5+ → 2×2 + "+N more" overlay
  */
-export function ChatImageGrid({ urls, isOwn = false }: ChatImageGridProps) {
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerIndex, setViewerIndex] = useState(0);
-
+export function ChatImageGrid({ urls, isOwn = false, onImageTap }: ChatImageGridProps) {
   if (!urls.length) return null;
-
-  const openViewer = (index: number) => {
-    setViewerIndex(index);
-    setViewerOpen(true);
-  };
 
   const count = urls.length;
   const displayUrls = urls.slice(0, 4);
@@ -38,53 +30,41 @@ export function ChatImageGrid({ urls, isOwn = false }: ChatImageGridProps) {
   );
 
   const getImageStyle = (index: number): string => {
-    if (count === 1) return 'aspect-[4/3] w-full';
-    if (count === 2) return 'aspect-square';
+    if (count === 1) return 'aspect-[4/3] w-full max-h-[320px]';
+    if (count === 2) return 'aspect-[3/4] max-h-[280px]';
     if (count === 3) {
-      if (index === 2) return 'aspect-[2/1] col-span-2';
-      return 'aspect-square';
+      if (index === 2) return 'aspect-[2/1] col-span-2 max-h-[180px]';
+      return 'aspect-square max-h-[200px]';
     }
-    // 4+
-    return 'aspect-square';
+    return 'aspect-square max-h-[180px]';
   };
 
   return (
-    <>
-      <div className={gridClass}>
-        {displayUrls.map((url, i) => (
-          <button
-            key={i}
-            className={cn(
-              'relative overflow-hidden focus:outline-none group',
-              getImageStyle(i)
-            )}
-            onClick={() => openViewer(i)}
-          >
-            <img
-              src={url}
-              alt=""
-              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-              loading="lazy"
-              draggable={false}
-            />
-            {/* "+N more" overlay on last visible image */}
-            {i === 3 && extraCount > 0 && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <span className="text-white text-2xl font-bold">+{extraCount}</span>
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-
-      <FullScreenMediaViewer
-        open={viewerOpen}
-        onOpenChange={setViewerOpen}
-        mediaUrls={urls}
-        mediaTypes={urls.map(() => 'image')}
-        initialIndex={viewerIndex}
-        minimal
-      />
-    </>
+    <div className={gridClass}>
+      {displayUrls.map((url, i) => (
+        <button
+          key={i}
+          className={cn(
+            'relative overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 group',
+            getImageStyle(i)
+          )}
+          onClick={() => onImageTap?.(url)}
+          aria-label={`Image ${i + 1} of ${count}`}
+        >
+          <img
+            src={url}
+            alt=""
+            className="w-full h-full object-cover"
+            loading="lazy"
+            draggable={false}
+          />
+          {i === 3 && extraCount > 0 && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <span className="text-white text-2xl font-bold">+{extraCount}</span>
+            </div>
+          )}
+        </button>
+      ))}
+    </div>
   );
 }

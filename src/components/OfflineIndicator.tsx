@@ -20,9 +20,9 @@ export function OfflineIndicator() {
   if (!isOffline) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[9999] bg-destructive text-destructive-foreground px-4 py-2 flex items-center justify-center gap-2 text-sm font-medium animate-fade-in shadow-lg">
-      <WifiOff className="w-4 h-4" />
-      <span>Please check your connection</span>
+    <div className="fixed bottom-4 left-4 z-[9999] bg-destructive/95 text-destructive-foreground px-3 py-2 flex items-center justify-center gap-1.5 text-xs font-medium rounded-lg shadow-lg animate-fade-in backdrop-blur-sm max-w-[180px]">
+      <WifiOff className="w-3.5 h-3.5 shrink-0" />
+      <span className="truncate">No internet connection</span>
     </div>
   );
 }

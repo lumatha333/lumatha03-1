@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ArrowLeft, Heart, MessageCircle, Send, Play, Bookmark, BookmarkCheck, MoreVertical, Download, Calendar, Eye, ThumbsDown, Ban, X, Volume2, VolumeX, Music } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { useVideoSound } from '@/contexts/VideoSoundContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +52,8 @@ export function ShortsViewer({
   videos, initialIndex = 0, onClose, onLike, onSave, onComment, onShare, onDelete, onProfileClick, onBlock, onNotInterested,
 }: ShortsViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [isMuted, setIsMuted] = useState(false);
+  const { globalMuted, setGlobalMuted } = useVideoSound();
+  const [isMuted, setIsMuted] = useState(globalMuted);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
   const [likedVideos, setLikedVideos] = useState<Set<string>>(new Set(videos.filter(v => v.isLiked).map(v => v.id)));
@@ -71,6 +73,17 @@ export function ShortsViewer({
   const isSwiping = useRef(false);
 
   const currentVideo = videos[currentIndex];
+
+  useEffect(() => {
+    setIsMuted(globalMuted);
+  }, [globalMuted]);
+
+  useEffect(() => {
+    const activeVideo = videoRefs.current.get(currentIndex);
+    if (activeVideo) {
+      activeVideo.muted = isMuted;
+    }
+  }, [currentIndex, isMuted]);
 
   // Lock body scroll
   useEffect(() => {
@@ -107,11 +120,15 @@ export function ShortsViewer({
       else if (e.key === 'ArrowDown' && currentIndex < videos.length - 1) { setCurrentIndex(p => p + 1); setProgress(0); }
       else if (e.key === 'Escape') onClose();
       else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
-      else if (e.key === 'm') setIsMuted(p => !p);
+      else if (e.key === 'm') {
+        const nextMuted = !isMuted;
+        setIsMuted(nextMuted);
+        setGlobalMuted(nextMuted);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, videos.length, onClose]);
+  }, [currentIndex, videos.length, onClose, togglePlay, isMuted, setGlobalMuted]);
 
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -264,7 +281,12 @@ export function ShortsViewer({
           <div className="flex items-center gap-1">
             <button
               className="w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform"
-              onClick={(e) => { e.stopPropagation(); setIsMuted(p => !p); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                const nextMuted = !isMuted;
+                setIsMuted(nextMuted);
+                setGlobalMuted(nextMuted);
+              }}
             >
               {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>

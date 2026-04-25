@@ -1,0 +1,12 @@
+# Exclude non-frontend runtime code from Vercel static deployment upload.
+/assistant_backend/
+/api/
+/config/
+/core/
+/modules/
+/ui/
+/voice/
+/tests/
+/*.py
+/requirements.txt
+/build_output.txt
