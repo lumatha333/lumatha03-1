@@ -152,7 +152,16 @@ export default function Marketplace() {
       const found = listings.find(l => l.id === listingId);
       if (found) setDetailListing(found);
     }
-  }, [searchParams, listings]);
+    
+    // Check for create=true param
+    if (searchParams.get('create') === 'true') {
+      handleOpenCreate();
+      // Remove the param after opening to avoid re-opening on refresh
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('create');
+      navigate({ search: newParams.toString() }, { replace: true });
+    }
+  }, [searchParams, listings, navigate]);
 
   const toggleLike = async (id: string) => {
     if (!user) return navigate('/auth');

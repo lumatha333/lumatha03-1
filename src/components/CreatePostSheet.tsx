@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export type QuickCreateType = 'post' | 'story' | 'diary' | 'reel' | 'thought' | 'drawing';
+export type QuickCreateType = 'post' | 'story' | 'diary' | 'reel' | 'thought' | 'drawing' | 'marketplace';
 
 interface CreatePostSheetProps {
   open: boolean;
@@ -33,6 +33,13 @@ const CREATE_TYPES: {
     label: 'Story',
     hint: '24h · Disappears',
     iconBg: 'linear-gradient(135deg, hsl(330 81% 60%), hsl(24 95% 53%))',
+  },
+  {
+    type: 'marketplace',
+    emoji: '🛍️',
+    label: 'Marketplace',
+    hint: 'Sell · Buy · Rent',
+    iconBg: 'linear-gradient(135deg, #10B981, #3B82F6)',
   },
   {
     type: 'diary',
@@ -88,6 +95,11 @@ export function CreatePostSheet({ open, onOpenChange }: CreatePostSheetProps) {
 
     if (type === 'diary') {
       navigate('/diary');
+      return;
+    }
+
+    if (type === 'marketplace') {
+      navigate('/marketplace?create=true');
       return;
     }
 
