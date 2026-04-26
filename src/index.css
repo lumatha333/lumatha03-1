@@ -204,46 +204,69 @@ All colors MUST be HSL.
   }
   
   .mp-card {
-    @apply bg-[var(--mp-bg-card)] p-3.5 flex flex-col gap-[9px] transition-all duration-300 hover:shadow-lg active:scale-[0.99] origin-center;
+    @apply bg-[var(--mp-bg-card)] p-4 flex flex-col gap-[12px] transition-all duration-300 relative overflow-hidden;
+    background: linear-gradient(180deg, hsl(var(--card) / 0.8), hsl(var(--card)));
+    border-bottom: 1px solid var(--mp-border);
+  }
+  
+  .mp-card:hover {
+    @apply shadow-xl;
+    transform: translateY(-2px);
   }
   
   .mp-av {
-    @apply w-[30px] h-[30px] rounded-full bg-[var(--mp-bg-info)] flex items-center justify-center text-[12px] font-medium text-[var(--mp-text-info)] flex-shrink-0;
+    @apply w-[32px] h-[32px] rounded-full bg-[var(--mp-bg-info)] flex items-center justify-center text-[12px] font-bold text-[var(--mp-text-info)] flex-shrink-0 transition-transform active:scale-90 border border-[var(--mp-text-info)]/20;
+    box-shadow: 0 2px 10px hsl(var(--primary) / 0.1);
   }
   
   .mp-price {
-    @apply text-[13px] font-medium text-[var(--mp-text-success)] bg-[var(--mp-bg-success)] px-2.5 py-0.5 rounded-full whitespace-nowrap;
+    @apply text-[13px] font-bold text-[var(--mp-text-success)] bg-[var(--mp-bg-success)] px-3 py-1 rounded-full whitespace-nowrap shadow-sm border border-[var(--mp-text-success)]/10;
+    background: linear-gradient(135deg, hsl(142 70% 45% / 0.15), hsl(142 70% 45% / 0.05));
   }
   
   .mp-thumb {
-    @apply w-[108px] h-[108px] flex-shrink-0 rounded-[calc(var(--radius)*0.75)] bg-[var(--mp-bg-subtle)] border border-[var(--mp-border)] overflow-hidden relative flex items-center justify-center;
+    @apply w-[120px] h-[120px] flex-shrink-0 rounded-2xl bg-[var(--mp-bg-subtle)] border border-[var(--mp-border)] overflow-hidden relative flex items-center justify-center transition-all duration-500;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+  }
+  
+  .mp-thumb img {
+    @apply transition-transform duration-700 ease-out;
+  }
+  
+  .mp-thumb:hover img {
+    @apply scale-110 rotate-1;
   }
   
   .mp-sell-pill {
-    @apply absolute top-1.5 left-1.5 bg-[var(--mp-bg-info)] text-[var(--mp-text-info)] text-[9px] font-medium px-1.5 py-0.5 rounded-full;
+    @apply absolute top-2 left-2 bg-[var(--mp-bg-info)] text-[var(--mp-text-info)] text-[10px] font-bold px-2 py-0.5 rounded-lg backdrop-blur-md border border-[var(--mp-text-info)]/30 z-10;
   }
   
   .mp-count-pill {
-    @apply absolute bottom-1.5 right-1.5 bg-black/40 text-white text-[9px] px-1.5 py-0.5 rounded-full backdrop-blur-sm;
+    @apply absolute bottom-2 right-2 bg-black/60 text-white text-[10px] font-medium px-2 py-0.5 rounded-lg backdrop-blur-md border border-white/10 z-10;
   }
   
   .mp-detail {
-    @apply flex-1 min-w-0 h-[108px] flex flex-col gap-1;
+    @apply flex-1 min-w-0 h-[120px] flex flex-col gap-1.5;
   }
   
   .mp-action-btn {
-    @apply bg-transparent border-none cursor-pointer text-[var(--mp-text-secondary)] flex items-center gap-1 text-[12px] px-2 py-1.5 rounded-lg transition-colors hover:bg-[var(--mp-bg-subtle)];
+    @apply bg-transparent border-none cursor-pointer text-[var(--mp-text-secondary)] flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-2 rounded-xl transition-all hover:bg-[var(--mp-bg-subtle)] active:scale-90;
   }
   
-  .mp-action-btn.liked { @apply text-[var(--mp-text-danger)]; }
-  .mp-action-btn.saved { @apply text-[var(--mp-text-warning)]; }
+  .mp-action-btn.liked { 
+    @apply text-[var(--mp-text-danger)] bg-[var(--mp-text-danger)]/5;
+  }
+  .mp-action-btn.saved { 
+    @apply text-[var(--mp-text-warning)] bg-[var(--mp-text-warning)]/5;
+  }
   
   .mp-cta-msg {
-    @apply flex-1 py-2 rounded-full border border-[var(--mp-border)] bg-[var(--mp-bg-info)] text-[var(--mp-text-info)] text-[13px] font-medium transition-all hover:bg-[var(--mp-bg-info)]/80 flex items-center justify-center gap-1.5 active:scale-95;
+    @apply flex-1 py-2.5 rounded-2xl border border-[var(--mp-border)] bg-[var(--mp-bg-info)] text-[var(--mp-text-info)] text-[13px] font-bold transition-all hover:shadow-glow flex items-center justify-center gap-2 active:scale-95;
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.05));
   }
   
   .mp-cta-call {
-    @apply flex-1 py-2 rounded-full border border-[var(--mp-border)] bg-transparent text-[var(--mp-text-success)] text-[13px] font-medium transition-all hover:bg-[var(--mp-bg-subtle)] flex items-center justify-center gap-1.5 active:scale-95;
+    @apply flex-1 py-2.5 rounded-2xl border border-[var(--mp-border)] bg-transparent text-[var(--mp-text-success)] text-[13px] font-bold transition-all hover:bg-[var(--mp-bg-subtle)] flex items-center justify-center gap-2 active:scale-95;
   }
 
   /* Glass Card Effect */

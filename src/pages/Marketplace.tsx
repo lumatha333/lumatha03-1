@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const TABS = [
   { id: 'all', label: 'All', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
@@ -19,6 +20,29 @@ const TABS = [
   { id: 'rent', label: 'Rent', icon: <HomeIcon className="w-3.5 h-3.5" /> },
   { id: 'controller', label: 'Me', icon: <Sliders className="w-3.5 h-3.5" /> },
 ];
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 100,
+      damping: 12
+    }
+  }
+};
 
 export default function Marketplace() {
   const { user } = useAuth();
@@ -126,69 +150,94 @@ export default function Marketplace() {
   };
 
   const renderListings = () => {
-    if (loading) return Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />);
+    if (loading) return (
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-2xl" />)}
+      </div>
+    );
     if (listings.length === 0) return (
-      <div className="text-center py-16">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="text-center py-16"
+      >
         <SearchX className="w-14 h-14 mx-auto text-muted-foreground/20 mb-4" />
         <p className="text-sm font-medium text-muted-foreground mb-1">No results found</p>
         <p className="text-xs text-muted-foreground/60 mb-4">Try a different search or category</p>
         <Button size="sm" onClick={() => { setEditListing(null); setCreateOpen(true); }} className="gap-1">
           <Plus className="w-4 h-4" />Post something new
         </Button>
-      </div>
+      </motion.div>
     );
-    return listings.map(l => (
-      <MarketplaceListingCard
-        key={l.id}
-        listing={l}
-        isLiked={likedSet.has(l.id)}
-        isSaved={savedSet.has(l.id)}
-        likesCount={likeCounts[l.id] || 0}
-        commentsCount={commentCounts[l.id] || 0}
-        currentUserId={user?.id || ''}
-        onLike={toggleLike}
-        onSave={toggleSave}
-        onComment={(id) => { setCommentListingId(id); setCommentOpen(true); }}
-        onShare={handleShare}
-        onChat={handleChat}
-        onDelete={deleteListing}
-        onEdit={(listing) => { setEditListing(listing); setCreateOpen(true); }}
-        onViewProfile={(userId) => navigate(`/marketplace/profile/${userId}`)}
-      />
-    ));
+    return (
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="mp-feed"
+      >
+        {listings.map(l => (
+          <motion.div key={l.id} variants={itemVariants}>
+            <MarketplaceListingCard
+              listing={l}
+              isLiked={likedSet.has(l.id)}
+              isSaved={savedSet.has(l.id)}
+              likesCount={likeCounts[l.id] || 0}
+              commentsCount={commentCounts[l.id] || 0}
+              currentUserId={user?.id || ''}
+              onLike={toggleLike}
+              onSave={toggleSave}
+              onComment={(id) => { setCommentListingId(id); setCommentOpen(true); }}
+              onShare={handleShare}
+              onChat={handleChat}
+              onDelete={deleteListing}
+              onEdit={(listing) => { setEditListing(listing); setCreateOpen(true); }}
+              onViewProfile={(userId) => navigate(`/marketplace/profile/${userId}`)}
+            />
+          </motion.div>
+        ))}
+      </motion.div>
+    );
   };
 
   return (
-    <div className="space-y-3 pb-20">
-
-
+    <div className="space-y-4 pb-20 page-enter">
       {/* Search bar */}
-      <div className="flex gap-2">
+      <motion.div 
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="flex gap-2"
+      >
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search listings, locations, categories..."
-            className="pl-9 text-sm h-9"
+            className="pl-9 text-sm h-10 rounded-2xl bg-muted/30 border-none focus-visible:ring-1 focus-visible:ring-primary/20"
           />
         </div>
-        <Button size="sm" onClick={() => { setEditListing(null); setCreateOpen(true); }} className="h-9 gap-1 bg-gradient-to-r from-primary to-secondary hover:opacity-90">
+        <Button size="sm" onClick={() => { setEditListing(null); setCreateOpen(true); }} className="h-10 px-4 rounded-2xl gap-1.5 bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-all active:scale-95 shadow-md">
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">Post</span>
         </Button>
-      </div>
+      </motion.div>
 
-      {/* Simple tab bar - no SwipeableTabs to avoid event conflicts */}
-      <div className="flex items-center gap-0 p-1 rounded-2xl glass-card overflow-x-auto no-scrollbar">
+      {/* Simple tab bar */}
+      <motion.div 
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        className="flex items-center gap-1 p-1 rounded-2xl bg-muted/20 backdrop-blur-md border border-white/5 overflow-x-auto no-scrollbar"
+      >
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all duration-200 whitespace-nowrap flex-1 justify-center text-xs font-medium",
+              "flex items-center gap-1.5 px-3 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap flex-1 justify-center text-[11px] font-bold uppercase tracking-wider",
               activeTab === tab.id
-                ? "bg-primary/20 text-primary shadow-sm"
+                ? "bg-background text-primary shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -196,10 +245,10 @@ export default function Marketplace() {
             <span>{tab.label}</span>
           </button>
         ))}
-      </div>
+      </motion.div>
 
       {/* Content */}
-      <div className={cn(activeTab !== 'controller' && "mp-feed mb-4")}>
+      <div className={cn(activeTab !== 'controller' && "mb-4")}>
         {activeTab === 'controller' ? (
           <div className="space-y-3">
             <MarketplaceController />
@@ -225,3 +274,4 @@ export default function Marketplace() {
     </div>
   );
 }
+
