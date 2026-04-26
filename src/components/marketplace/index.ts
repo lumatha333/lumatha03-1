@@ -5,4 +5,5 @@ export type { MediaFirstCardProps, ListingType, CTAType } from './MediaFirstCard
 // Re-export existing components
 export { MarketplaceGalleryCard } from './MarketplaceGalleryCard';
 export { MarketplaceListingCard } from './MarketplaceListingCard';
+export { MarketplaceFeedCard } from './MarketplaceFeedCard';
 export { MarketplaceCommentsDialog } from './MarketplaceCommentsDialog';
