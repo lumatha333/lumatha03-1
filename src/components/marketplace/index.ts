@@ -6,4 +6,5 @@ export type { MediaFirstCardProps, ListingType, CTAType } from './MediaFirstCard
 export { MarketplaceGalleryCard } from './MarketplaceGalleryCard';
 export { MarketplaceListingCard } from './MarketplaceListingCard';
 export { MarketplaceFeedCard } from './MarketplaceFeedCard';
+export { CreateListingSheet } from './CreateListingSheet';
 export { MarketplaceCommentsDialog } from './MarketplaceCommentsDialog';
