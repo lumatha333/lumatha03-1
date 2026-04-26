@@ -82,6 +82,19 @@ All colors MUST be HSL.
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     --transition-spring: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Marketplace Specific Colors */
+    --mp-border: hsl(var(--border) / 0.4);
+    --mp-bg-card: hsl(var(--card));
+    --mp-bg-subtle: hsl(var(--muted) / 0.3);
+    --mp-bg-info: hsl(var(--primary) / 0.1);
+    --mp-bg-success: hsl(142 70% 45% / 0.1);
+    --mp-text-primary: hsl(var(--foreground));
+    --mp-text-secondary: hsl(var(--muted-foreground));
+    --mp-text-info: hsl(var(--primary));
+    --mp-text-success: hsl(142 70% 45%);
+    --mp-text-danger: hsl(var(--destructive));
+    --mp-text-warning: hsl(38 92% 55%);
   }
 
   .light {
@@ -139,6 +152,11 @@ All colors MUST be HSL.
     --shadow-lg: 0 16px 48px hsl(220 20% 60% / 0.2);
     --shadow-glow: 0 0 40px hsl(210 100% 50% / 0.2);
     --shadow-glow-secondary: 0 0 40px hsl(200 70% 65% / 0.2);
+
+    /* Marketplace Light */
+    --mp-border: hsl(var(--border) / 0.6);
+    --mp-bg-info: hsl(var(--primary) / 0.08);
+    --mp-bg-success: hsl(142 70% 45% / 0.08);
   }
 }
 
@@ -180,6 +198,54 @@ All colors MUST be HSL.
 }
 
 @layer components {
+  /* Marketplace Layout Classes */
+  .mp-feed {
+    @apply flex flex-col gap-px bg-[var(--mp-border)] rounded-[var(--radius)] overflow-hidden;
+  }
+  
+  .mp-card {
+    @apply bg-[var(--mp-bg-card)] p-3.5 flex flex-col gap-[9px] transition-all duration-300 hover:shadow-lg active:scale-[0.99] origin-center;
+  }
+  
+  .mp-av {
+    @apply w-[30px] h-[30px] rounded-full bg-[var(--mp-bg-info)] flex items-center justify-center text-[12px] font-medium text-[var(--mp-text-info)] flex-shrink-0;
+  }
+  
+  .mp-price {
+    @apply text-[13px] font-medium text-[var(--mp-text-success)] bg-[var(--mp-bg-success)] px-2.5 py-0.5 rounded-full whitespace-nowrap;
+  }
+  
+  .mp-thumb {
+    @apply w-[108px] h-[108px] flex-shrink-0 rounded-[calc(var(--radius)*0.75)] bg-[var(--mp-bg-subtle)] border border-[var(--mp-border)] overflow-hidden relative flex items-center justify-center;
+  }
+  
+  .mp-sell-pill {
+    @apply absolute top-1.5 left-1.5 bg-[var(--mp-bg-info)] text-[var(--mp-text-info)] text-[9px] font-medium px-1.5 py-0.5 rounded-full;
+  }
+  
+  .mp-count-pill {
+    @apply absolute bottom-1.5 right-1.5 bg-black/40 text-white text-[9px] px-1.5 py-0.5 rounded-full backdrop-blur-sm;
+  }
+  
+  .mp-detail {
+    @apply flex-1 min-w-0 h-[108px] flex flex-col gap-1;
+  }
+  
+  .mp-action-btn {
+    @apply bg-transparent border-none cursor-pointer text-[var(--mp-text-secondary)] flex items-center gap-1 text-[12px] px-2 py-1.5 rounded-lg transition-colors hover:bg-[var(--mp-bg-subtle)];
+  }
+  
+  .mp-action-btn.liked { @apply text-[var(--mp-text-danger)]; }
+  .mp-action-btn.saved { @apply text-[var(--mp-text-warning)]; }
+  
+  .mp-cta-msg {
+    @apply flex-1 py-2 rounded-full border border-[var(--mp-border)] bg-[var(--mp-bg-info)] text-[var(--mp-text-info)] text-[13px] font-medium transition-all hover:bg-[var(--mp-bg-info)]/80 flex items-center justify-center gap-1.5 active:scale-95;
+  }
+  
+  .mp-cta-call {
+    @apply flex-1 py-2 rounded-full border border-[var(--mp-border)] bg-transparent text-[var(--mp-text-success)] text-[13px] font-medium transition-all hover:bg-[var(--mp-bg-subtle)] flex items-center justify-center gap-1.5 active:scale-95;
+  }
+
   /* Glass Card Effect */
   .glass-card {
     background: linear-gradient(135deg, hsl(var(--card) / 0.95), hsl(var(--card) / 0.85));

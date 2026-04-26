@@ -199,9 +199,11 @@ export default function Marketplace() {
       </div>
 
       {/* Content */}
-      <div className="space-y-3">
+      <div className={cn(activeTab !== 'controller' && "mp-feed mb-4")}>
         {activeTab === 'controller' ? (
-          <MarketplaceController />
+          <div className="space-y-3">
+            <MarketplaceController />
+          </div>
         ) : (
           renderListings()
         )}
