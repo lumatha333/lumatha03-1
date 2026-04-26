@@ -437,7 +437,7 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
       {/* Top Navigation Bar */}
       <div className="absolute top-0 left-0 right-0 z-50 p-4 pt-safe">
         <div className="flex items-center justify-between">
-          {/* Left - Back & Profile */}
+          {/* Left - Back */}
           <div className="flex items-center gap-3">
             <motion.button
               whileTap={{ scale: 0.9 }}
@@ -446,26 +446,13 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
             >
               <ChevronLeft size={20} />
             </motion.button>
-
-            <Avatar className="w-10 h-10 border-2 border-white/30 ring-2 ring-black/20">
-              <AvatarImage src={currentGroup.profile?.avatar_url} />
-              <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white font-bold">
-                {currentGroup.profile?.name?.[0] || '?'}
-              </AvatarFallback>
-            </Avatar>
-
-            <div>
-              <p className="text-white font-bold text-sm">
-                {currentGroup.profile?.name || 'User'}
-              </p>
-              <p className="text-white/50 text-xs">
-                {new Date(currentStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
           </div>
 
           {/* Right - Controls */}
           <div className="flex items-center gap-2">
+            <p className="text-white/70 text-xs font-medium px-2">
+              {new Date(currentStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
             {currentStory.media_type === 'video' && (
               <motion.button
                 whileTap={{ scale: 0.9 }}
@@ -560,9 +547,13 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
         {/* Say Something Input - Only for non-Text/Dang stories */}
         {!isOwnStory && currentStory.media_type !== 'text' && !showComments && (
           <div className="px-4 py-3 border-t border-white/10" onClick={(e) => e.stopPropagation()}>
-            <div 
-              className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-full px-4 py-2.5"
-            >
+            <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-full px-3 py-2.5">
+              <Avatar className="w-8 h-8 border border-white/20 shrink-0">
+                <AvatarImage src={profile?.avatar_url || undefined} />
+                <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-[10px] font-bold">
+                  {profile?.name?.[0] || user?.email?.[0] || 'Y'}
+                </AvatarFallback>
+              </Avatar>
               <input
                 type="text"
                 value={newComment}
@@ -573,6 +564,17 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
                 onBlur={() => setIsPaused(false)}
                 onKeyDown={(e) => e.key === 'Enter' && handleComment()}
               />
+              <motion.button
+                whileTap={{ scale: 0.85 }}
+                onClick={handleLike}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:text-pink-400 transition-colors"
+                aria-label="Like story"
+              >
+                <Heart
+                  size={18}
+                  className={cn(isLiked ? 'fill-red-500 text-red-500' : 'fill-transparent text-white')}
+                />
+              </motion.button>
               {newComment.trim() && (
                 <motion.button
                   initial={{ scale: 0 }}
@@ -607,39 +609,6 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
           </div>
         )}
       </div>
-
-      {/* Bottom Right Story Actions - Instagram style */}
-      {!showComments && (
-        <div className="absolute right-4 bottom-24 z-40 flex flex-col items-center gap-5" onClick={(e) => e.stopPropagation()}>
-          <div className="flex flex-col items-center gap-1">
-            <motion.button
-              whileTap={{ scale: 0.82 }}
-              onClick={handleLike}
-              className="text-white"
-            >
-              <Heart
-                size={30}
-                className={cn(
-                  'transition-all duration-300',
-                  isLiked ? 'fill-red-500 text-red-500' : 'fill-transparent text-white'
-                )}
-              />
-            </motion.button>
-            <span className="text-white text-xs font-bold">{likeCount}</span>
-          </div>
-
-          <div className="flex flex-col items-center gap-1">
-            <motion.button
-              whileTap={{ scale: 0.82 }}
-              onClick={() => setShowComments(true)}
-              className="text-white"
-            >
-              <MessageCircle size={30} />
-            </motion.button>
-            <span className="text-white text-xs font-bold">{comments.length}</span>
-          </div>
-        </div>
-      )}
 
       {/* Floating hearts burst - YouTube livestream inspired */}
       <div className="absolute right-10 bottom-32 z-40 pointer-events-none">

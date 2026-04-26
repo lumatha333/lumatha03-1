@@ -116,13 +116,13 @@ const StoryCircle = memo(({
         className={cn(
           "relative w-[84px] h-[84px] rounded-full p-[3px] transition-all duration-200",
           group.hasUnseen 
-            ? "bg-gradient-to-tr from-[#FF006E] via-[#FFB703] to-[#FB5607]" 
+            ? "bg-gradient-to-tr from-[#7C3AED] to-[#3B82F6]" 
             : "bg-white/[0.08]"
         )}
       >
         {/* Glow behind active stories */}
         {group.hasUnseen && (
-          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-500 blur-lg opacity-30 animate-ring-glow -z-10" />
+          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 blur-lg opacity-30 animate-ring-glow -z-10" />
         )}
 
         <div className="w-full h-full rounded-full overflow-hidden border-2 border-background bg-muted/20">
