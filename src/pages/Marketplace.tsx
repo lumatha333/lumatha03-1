@@ -17,7 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MarketplaceFeedCard } from '@/components/marketplace/MarketplaceFeedCard';
-import { ListingDetail } from '@/components/marketplace/ListingDetail';
+import { ListingDetail } from '@/components/marketplace/redesign/ListingDetail';
 import { CreateListingSheet } from '@/components/marketplace/CreateListingSheet';
 
 // ===== CONSTANTS =====
