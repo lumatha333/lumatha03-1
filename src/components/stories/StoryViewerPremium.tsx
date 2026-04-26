@@ -52,6 +52,7 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
   const [viewers, setViewers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const [floatingHearts, setFloatingHearts] = useState<FloatingHeart[]>([]);
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -221,22 +222,36 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
   // Swipe handling
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.touches[0].clientX);
+    setTouchStartY(e.touches[0].clientY);
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX === null) return;
-    
-    const diff = touchStartX - e.changedTouches[0].clientX;
-    const threshold = 50;
-    
-    if (Math.abs(diff) > threshold) {
-      if (diff > 0) {
+    if (touchStartX === null || touchStartY === null) return;
+
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const diffX = touchStartX - endX;
+    const diffY = endY - touchStartY;
+    const horizontalThreshold = 50;
+    const closeThreshold = 80;
+
+    // Vertical swipe down closes the viewer for a smoother back gesture.
+    if (Math.abs(diffY) > Math.abs(diffX) && diffY > closeThreshold) {
+      onClose();
+      setTouchStartX(null);
+      setTouchStartY(null);
+      return;
+    }
+
+    if (Math.abs(diffX) > horizontalThreshold) {
+      if (diffX > 0) {
         handleNext();
       } else {
         handlePrev();
       }
     }
     setTouchStartX(null);
+    setTouchStartY(null);
   };
 
   const handleLike = useCallback(async () => {
@@ -437,7 +452,7 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
       {/* Top Navigation Bar */}
       <div className="absolute top-0 left-0 right-0 z-50 p-4 pt-safe">
         <div className="flex items-center justify-between">
-          {/* Left - Back */}
+          {/* Left - Back + uploader */}
           <div className="flex items-center gap-3">
             <motion.button
               whileTap={{ scale: 0.9 }}
@@ -446,6 +461,18 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
             >
               <ChevronLeft size={20} />
             </motion.button>
+
+            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1.5">
+              <Avatar className="w-7 h-7 border border-white/20">
+                <AvatarImage src={currentGroup.profile?.avatar_url || undefined} />
+                <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-[10px] font-bold">
+                  {currentGroup.profile?.name?.[0] || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <p className="text-white text-sm font-semibold max-w-[38vw] truncate">
+                {currentGroup.profile?.name || 'User'}
+              </p>
+            </div>
           </div>
 
           {/* Right - Controls */}
@@ -533,19 +560,14 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
             animate={{ opacity: 1, y: 0 }}
             className="px-4 pt-8 pb-3"
           >
-            <div className="mb-1">
-              <p className="text-white/90 font-semibold text-sm mb-1">
-                {currentGroup.profile?.name}
-              </p>
-              <p className="text-white text-sm leading-relaxed">
-                {currentStory.caption}
-              </p>
-            </div>
+            <p className="text-white text-sm leading-relaxed">
+              {currentStory.caption}
+            </p>
           </motion.div>
         )}
 
-        {/* Say Something Input - Only for non-Text/Dang stories */}
-        {!isOwnStory && currentStory.media_type !== 'text' && !showComments && (
+        {/* Say Something Input */}
+        {!isOwnStory && !showComments && (
           <div className="px-4 py-3 border-t border-white/10" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-full px-3 py-2.5">
               <Avatar className="w-8 h-8 border border-white/20 shrink-0">
