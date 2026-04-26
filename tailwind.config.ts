@@ -15,6 +15,13 @@ export default {
     },
     extend: {
       colors: {
+        notes: {
+          bg: '#070B14',
+          card: '#0F1629',
+          primary: '#7B61FF',
+          text: '#E6E9F2',
+          muted: '#8A90A2',
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -98,6 +105,14 @@ export default {
           "0%": { transform: "translateX(-100%)", opacity: "0" },
           "100%": { transform: "translateX(0)", opacity: "1" },
         },
+      },
+      transitionTimingFunction: {
+        'notes-premium': 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+      },
+      transitionDuration: {
+        220: '220ms',
+        280: '280ms',
+        300: '300ms',
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",

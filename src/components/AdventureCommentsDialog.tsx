@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { X, Send, Heart, Reply, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { X, Send, Heart, Reply, MoreVertical, Edit, Trash2, MessageCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
 
 interface Comment {
   id: string;
@@ -25,9 +27,10 @@ interface Comment {
 interface AdventureCommentsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  itemId: string; // Challenge ID, Place ID, or Travel Story ID
+  itemId: string;
   itemTitle: string;
   itemType: 'challenge' | 'place' | 'travel';
+  inline?: boolean;
 }
 
 export function AdventureCommentsDialog({ 
@@ -35,66 +38,87 @@ export function AdventureCommentsDialog({
   onOpenChange, 
   itemId, 
   itemTitle,
-  itemType 
+  itemType,
+  inline
 }: AdventureCommentsDialogProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyContent, setReplyContent] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, profile: currentUserProfile } = useAuth();
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Create a unique reference_id based on item type and id (text field, not UUID)
   const referenceId = `adventure_${itemType}_${itemId}`;
 
   useEffect(() => {
-    if (open && itemId) {
+    if ((open || inline) && itemId) {
       fetchComments();
     }
-  }, [open, itemId]);
+  }, [open, itemId, inline]);
+
+  useEffect(() => {
+    if (!(open || inline) || !itemId) return;
+
+    const channel = supabase
+      .channel(`adventure-comments-${referenceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'comments',
+          filter: `reference_id=eq.${referenceId}`,
+        },
+        () => {
+          void fetchComments();
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'comment_reactions',
+        },
+        () => {
+          void fetchComments();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [open, inline, itemId, referenceId]);
 
   const fetchComments = async () => {
     setLoading(true);
     try {
-      // Use reference_id field (TEXT) to store adventure-related comments
-      // @ts-ignore - reference_id is a new column not yet in types
+      // @ts-ignore
       const { data, error } = await supabase
         .from('comments')
-        .select('*')
+        .select('*, profiles(*)')
         .eq('reference_id', referenceId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       
-      // Fetch profiles separately for each comment
-      const commentsWithProfiles: Comment[] = [];
+      const commentsWithMetadata: Comment[] = [];
       for (const comment of data || []) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('name, avatar_url')
-          .eq('id', comment.user_id)
-          .single();
-        
-        // Fetch like count for this comment
         const { data: reactions } = await supabase
           .from('comment_reactions')
-          .select('user_id, reaction')
+          .select('user_id')
           .eq('comment_id', comment.id)
           .eq('reaction', 'like');
         
-        const likeCount = reactions?.length || 0;
-        const userLiked = user ? reactions?.some(r => r.user_id === user.id) : false;
-        
-        commentsWithProfiles.push({
+        commentsWithMetadata.push({
           ...comment,
-          profiles: profile || undefined,
-          likeCount,
-          userLiked
+          likeCount: reactions?.length || 0,
+          userLiked: user ? reactions?.some(r => r.user_id === user.id) : false
         });
       }
-      setComments(commentsWithProfiles);
+      setComments(commentsWithMetadata);
     } catch (error) {
       console.error('Error fetching comments:', error);
     } finally {
@@ -104,15 +128,12 @@ export function AdventureCommentsDialog({
 
   const addComment = async () => {
     if (!newComment.trim() || !user) {
-      if (!user) {
-        toast.error('Please login to comment');
-      }
+      if (!user) toast.error('Please login to comment');
       return;
     }
 
     try {
-      // Use reference_id (TEXT) for adventure items - allows non-UUID identifiers
-      // @ts-ignore - reference_id is a new column not yet in types
+      // @ts-ignore
       const { error } = await supabase.from('comments').insert({
         reference_id: referenceId,
         user_id: user.id,
@@ -122,257 +143,161 @@ export function AdventureCommentsDialog({
       if (error) throw error;
       setNewComment('');
       fetchComments();
-      toast.success('Comment added');
+      toast.success('Comment posted!');
     } catch (error) {
-      console.error('Comment error:', error);
-      toast.error('Failed to add comment');
-    }
-  };
-
-  const addReply = async (parentId: string) => {
-    if (!replyContent.trim() || !user) return;
-    try {
-      // @ts-ignore - reference_id is a new column not yet in types
-      const { error } = await supabase.from('comments').insert({
-        reference_id: referenceId,
-        user_id: user.id,
-        content: `@reply: ${replyContent.trim()}`
-      });
-
-      if (error) throw error;
-      setReplyingTo(null);
-      setReplyContent('');
-      fetchComments();
-      toast.success('Reply added');
-    } catch (error) {
-      toast.error('Failed to add reply');
-    }
-  };
-
-  const deleteComment = async (id: string) => {
-    try {
-      const { error } = await supabase.from('comments').delete().eq('id', id);
-      if (error) throw error;
-      setComments(comments.filter(c => c.id !== id));
-      toast.success('Comment deleted');
-    } catch (error) {
-      toast.error('Failed to delete');
-    }
-  };
-
-  const updateComment = async (id: string) => {
-    if (!editContent.trim()) return;
-    try {
-      const { error } = await supabase
-        .from('comments')
-        .update({ content: editContent.trim() })
-        .eq('id', id);
-
-      if (error) throw error;
-      setComments(comments.map(c => c.id === id ? { ...c, content: editContent.trim() } : c));
-      setEditingId(null);
-      setEditContent('');
-      toast.success('Comment updated');
-    } catch (error) {
-      toast.error('Failed to update');
+      toast.error('Failed to post comment');
     }
   };
 
   const toggleLike = async (commentId: string) => {
     if (!user) return;
-    
     const comment = comments.find(c => c.id === commentId);
     if (!comment) return;
     
     try {
       if (comment.userLiked) {
-        await supabase.from('comment_reactions').delete()
-          .eq('comment_id', commentId)
-          .eq('user_id', user.id)
-          .eq('reaction', 'like');
-        
-        setComments(prev => prev.map(c => 
-          c.id === commentId 
-            ? { ...c, userLiked: false, likeCount: Math.max(0, c.likeCount - 1) }
-            : c
-        ));
+        await supabase.from('comment_reactions').delete().eq('comment_id', commentId).eq('user_id', user.id);
+        setComments(prev => prev.map(c => c.id === commentId ? { ...c, userLiked: false, likeCount: Math.max(0, c.likeCount - 1) } : c));
       } else {
-        await supabase.from('comment_reactions').insert({
-          comment_id: commentId,
-          user_id: user.id,
-          reaction: 'like'
-        });
-        
-        setComments(prev => prev.map(c => 
-          c.id === commentId 
-            ? { ...c, userLiked: true, likeCount: c.likeCount + 1 }
-            : c
-        ));
+        await supabase.from('comment_reactions').insert({ comment_id: commentId, user_id: user.id, reaction: 'like' });
+        setComments(prev => prev.map(c => c.id === commentId ? { ...c, userLiked: true, likeCount: c.likeCount + 1 } : c));
       }
-    } catch (error) {
-      console.error('Like error:', error);
-    }
+    } catch (e) {}
   };
 
-  const formatTime = (date: string) => {
-    const d = new Date(date);
-    const now = new Date();
-    const diff = now.getTime() - d.getTime();
-    const mins = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m`;
-    if (hours < 24) return `${hours}h`;
-    return `${days}d`;
+  const deleteComment = async (id: string) => {
+    try {
+      await supabase.from('comments').delete().eq('id', id);
+      setComments(comments.filter(c => c.id !== id));
+      toast.success('Deleted');
+    } catch (e) {}
   };
 
-  const getTypeLabel = () => {
-    switch (itemType) {
-      case 'challenge': return '🎯 Challenge';
-      case 'place': return '📍 Place';
-      case 'travel': return '✈️ Travel Story';
-      default: return '';
-    }
+  const handleUpdate = async () => {
+    if (!editingId || !editContent.trim()) return;
+    try {
+      await supabase.from('comments').update({ content: editContent.trim() }).eq('id', editingId);
+      toast.success('Updated');
+      setEditingId(null);
+      fetchComments();
+    } catch (e) {}
   };
+
+  const Content = (
+    <div className="flex flex-col h-full bg-[#0a0f1e]">
+      {/* List */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 no-scrollbar">
+        {loading ? (
+          <div className="flex justify-center py-10"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+        ) : comments.length === 0 ? (
+          <div className="text-center py-20 opacity-30">
+            <MessageCircle className="w-12 h-12 mx-auto mb-3" />
+            <p className="font-bold text-sm uppercase tracking-widest">No comments yet</p>
+          </div>
+        ) : (
+          comments.map((comment) => (
+            <div key={comment.id} className="flex gap-3">
+              <Avatar className="w-9 h-9 border border-white/5">
+                <AvatarImage src={comment.profiles?.avatar_url || ''} />
+                <AvatarFallback className="bg-slate-800 text-primary text-[10px] font-black uppercase">{comment.profiles?.name?.[0] || '?'}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-3 relative group">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[13px] font-bold text-white">{(comment.profiles as any)?.name || (comment.profiles as any)?.username || comment.profiles?.name || (comment.profiles as any)?.username || 'Explorer'}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-medium text-slate-500">
+                        {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                      </span>
+                      {user?.id === comment.user_id && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1 hover:bg-white/5 rounded-full transition-colors text-slate-500">
+                              <MoreVertical className="w-3 h-3" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" side="top" className="bg-slate-900 border-white/10 rounded-2xl">
+                            <DropdownMenuItem onClick={() => { setEditingId(comment.id); setEditContent(comment.content); }} className="text-xs text-white">
+                              <Edit className="w-3 h-3 mr-2" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => deleteComment(comment.id)} className="text-xs text-red-500">
+                              <Trash2 className="w-3 h-3 mr-2" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  </div>
+                  {editingId === comment.id ? (
+                    <div className="space-y-2 mt-2">
+                      <Input value={editContent} onChange={e => setEditContent(e.target.value)} className="h-9 bg-slate-800 border-white/10" />
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                        <Button size="sm" onClick={handleUpdate}>Save</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[13px] text-slate-300 leading-relaxed">{comment.content}</p>
+                  )}
+                </div>
+                
+                {!editingId && (
+                  <div className="flex items-center gap-4 mt-1.5 px-1">
+                    <button onClick={() => toggleLike(comment.id)} className={cn("text-[10px] font-black uppercase tracking-widest flex items-center gap-1 transition-all", comment.userLiked ? "text-red-500" : "text-slate-500")}>
+                      <Heart className={cn("w-3 h-3", comment.userLiked && "fill-current")} />
+                      {comment.likeCount > 0 ? comment.likeCount : 'Like'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="p-4 border-t border-white/5 bg-[#0a0f1e]/95 backdrop-blur-xl">
+        <div className="flex items-center gap-3 max-w-2xl mx-auto">
+          <Avatar className="w-10 h-10 border-2 border-primary/20">
+            <AvatarImage src={currentUserProfile?.avatar_url || ''} />
+            <AvatarFallback className="bg-slate-800 text-primary font-black">{currentUserProfile?.name?.[0] || '?'}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 relative">
+            <Input
+              ref={inputRef}
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Give reviews..."
+              className="h-12 bg-slate-900/80 border-slate-800 text-white rounded-full px-5 text-sm font-medium focus-visible:ring-primary"
+              onKeyPress={(e) => e.key === 'Enter' && addComment()}
+            />
+          </div>
+          <Button 
+            size="icon" 
+            onClick={addComment} 
+            disabled={!newComment.trim() || !user} 
+            className={cn("h-12 w-12 rounded-full transition-all", newComment.trim() ? "bg-primary text-white scale-100" : "bg-slate-800 text-slate-500 scale-90")}
+          >
+            <Send className="w-5 h-5" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (inline) return Content;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full h-full max-w-full max-h-full sm:max-w-lg sm:max-h-[90vh] sm:h-auto m-0 sm:m-auto p-0 flex flex-col glass-card border-0 sm:border sm:border-border rounded-none sm:rounded-lg">
-        {/* Header */}
-        <div className="flex items-center justify-between p-3 border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-10">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-sm">Comments</h3>
-            <p className="text-[10px] text-muted-foreground truncate max-w-[220px]">
-              {getTypeLabel()} • {itemTitle}
-            </p>
+      <DialogContent className="w-full h-full max-w-full m-0 p-0 border-0 rounded-none bg-[#0a0f1e] flex flex-col overflow-hidden">
+        <DialogHeader className="px-4 py-4 border-b border-white/5 flex flex-row items-center justify-between sticky top-0 bg-[#0a0f1e]/80 backdrop-blur-xl z-20">
+          <div className="flex items-center gap-3">
+            <button onClick={() => onOpenChange(false)} className="p-1 hover:bg-white/5 rounded-full text-slate-400"><X className="w-6 h-6" /></button>
+            <DialogTitle className="text-[17px] font-bold text-white truncate max-w-[240px] font-['Space_Grotesk']">{itemTitle}</DialogTitle>
+            <DialogDescription className="sr-only">Read and write comments for this adventure item.</DialogDescription>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => onOpenChange(false)}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-
-        {/* Comments List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {loading ? (
-            <div className="text-center text-muted-foreground py-8 text-sm">Loading comments...</div>
-          ) : comments.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">
-              <p className="text-base">No comments yet</p>
-              <p className="text-xs">Be the first to comment!</p>
-            </div>
-          ) : (
-            comments.map((comment) => (
-              <div key={comment.id} className="group">
-                <div className="flex gap-2">
-                  <Avatar className="w-7 h-7 shrink-0">
-                    <AvatarImage src={comment.profiles?.avatar_url || undefined} />
-                    <AvatarFallback className="bg-primary/20 text-primary text-[10px]">
-                      {comment.profiles?.name?.[0] || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  
-                  <div className="flex-1 min-w-0">
-                    {editingId === comment.id ? (
-                      <div className="space-y-2">
-                        <Input
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          className="h-8 text-xs"
-                        />
-                        <div className="flex gap-1.5">
-                          <Button size="sm" className="h-7 text-xs" onClick={() => updateComment(comment.id)}>Save</Button>
-                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingId(null)}>Cancel</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="bg-muted/30 rounded-xl px-2.5 py-1.5">
-                          <p className="font-medium text-xs">{comment.profiles?.name || 'Anonymous'}</p>
-                          <p className="text-xs">{comment.content}</p>
-                        </div>
-                        
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 mt-1 ml-1 flex-wrap">
-                          <span className="text-[9px] text-muted-foreground">{formatTime(comment.created_at)}</span>
-                          
-                          <button 
-                            onClick={() => toggleLike(comment.id)}
-                            className={`text-[10px] font-medium hover:underline flex items-center gap-0.5 ${comment.userLiked ? 'text-red-500' : ''}`}
-                          >
-                            <Heart className={`w-3 h-3 ${comment.userLiked ? 'fill-current' : ''}`} />
-                            {comment.likeCount > 0 && <span className="ml-0.5">{comment.likeCount}</span>}
-                          </button>
-                          
-                          <button 
-                            onClick={() => { setReplyingTo(comment.id); setReplyContent(''); }}
-                            className="text-[10px] font-medium hover:underline flex items-center gap-0.5"
-                          >
-                            <Reply className="w-2.5 h-2.5" /> Reply
-                          </button>
-                          
-                          {user?.id === comment.user_id && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5">
-                                  <MoreVertical className="w-3 h-3" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="glass-card min-w-[100px]">
-                                <DropdownMenuItem className="text-xs py-1.5" onClick={() => { setEditingId(comment.id); setEditContent(comment.content); }}>
-                                  <Edit className="w-3 h-3 mr-1.5" /> Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="text-xs py-1.5 text-destructive" onClick={() => deleteComment(comment.id)}>
-                                  <Trash2 className="w-3 h-3 mr-1.5" /> Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                      </>
-                    )}
-                    
-                    {/* Reply Input */}
-                    {replyingTo === comment.id && (
-                      <div className="flex gap-1.5 mt-2 ml-2">
-                        <Input
-                          value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                          placeholder="Write a reply..."
-                          className="h-7 text-xs flex-1"
-                          autoFocus
-                        />
-                        <Button size="sm" className="h-7 w-7 p-0" onClick={() => addReply(comment.id)}>
-                          <Send className="w-3 h-3" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setReplyingTo(null)}>
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Add Comment Input */}
-        <div className="p-3 border-t border-border sticky bottom-0 bg-background/95 backdrop-blur-sm">
-          <div className="flex gap-2">
-            <Input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Write a comment..."
-              onKeyPress={(e) => e.key === 'Enter' && addComment()}
-              className="flex-1 h-9 text-sm"
-            />
-            <Button onClick={addComment} disabled={!newComment.trim() || !user} className="h-9 w-9 p-0">
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
+        </DialogHeader>
+        {Content}
       </DialogContent>
     </Dialog>
   );

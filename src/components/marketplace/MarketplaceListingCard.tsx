@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Heart, MessageCircle, Share2, Bookmark, MapPin, MoreVertical, Edit3, Trash2, Phone, Image as ImageIcon } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, MapPin, MoreVertical, Edit3, Trash2, ShoppingBag, Briefcase, Home as HomeIcon, DollarSign } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface Listing {
   id: string;
@@ -45,217 +45,155 @@ interface Props {
   onViewProfile: (userId: string) => void;
 }
 
+const typeIcons: Record<string, any> = {
+  sell: ShoppingBag,
+  job: Briefcase,
+  rent: HomeIcon,
+};
+
+const typeGradients: Record<string, string> = {
+  sell: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/25',
+  job: 'from-violet-500/20 to-purple-500/10 border-violet-500/25',
+  rent: 'from-amber-500/20 to-orange-500/10 border-amber-500/25',
+};
+
+const typeBadgeColors: Record<string, string> = {
+  sell: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
+  job: 'bg-violet-500/15 text-violet-400 border-violet-500/20',
+  rent: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+};
+
+const actionLabels: Record<string, string> = {
+  sell: 'Buy',
+  job: 'Apply',
+  rent: 'Contact',
+};
+
 export function MarketplaceListingCard({
   listing, isLiked, isSaved, likesCount, commentsCount,
   currentUserId, onLike, onSave, onComment, onShare, onChat,
   onDelete, onEdit, onViewProfile
 }: Props) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [imgIndex, setImgIndex] = useState(0);
   const isOwner = listing.user_id === currentUserId;
   const media = listing.media_urls || [];
-  const hasMultipleImages = media.length > 1;
-
-  const handleCall = () => {
-    window.location.href = `tel:+977000000000`; // Placeholder
-  };
 
   return (
-    <motion.div 
-      layout
-      className="mp-card"
-    >
-      {/* Top Row */}
-      <div className="flex items-center gap-2.5">
-        <motion.button 
-          whileTap={{ scale: 0.9 }}
-          onClick={() => onViewProfile(listing.user_id)} 
-          className="mp-av"
-        >
-          <Avatar className="w-full h-full">
+    <Card className={cn(
+      "border-0 overflow-hidden animate-fade-in backdrop-blur-sm",
+      "bg-gradient-to-br", typeGradients[listing.type] || 'from-card/80 to-card/40'
+    )}>
+      {/* Header */}
+      <div className="flex items-center gap-3 p-3 pb-2">
+        <button onClick={() => onViewProfile(listing.user_id)}>
+          <Avatar className="w-9 h-9 ring-1 ring-border/50">
             <AvatarImage src={listing.profiles?.avatar_url || undefined} />
-            <AvatarFallback className="bg-transparent text-[var(--mp-text-info)] text-[10px] font-bold">
+            <AvatarFallback className="bg-gradient-to-br from-primary/30 to-secondary/30 text-foreground text-xs font-bold">
               {listing.profiles?.name?.[0]?.toUpperCase() || '?'}
             </AvatarFallback>
           </Avatar>
-        </motion.button>
+        </button>
         <div className="flex-1 min-w-0">
-          <button 
-            onClick={() => onViewProfile(listing.user_id)} 
-            className="text-[14px] font-bold text-[var(--mp-text-primary)] leading-tight block text-left truncate group"
-          >
-            <span className="group-hover:text-primary transition-colors">{listing.profiles?.name || 'User'}</span>
-            <small className="block text-[11px] font-normal text-[var(--mp-text-secondary)] mt-0.5 opacity-80">
-              {isOwner ? 'You' : 'Verified seller'}
-            </small>
+          <button onClick={() => onViewProfile(listing.user_id)} className="font-semibold text-sm truncate block hover:text-primary transition-colors">
+            {listing.profiles?.name || 'User'}
           </button>
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            <span>{formatDistanceToNow(new Date(listing.created_at), { addSuffix: true })}</span>
+            {listing.location && (
+              <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{listing.location}</span>
+            )}
+          </div>
         </div>
-        {listing.price != null && (
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="mp-price"
-          >
-            {listing.currency || 'NPR'} {listing.price.toLocaleString()}
-          </motion.div>
+        <Badge className={cn("text-[10px] px-2 py-0.5 border", typeBadgeColors[listing.type] || 'bg-primary/20 text-primary')}>
+          <TypeIcon className="w-3 h-3 mr-1" />
+          {listing.type === 'sell' ? 'Buy/Sell' : listing.type.charAt(0).toUpperCase() + listing.type.slice(1)}
+        </Badge>
+        {isOwner && (
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="w-4 h-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="z-[100] bg-popover shadow-xl">
+              <DropdownMenuItem onClick={() => onEdit?.(listing)}><Edit3 className="w-4 h-4 mr-2" />Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDelete?.(listing.id)} className="text-destructive"><Trash2 className="w-4 h-4 mr-2" />Delete</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <motion.button 
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              className="text-[var(--mp-text-secondary)] opacity-60 hover:opacity-100 p-1"
-            >
-              <MoreVertical className="w-4.5 h-4.5" />
-            </motion.button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="z-[100] bg-popover/90 backdrop-blur-xl shadow-2xl border-border/50 rounded-2xl min-w-[160px]">
-            {isOwner ? (
-              <>
-                <DropdownMenuItem onClick={() => onEdit?.(listing)} className="py-2.5">
-                  <Edit3 className="w-4 h-4 mr-2.5" />Edit Listing
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onDelete?.(listing.id)} className="text-destructive py-2.5">
-                  <Trash2 className="w-4 h-4 mr-2.5" />Delete Listing
-                </DropdownMenuItem>
-              </>
-            ) : (
-              <DropdownMenuItem onClick={() => onViewProfile(listing.user_id)} className="py-2.5">
-                View Profile
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
-      {/* Body */}
-      <div className="flex gap-3">
-        <motion.div 
-          className="mp-thumb group"
-          whileHover={{ scale: 1.02 }}
-        >
-          {media.length > 0 ? (
-            <img 
-              src={media[0]} 
-              alt={listing.title} 
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <ImageIcon className="w-8 h-8 text-[var(--mp-text-secondary)] opacity-20" />
+      {/* Content */}
+      <div className="px-3 pb-2">
+        <h3 className="font-bold text-sm">{listing.title}</h3>
+        {listing.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-3">{listing.description}</p>}
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          {listing.price != null && (
+            <Badge variant="outline" className="text-xs gap-1 border-primary/20 bg-primary/5">
+              <DollarSign className="w-3 h-3" />
+              {listing.currency || 'NPR'} {listing.price.toLocaleString()}
+            </Badge>
           )}
-          <div className="mp-sell-pill">
-            {listing.type === 'sell' ? 'Sell' : listing.type === 'job' ? 'Job' : 'Rent'}
-          </div>
-          {hasMultipleImages && (
-            <div className="mp-count-pill">1/{media.length}</div>
-          )}
-        </motion.div>
-        
-        <div className="mp-detail">
-          <div className="text-[15px] font-bold text-[var(--mp-text-primary)] leading-tight line-clamp-1">
-            {listing.title}
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-[var(--mp-text-secondary)] font-medium">
-            <MapPin className="w-3 h-3 text-primary/70" />
-            <span className="truncate">{listing.location || 'Nepal'}</span>
-          </div>
-          <div className="text-[12px] text-[var(--mp-text-secondary)] leading-[1.6] flex-1 overflow-hidden mt-1 relative">
-            {listing.description && (
-              <>
-                <motion.span 
-                  layout
-                  className={cn("block", !isExpanded && "line-clamp-2")}
-                >
-                  {listing.description}
-                </motion.span>
-                {listing.description.length > 60 && (
-                  <button 
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="text-primary mt-1 text-[11px] font-bold hover:underline inline-flex items-center gap-0.5"
-                  >
-                    {isExpanded ? 'see less' : 'see more'}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+          {listing.salary_range && <Badge variant="outline" className="text-xs border-violet-500/20 bg-violet-500/5">{listing.salary_range}</Badge>}
+          {listing.qualification && <Badge variant="secondary" className="text-[10px]">{listing.qualification}</Badge>}
+          {listing.category && <Badge variant="secondary" className="text-[10px]">{listing.category}</Badge>}
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-1 mt-[-2px]">
-        <motion.button 
-          whileTap={{ scale: 0.8 }}
-          onClick={() => onLike(listing.id)}
-          className={cn("mp-action-btn", isLiked && "liked")}
-        >
-          <Heart className={cn("w-4 h-4 transition-all duration-300", isLiked && "fill-current scale-110")} />
-          <motion.span
-            key={likesCount}
-            initial={{ y: 5, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-          >
-            {likesCount}
-          </motion.span>
-        </motion.button>
-        <motion.button 
-          whileTap={{ scale: 0.8 }}
-          onClick={() => onComment(listing.id)}
-          className="mp-action-btn"
-        >
-          <MessageCircle className="w-4 h-4" />
-          <motion.span
-            key={commentsCount}
-            initial={{ y: 5, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-          >
-            {commentsCount}
-          </motion.span>
-        </motion.button>
-        <motion.button 
-          whileTap={{ scale: 0.8 }}
-          onClick={() => onShare(listing.id)}
-          className="mp-action-btn"
-        >
-          <Share2 className="w-4 h-4" />
-        </motion.button>
-        <motion.button 
-          whileTap={{ scale: 0.8 }}
-          onClick={() => onSave(listing.id)}
-          className={cn("mp-action-btn", isSaved && "saved")}
-        >
-          <Bookmark className={cn("w-4 h-4 transition-all duration-300", isSaved && "fill-current scale-110")} />
-        </motion.button>
-        <div className="flex-1" />
-        <div className="text-[10px] font-medium text-[var(--mp-text-secondary)] opacity-50 bg-[var(--mp-bg-subtle)] px-2 py-0.5 rounded-full">
-          {formatDistanceToNow(new Date(listing.created_at), { addSuffix: true })}
-        </div>
-      </div>
-
-      {/* CTA */}
-      {!isOwner && (
-        <div className="flex gap-3 pt-1">
-          <motion.button 
-            whileHover={{ scale: 1.02, y: -2 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => onChat(listing.user_id, listing.id)}
-            className="mp-cta-msg group"
-          >
-            <MessageCircle className="w-4 h-4 transition-transform group-hover:rotate-12" />
-            Message
-          </motion.button>
-          <motion.button 
-            whileHover={{ scale: 1.02, y: -2 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleCall}
-            className="mp-cta-call group"
-          >
-            <Phone className="w-4 h-4 transition-transform group-hover:scale-110" />
-            Call
-          </motion.button>
+      {/* Media */}
+      {media.length > 0 && (
+        <div className="relative">
+          <img
+            src={media[imgIndex]}
+            alt={listing.title}
+            className="w-full aspect-[4/3] object-cover"
+            loading="lazy"
+          />
+          {media.length > 1 && (
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+              {media.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setImgIndex(i)}
+                  className={cn("w-1.5 h-1.5 rounded-full transition-all", i === imgIndex ? "bg-white w-3" : "bg-white/50")}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
-    </motion.div>
+
+      {/* Actions */}
+      <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => onLike(listing.id)} className="h-8 gap-1 px-2">
+            <Heart className={cn("w-4 h-4", isLiked ? "fill-red-500 text-red-500" : "")} />
+            <span className="text-xs">{likesCount}</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onComment(listing.id)} className="h-8 gap-1 px-2">
+            <MessageCircle className="w-4 h-4" />
+            <span className="text-xs">{commentsCount}</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onShare(listing.id)} className="h-8 gap-1 px-2">
+            <Share2 className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => onSave(listing.id)} className="h-8 px-2">
+            <Bookmark className={cn("w-4 h-4", isSaved ? "fill-primary text-primary" : "")} />
+          </Button>
+          {!isOwner && (
+            <Button size="sm" onClick={() => onChat(listing.user_id, listing.id)} className={cn(
+              "h-8 text-xs gap-1",
+              listing.type === 'sell' ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30" :
+                listing.type === 'job' ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30" :
+                  "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+            )}>
+              <MessageCircle className="w-3.5 h-3.5" />
+              {actionLabels[listing.type] || 'Chat'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 

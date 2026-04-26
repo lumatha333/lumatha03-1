@@ -1,21 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFriends } from '@/hooks/useFriends';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { NotificationsPanelSkeleton } from '@/components/ui/skeleton-loaders';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
-import { 
-  Bell, Heart, MessageCircle, UserPlus, Share2, CheckCheck, 
-  Trash2, Users, AtSign, ListTodo, StickyNote, Mountain,
-  UserCheck, UserX, Sparkles
+import {
+  Bell, Heart, MessageCircle, UserPlus, Share2, CheckCheck,
+  Trash2, Users, AtSign, Mountain, UserCheck, UserX, Zap,
+  Shield, Target, Loader2, Gamepad2, Compass, BookOpen, 
+  ShoppingCart, Music, PlayCircle, Star, TrendingUp
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { beginPerfTrace, endPerfTrace } from '@/lib/perfMarkers';
 
 interface NotificationItem {
   id: string;
@@ -29,12 +30,35 @@ interface NotificationItem {
 }
 
 const TABS = [
-  { id: 'all', label: 'All', icon: Bell },
-  { id: 'friends', label: 'Friends', icon: Users },
-  { id: 'reactions', label: 'Reactions', icon: Heart },
-  { id: 'mentions', label: 'Mentions', icon: AtSign },
-  { id: 'activity', label: 'Activity', icon: Sparkles },
+  { id: 'all', label: 'All', icon: '🔔' },
+  { id: 'friends', label: 'Friends', icon: '👥' },
+  { id: 'reactions', label: 'Reactions', icon: '❤️' },
+  { id: 'mentions', label: 'Mentions', icon: '@' },
+  { id: 'activity', label: 'Activity', icon: '⚡' },
 ] as const;
+
+function NotificationIcon({ type }: { type: string }) {
+  const map: Record<string, { icon: React.ReactNode; bg: string }> = {
+    like: { icon: <Heart className="w-3.5 h-3.5 text-white" />, bg: '#ef4444' },
+    comment: { icon: <MessageCircle className="w-3.5 h-3.5 text-white" />, bg: '#3B82F6' },
+    follow: { icon: <UserPlus className="w-3.5 h-3.5 text-white" />, bg: '#7C3AED' },
+    friend_request: { icon: <Users className="w-3.5 h-3.5 text-white" />, bg: '#7C3AED' },
+    mention: { icon: <AtSign className="w-3.5 h-3.5 text-white" />, bg: '#f97316' },
+    share: { icon: <Share2 className="w-3.5 h-3.5 text-white" />, bg: '#8b5cf6' },
+    challenge: { icon: <Target className="w-3.5 h-3.5 text-white" />, bg: '#22c55e' },
+    system: { icon: <Zap className="w-3.5 h-3.5 text-white" />, bg: '#eab308' },
+    message: { icon: <MessageCircle className="w-3.5 h-3.5 text-white" />, bg: '#06b6d4' },
+    todo: { icon: <Bell className="w-3.5 h-3.5 text-white" />, bg: '#f59e0b' },
+    adventure: { icon: <Mountain className="w-3.5 h-3.5 text-white" />, bg: '#14b8a6' },
+    warning: { icon: <Shield className="w-3.5 h-3.5 text-white" />, bg: '#ef4444' },
+  };
+  const entry = map[type] || { icon: <Bell className="w-3.5 h-3.5 text-white" />, bg: '#6b7280' };
+  return (
+    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: entry.bg }}>
+      {entry.icon}
+    </div>
+  );
+}
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -42,14 +66,31 @@ export default function Notifications() {
   const { friendRequests, acceptFriendRequest, rejectFriendRequest } = useFriends();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+
+  const VIRTUAL_ROW_HEIGHT = 92;
+  const VIRTUAL_OVERSCAN = 10;
 
   useEffect(() => {
-    if (user) fetchNotifications();
+    if (user) {
+      fetchNotifications();
+      // Auto-mark all notifications as read when page opens
+      supabase.from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .then(() => {});
+    }
   }, [user]);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!user) return;
+    const trace = beginPerfTrace('notifications.fetch', { userId: user.id });
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -58,7 +99,6 @@ export default function Notifications() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100);
-
       if (error) throw error;
 
       if (data && data.length > 0) {
@@ -67,7 +107,6 @@ export default function Notifications() {
           .from('profiles')
           .select('id, name, avatar_url')
           .in('id', userIds);
-        
         const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
         setNotifications(data.map(n => ({ ...n, from_user: profilesMap.get(n.from_user_id) })));
       } else {
@@ -76,8 +115,21 @@ export default function Notifications() {
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
+      endPerfTrace(trace, { slowMs: 220 });
       setLoading(false);
     }
+  }, [user]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => { touchStartY.current = e.touches[0].clientY; };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const diff = e.changedTouches[0].clientY - touchStartY.current;
+    if (diff > 80 && !refreshing) handleRefresh();
   };
 
   const markAsRead = async (notificationId: string) => {
@@ -87,7 +139,7 @@ export default function Notifications() {
 
   const markAllAsRead = async () => {
     if (!user) return;
-    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id);
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     toast.success('All marked as read');
   };
@@ -103,22 +155,6 @@ export default function Notifications() {
     else if (notification.from_user_id) navigate(`/profile/${notification.from_user_id}`);
   };
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'follow': return <UserPlus className="w-3.5 h-3.5 text-blue-400" />;
-      case 'like': return <Heart className="w-3.5 h-3.5 text-rose-400" />;
-      case 'comment': return <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />;
-      case 'share': return <Share2 className="w-3.5 h-3.5 text-violet-400" />;
-      case 'friend_request': return <Users className="w-3.5 h-3.5 text-amber-400" />;
-      case 'mention': return <AtSign className="w-3.5 h-3.5 text-cyan-400" />;
-      case 'message': return <MessageCircle className="w-3.5 h-3.5 text-primary" />;
-      case 'challenge': return <Mountain className="w-3.5 h-3.5 text-orange-400" />;
-      case 'todo': return <ListTodo className="w-3.5 h-3.5 text-emerald-400" />;
-      case 'adventure': return <Mountain className="w-3.5 h-3.5 text-teal-400" />;
-      default: return <Bell className="w-3.5 h-3.5 text-muted-foreground" />;
-    }
-  };
-
   const filteredNotifications = notifications.filter(n => {
     switch (activeTab) {
       case 'friends': return n.type === 'follow' || n.type === 'friend_request';
@@ -129,138 +165,242 @@ export default function Notifications() {
     }
   });
 
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const updateViewport = () => setViewportHeight(container.clientHeight || 0);
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
+
+  useEffect(() => {
+    setScrollTop(0);
+    const container = scrollRef.current;
+    if (container) container.scrollTop = 0;
+  }, [activeTab]);
+
+  const virtualized = useMemo(() => {
+    const total = filteredNotifications.length;
+    const enabled = total > 80;
+    if (!enabled) {
+      return {
+        enabled,
+        startIndex: 0,
+        endIndex: total,
+        topSpacer: 0,
+        bottomSpacer: 0,
+        items: filteredNotifications,
+      };
+    }
+
+    const startIndex = Math.max(0, Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_OVERSCAN);
+    const visibleCount = Math.ceil((viewportHeight || 600) / VIRTUAL_ROW_HEIGHT) + VIRTUAL_OVERSCAN * 2;
+    const endIndex = Math.min(total, startIndex + visibleCount);
+    return {
+      enabled,
+      startIndex,
+      endIndex,
+      topSpacer: startIndex * VIRTUAL_ROW_HEIGHT,
+      bottomSpacer: Math.max(0, (total - endIndex) * VIRTUAL_ROW_HEIGHT),
+      items: filteredNotifications.slice(startIndex, endIndex),
+    };
+  }, [filteredNotifications, scrollTop, viewportHeight]);
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] pb-20">
+    <div className="flex flex-col h-[calc(100vh-4rem)] pb-20" style={{ background: '#0a0f1e' }}>
       {/* Header */}
-      <div className="p-3 border-b border-border/50 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-            <Bell className="w-4 h-4 text-primary" />
+      <div className="px-5 pt-4 pb-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 flex items-center justify-center">
+            <Bell className="w-5 h-5 text-violet-400" />
           </div>
           <div>
-            <h1 className="text-base font-bold">Notifications</h1>
-            {unreadCount > 0 && <p className="text-[10px] text-primary">{unreadCount} new</p>}
+            <h1 className="text-white" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 22 }}>
+              Notify
+            </h1>
+            <p className="text-xs text-slate-400">{unreadCount > 0 ? `${unreadCount} new messages` : 'No new messages'}</p>
           </div>
         </div>
-        <Button size="sm" variant="ghost" className="h-7 text-[10px] gap-1" onClick={markAllAsRead} disabled={unreadCount === 0}>
-          <CheckCheck className="w-3 h-3" /> Read all
-        </Button>
+        {unreadCount > 0 && (
+          <button onClick={markAllAsRead} className="text-sm font-medium px-3 py-1.5 rounded-full bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 transition-colors">
+            Mark read
+          </button>
+        )}
       </div>
 
-      {/* Friend Requests Section — always visible at top when pending */}
-      {friendRequests.length > 0 && (
-        <div className="p-3 border-b border-border/30 space-y-2">
-          <h3 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-            <Users className="w-3 h-3" /> Friend Requests ({friendRequests.length})
-          </h3>
-          <div className="space-y-1.5">
-            {friendRequests.slice(0, 3).map(req => (
-              <div key={req.id} className="flex items-center gap-2 p-2 rounded-xl bg-primary/5 border border-primary/10">
-                <Avatar className="w-9 h-9">
-                  <AvatarImage src={(req as any).sender?.avatar_url} />
-                  <AvatarFallback className="text-xs bg-primary/20">{(req as any).sender?.name?.[0] || '?'}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">{(req as any).sender?.name || 'Someone'}</p>
-                  <p className="text-[10px] text-muted-foreground">wants to be friends</p>
-                </div>
-                <div className="flex gap-1">
-                  <Button size="icon" className="h-7 w-7 rounded-lg" style={{ background: 'linear-gradient(135deg, hsl(160 60% 45%), hsl(200 70% 50%))' }}
-                    onClick={() => acceptFriendRequest(req.id, req.sender_id)}>
-                    <UserCheck className="w-3.5 h-3.5 text-white" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 rounded-lg hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => rejectFriendRequest(req.id)}>
-                    <UserX className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Filter Tabs */}
+      <div className="px-4 flex gap-1 overflow-x-auto pb-3" style={{ scrollbarWidth: 'none' }}>
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className="shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all"
+            style={{
+              background: activeTab === tab.id ? '#7C3AED' : 'transparent',
+              color: activeTab === tab.id ? 'white' : '#94A3B8',
+              border: activeTab === tab.id ? 'none' : '1px solid #1f2937',
+              fontFamily: "'Inter'",
+            }}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Pull to refresh indicator */}
+      {refreshing && (
+        <div className="flex justify-center py-2">
+          <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#7C3AED' }} />
         </div>
       )}
 
-      {/* Filter Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-5 h-auto p-0.5 mx-0 rounded-none bg-muted/20 border-b border-border/20">
-          {TABS.map(tab => (
-            <TabsTrigger key={tab.id} value={tab.id} className="text-[9px] py-1.5 rounded-none data-[state=active]:bg-background gap-0.5 flex-col">
-              <tab.icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </TabsTrigger>
+      {/* Friend Requests */}
+      {friendRequests.length > 0 && (activeTab === 'all' || activeTab === 'friends') && (
+        <div className="px-4 pb-3 space-y-2">
+          <h3 className="text-xs font-semibold flex items-center gap-1.5 px-1" style={{ color: '#94A3B8' }}>
+            <Users className="w-3 h-3" /> Friend Requests ({friendRequests.length})
+          </h3>
+          {friendRequests.slice(0, 3).map(req => (
+            <div key={req.id} className="flex items-center gap-3 p-3 rounded-2xl" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+              <Avatar className="w-10 h-10">
+                <AvatarImage src={(req as any).sender?.avatar_url} />
+                <AvatarFallback style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', color: 'white', fontSize: 13 }}>
+                  {(req as any).sender?.name?.[0] || '?'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{(req as any).sender?.name || 'Someone'}</p>
+                <p className="text-xs" style={{ color: '#94A3B8' }}>wants to be friends</p>
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                  style={{ background: 'linear-gradient(135deg, #22c55e, #059669)' }}
+                  onClick={() => acceptFriendRequest(req.id, req.sender_id)}
+                >
+                  <UserCheck className="w-4 h-4 text-white" />
+                </button>
+                <button
+                  className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                  style={{ background: '#1f2937' }}
+                  onClick={() => rejectFriendRequest(req.id)}
+                >
+                  <UserX className="w-4 h-4" style={{ color: '#94A3B8' }} />
+                </button>
+              </div>
+            </div>
           ))}
-        </TabsList>
-      </Tabs>
+        </div>
+      )}
 
       {/* Notifications List */}
-      <ScrollArea className="flex-1 px-2">
+      <div
+        className="flex-1 overflow-y-auto"
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onScroll={(e) => setScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
+      >
         {loading ? (
-          <div className="space-y-2 py-3">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="flex items-center gap-3 p-3">
-                <Skeleton className="w-10 h-10 rounded-full shrink-0" />
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3 w-3/4" />
-                  <Skeleton className="h-2 w-1/2" />
-                </div>
-              </div>
-            ))}
+          <div className="px-4">
+            <NotificationsPanelSkeleton count={5} />
           </div>
         ) : filteredNotifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-muted/30 flex items-center justify-center mb-3">
-              <Bell className="w-7 h-7 text-muted-foreground/30" />
-            </div>
-            <h3 className="font-semibold text-sm">No notifications</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              {activeTab === 'all' ? "You're all caught up!" : `No ${activeTab} notifications yet`}
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <span className="text-5xl mb-4">🔔</span>
+            <h3 className="text-white mb-1" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 20 }}>
+              All caught up!
+            </h3>
+            <p className="text-sm" style={{ color: '#94A3B8', fontFamily: "'Inter'" }}>
+              {activeTab === 'all' ? 'No new updates' : `No ${activeTab} updates yet`}
             </p>
           </div>
         ) : (
-          <div className="py-2 space-y-0.5">
-            {filteredNotifications.map(notification => (
+          <div>
+            {virtualized.enabled && virtualized.topSpacer > 0 && (
+              <div style={{ height: virtualized.topSpacer }} />
+            )}
+            {virtualized.items.map(notification => (
               <div
                 key={notification.id}
-                className={`group flex items-start gap-2.5 p-2.5 rounded-xl cursor-pointer transition-all ${
-                  notification.is_read ? 'hover:bg-muted/30' : 'bg-primary/5 hover:bg-primary/8'
-                }`}
+                className="group flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-colors relative"
+                style={{ borderBottom: '1px solid #1f2937', background: notification.is_read ? 'transparent' : 'rgba(124,58,237,0.05)' }}
                 onClick={() => handleNotificationClick(notification)}
               >
-                <div className="relative shrink-0">
-                  <Avatar className="w-10 h-10">
-                    <AvatarImage src={notification.from_user?.avatar_url || undefined} />
-                    <AvatarFallback className="bg-primary/15 text-xs">{notification.from_user?.name?.[0] || '?'}</AvatarFallback>
-                  </Avatar>
-                  <div className="absolute -bottom-0.5 -right-0.5 bg-background rounded-full p-[2px]">
-                    {getNotificationIcon(notification.type)}
-                  </div>
+                {/* Unread bar */}
+                {!notification.is_read && (
+                  <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ background: '#7C3AED' }} />
+                )}
+
+                {/* Avatar or system icon */}
+                <div className="relative shrink-0 mt-0.5">
+                  {notification.type === 'system' || notification.type === 'warning' ? (
+                    <NotificationIcon type={notification.type} />
+                  ) : (
+                    <Avatar className="w-11 h-11">
+                      <AvatarImage src={notification.from_user?.avatar_url || undefined} />
+                      <AvatarFallback style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', color: 'white', fontSize: 13 }}>
+                        {notification.from_user?.name?.[0] || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  {notification.type !== 'system' && notification.type !== 'warning' && (
+                    <div className="absolute -bottom-1 -right-1">
+                      <NotificationIcon type={notification.type} />
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm leading-snug">
-                    <span className="font-semibold">{notification.from_user?.name || 'Someone'}</span>{' '}
-                    <span className="text-muted-foreground">{notification.content}</span>
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                {/* Content - Horizontal Layout */}
+                <div className="flex-1 min-w-0 flex items-center justify-between">
+                  <div className="flex-1 min-w-0 pr-3">
+                    {(() => {
+                      const actorName = (notification.type === 'todo' || notification.type === 'system' || notification.type === 'warning')
+                        ? 'Lumatha'
+                        : (notification.from_user?.name || 'Someone');
+                      return (
+                        <p className="text-sm leading-snug" style={{ fontFamily: "'Inter'" }}>
+                          <span className="font-semibold text-white">{actorName}</span>{' '}
+                          <span style={{ color: '#d1d5db' }}>{notification.content}</span>
+                        </p>
+                      );
+                    })()}
+                  </div>
+                  <p className="text-xs whitespace-nowrap" style={{ color: '#6B7280', fontFamily: "'Inter'" }}>
                     {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
-                  {!notification.is_read && <div className="w-2 h-2 bg-primary rounded-full" />}
-                  <Button size="icon" variant="ghost"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:text-destructive"
-                    onClick={e => { e.stopPropagation(); deleteNotification(notification.id); }}>
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+                {/* Right side */}
+                <div className="flex items-center gap-1.5 shrink-0 mt-1">
+                  {notification.type === 'follow' && (
+                    <button
+                      className="px-3 py-1 rounded-full text-xs font-semibold text-white active:scale-95 transition-transform"
+                      style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)' }}
+                      onClick={e => { e.stopPropagation(); }}
+                    >
+                      Follow back
+                    </button>
+                  )}
+                  <button
+                    className="w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: '#1f2937' }}
+                    onClick={e => { e.stopPropagation(); deleteNotification(notification.id); }}
+                  >
+                    <Trash2 className="w-3 h-3" style={{ color: '#94A3B8' }} />
+                  </button>
                 </div>
               </div>
             ))}
+            {virtualized.enabled && virtualized.bottomSpacer > 0 && (
+              <div style={{ height: virtualized.bottomSpacer }} />
+            )}
           </div>
         )}
-      </ScrollArea>
+      </div>
     </div>
   );
 }

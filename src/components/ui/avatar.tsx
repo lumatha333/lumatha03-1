@@ -18,9 +18,30 @@ Avatar.displayName = AvatarPrimitive.Root.displayName;
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image ref={ref} className={cn("aspect-square h-full w-full", className)} {...props} />
-));
+>(({ className, src, onLoadingStatusChange, ...props }, ref) => {
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  const normalizedSrc = typeof src === 'string' ? src.trim() : src;
+
+  if (!normalizedSrc || failed) return null;
+
+  return (
+    <AvatarPrimitive.Image
+      ref={ref}
+      src={normalizedSrc}
+      className={cn("aspect-square h-full w-full", className)}
+      onLoadingStatusChange={(status) => {
+        if (status === 'error') setFailed(true);
+        onLoadingStatusChange?.(status);
+      }}
+      {...props}
+    />
+  );
+});
 AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
 const AvatarFallback = React.forwardRef<

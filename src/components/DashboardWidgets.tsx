@@ -1,8 +1,44 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageCircle, BookOpen, CheckSquare, Bookmark, TrendingUp, Globe, Plus, ArrowRight, Crown, PenLine, Image, Music } from 'lucide-react';
+import { MessageCircle, BookOpen, CheckSquare, Bookmark, TrendingUp, Globe, Plus, ArrowRight, Crown, PenLine, Image, Music, Gamepad2, Star } from 'lucide-react';
+
+// ... (existing code)
+
+export function FunpunPreviewWidget({ className }: WidgetProps) {
+  return (
+    <Card className={cn("glass-card border-border/40 hover-lift cursor-pointer group shadow-[0_0_20px_rgba(249,115,22,0.15)]", className)}>
+      <Link to="/funpun">
+        <CardHeader className="p-3 pb-1.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center relative">
+                <Gamepad2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                </span>
+              </div>
+              <CardTitle className="text-xs sm:text-sm font-semibold">FunPun</CardTitle>
+            </div>
+            <Badge variant="outline" className="text-[8px] h-4 border-green-500/50 text-green-500 font-black animate-pulse">PLAY NOW</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-3 pt-0">
+          <p className="text-[10px] sm:text-xs text-muted-foreground leading-relaxed">
+            Experience 29 classic games in our legendary FP-333 console. Pure nostalgia, high-performance gaming.
+          </p>
+          <div className="mt-2 flex items-center gap-1">
+            <Star className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" />
+            <span className="text-[9px] font-bold text-orange-500/80 tracking-widest uppercase">29 GAMES ACTIVE</span>
+          </div>
+        </CardContent>
+      </Link>
+    </Card>
+  );
+}
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -78,9 +114,7 @@ export function ChatPreviewWidget({ className }: WidgetProps) {
               <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center relative">
                 <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-destructive text-[8px] text-white rounded-full flex items-center justify-center font-bold">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.7)' }} />
                 )}
               </div>
               <CardTitle className="text-xs sm:text-sm font-semibold">Messages</CardTitle>
@@ -90,7 +124,7 @@ export function ChatPreviewWidget({ className }: WidgetProps) {
         </CardHeader>
         <CardContent className="p-3 pt-0">
           {unreadCount > 0 ? (
-            <p className="text-[10px] sm:text-xs text-primary font-medium">{unreadCount} unread</p>
+            <p className="text-[10px] sm:text-xs font-medium" style={{ color: '#22C55E' }}>New messages</p>
           ) : (
             <p className="text-[10px] sm:text-xs text-muted-foreground">All caught up!</p>
           )}
@@ -153,7 +187,7 @@ export function TasksPreviewWidget({ className }: WidgetProps) {
   const progress = todoStats.total > 0 ? (todoStats.completed / todoStats.total) * 100 : 0;
 
   return (
-    <Card className={cn("glass-card border-border/40 hover-lift cursor-pointer group", className)}>
+    <Card className={cn("glass-card border-border/40 hover-lift cursor-pointer group shadow-[0_0_0_1px_rgba(16,185,129,0.25),0_0_14px_rgba(16,185,129,0.2)]", className)}>
       <Link to="/education">
         <CardHeader className="p-3 pb-1.5">
           <div className="flex items-center justify-between">

@@ -147,7 +147,7 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
     
     if (data) {
       const userIds = [...new Set(data.map(c => c.user_id))];
-      const { data: profiles } = await supabase.from('profiles').select('*').in('id', userIds);
+      const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, username, name, username').in('id', userIds);
       const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
       setComments(data.map(c => ({ ...c, profile: profilesMap.get(c.user_id) })));
     }
@@ -211,7 +211,7 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0">
-                <p className="text-[11px] font-medium truncate">{doc.profiles?.name || 'Anonymous'}</p>
+                <p className="text-[11px] font-medium truncate">{(doc.profiles as any)?.username || (doc.profiles as any)?.name || (doc.profiles as any)?.username || doc.profiles?.name || 'User'}</p>
                 <p className="text-[9px] text-muted-foreground">{new Date(doc.created_at).toLocaleDateString()}</p>
               </div>
             </div>
@@ -317,16 +317,51 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
             </div>
           </div>
 
-          {/* Document info */}
-          <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
-            <BookOpen className="w-5 h-5 text-primary shrink-0" />
-            <div className="min-w-0 flex-1">
-              <h3 className="font-medium text-xs truncate">{doc.title}</h3>
-              {doc.description && (
-                <p className="text-[10px] text-muted-foreground line-clamp-2">{doc.description}</p>
-              )}
-              <p className="text-[9px] text-muted-foreground mt-0.5">{doc.file_name}</p>
-            </div>
+          {/* Document info and Cover Image */}
+          <div className="flex flex-col gap-2 p-2 bg-muted/30 rounded-lg overflow-hidden group/card relative">
+            {doc.cover_url ? (
+              <div className="relative aspect-[16/9] w-full rounded-md overflow-hidden bg-black/20">
+                <img 
+                  src={doc.cover_url} 
+                  alt={doc.title}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-110"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-primary shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-medium text-xs truncate">{doc.title}</h3>
+                  <p className="text-[9px] text-muted-foreground truncate">{doc.file_name}</p>
+                </div>
+              </div>
+            )}
+            
+            {doc.cover_url && (
+              <div className="min-w-0">
+                <h3 className="font-medium text-xs truncate">{doc.title}</h3>
+                {doc.description && (
+                  <p className="text-[10px] text-muted-foreground line-clamp-2">{doc.description}</p>
+                )}
+                <p className="text-[9px] text-muted-foreground mt-0.5">{doc.file_name}</p>
+              </div>
+            )}
+
+            {/* Direct Delete Button for Owner - visible on hover */}
+            {isOwner && (
+              <Button
+                variant="destructive"
+                size="icon"
+                className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover/card:opacity-100 transition-opacity shadow-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(doc.id, doc.file_url);
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
           </div>
 
           {/* Social actions */}
@@ -383,7 +418,7 @@ export default function DocumentCard({ doc, onDelete, onDownload, onOpenInBrowse
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-medium">{comment.profile?.name || 'User'}</p>
+                      <p className="text-[10px] font-medium">{(comment.profile as any)?.username || (comment.profile as any)?.name || (comment.profile as any)?.username || comment.profile?.name || 'User'}</p>
                       {comment.user_id === currentUser?.id && (
                         <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => handleDeleteComment(comment.id)}>
                           <Trash2 className="w-2.5 h-2.5 text-destructive" />

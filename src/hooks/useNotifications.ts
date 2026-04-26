@@ -2,11 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Notification } from '@/types/chat';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
 
 export function useNotifications() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -16,17 +14,15 @@ export function useNotifications() {
 
     setLoading(true);
     try {
-      // First fetch notifications
       const { data: notificationsData, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select('id, user_id, from_user_id, type, content, link, is_read, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(30);
 
       if (error) throw error;
 
-      // Then fetch profile info for from_user_id
       const fromUserIds = [...new Set(notificationsData?.map(n => n.from_user_id) || [])];
       const { data: profilesData } = await supabase
         .from('profiles')
@@ -42,8 +38,8 @@ export function useNotifications() {
 
       setNotifications(data as Notification[]);
       setUnreadCount(data.filter(n => !n.is_read).length);
-    } catch (error: any) {
-      console.error('Error fetching notifications:', error);
+    } catch {
+      // Silent fail
     } finally {
       setLoading(false);
     }
@@ -62,8 +58,8 @@ export function useNotifications() {
         prev.map(n => (n.id === notificationId ? { ...n, is_read: true } : n))
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error: any) {
-      console.error('Error marking notification as read:', error);
+    } catch {
+      // Silent fail
     }
   }, []);
 
@@ -81,8 +77,8 @@ export function useNotifications() {
 
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
-    } catch (error: any) {
-      console.error('Error marking all as read:', error);
+    } catch {
+      // Silent fail
     }
   }, [user]);
 
@@ -100,12 +96,11 @@ export function useNotifications() {
       if (wasUnread) {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
-    } catch (error: any) {
-      console.error('Error deleting notification:', error);
+    } catch {
+      // Silent fail
     }
   }, [notifications]);
 
-  // Real-time subscription
   useEffect(() => {
     if (!user) return;
 
@@ -119,20 +114,14 @@ export function useNotifications() {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        () => {
-          fetchNotifications();
-        }
+        fetchNotifications
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [user, fetchNotifications]);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
   return {
     notifications,
@@ -141,5 +130,6 @@ export function useNotifications() {
     markAsRead,
     markAllAsRead,
     deleteNotification,
+    fetchNotifications,
   };
 }

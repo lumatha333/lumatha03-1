@@ -11,3 +11,30 @@ verify_jwt = false
 
 [functions.link-preview]
 verify_jwt = false
+
+[functions.welcome-message]
+verify_jwt = false
+
+[functions.lumatha-assistant]
+verify_jwt = false
+
+[functions.generate-bio]
+verify_jwt = false
+
+[functions.doc-summary]
+verify_jwt = false
+
+[functions.stats-insight]
+verify_jwt = false
+
+[functions.smart-reply]
+verify_jwt = false
+
+[functions.ai-compose]
+verify_jwt = false
+
+[functions.todo-ai]
+verify_jwt = false
+
+[functions.rc-ai]
+verify_jwt = false

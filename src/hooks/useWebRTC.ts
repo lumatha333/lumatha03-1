@@ -7,7 +7,6 @@ interface WebRTCConfig {
   onDataChannelMessage?: (message: string) => void;
 }
 
-// Use centralized TURN server configuration
 const iceServers = getIceServers();
 
 export const useWebRTC = (config: WebRTCConfig = {}) => {
@@ -22,7 +21,6 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Initialize local media stream
   const initializeMedia = useCallback(async (options: { video: boolean; audio: boolean }) => {
     try {
       const constraints: MediaStreamConstraints = {
@@ -47,20 +45,15 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
       
       return stream;
     } catch (error) {
-      console.error('Failed to get media devices:', error);
       throw error;
     }
   }, []);
 
-  // Create peer connection
   const createPeerConnection = useCallback(() => {
     const pc = new RTCPeerConnection({ iceServers });
     
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        // In production, send this to signaling server
-        console.log('ICE candidate:', event.candidate);
-      }
+    pc.onicecandidate = () => {
+      // ICE candidate handling done via signaling
     };
 
     pc.ontrack = (event) => {
@@ -79,7 +72,6 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
       config.onConnectionStateChange?.(pc.connectionState);
     };
 
-    // Create data channel for signaling
     const dataChannel = pc.createDataChannel('messaging');
     dataChannel.onmessage = (event) => {
       config.onDataChannelMessage?.(event.data);
@@ -90,7 +82,6 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
     return pc;
   }, [config]);
 
-  // Add local stream to peer connection
   const addStreamToPeerConnection = useCallback((stream: MediaStream) => {
     if (!peerConnectionRef.current) return;
     
@@ -99,7 +90,6 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
     });
   }, []);
 
-  // Create offer (for caller)
   const createOffer = useCallback(async () => {
     if (!peerConnectionRef.current) return null;
     
@@ -109,7 +99,6 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
     return offer;
   }, []);
 
-  // Create answer (for callee)
   const createAnswer = useCallback(async (offer: RTCSessionDescriptionInit) => {
     if (!peerConnectionRef.current) return null;
     
@@ -120,21 +109,16 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
     return answer;
   }, []);
 
-  // Set remote answer
   const setRemoteAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
     if (!peerConnectionRef.current) return;
-    
     await peerConnectionRef.current.setRemoteDescription(answer);
   }, []);
 
-  // Add ICE candidate
   const addIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
     if (!peerConnectionRef.current) return;
-    
     await peerConnectionRef.current.addIceCandidate(candidate);
   }, []);
 
-  // Toggle audio
   const toggleAudio = useCallback(() => {
     if (localStream) {
       const audioTrack = localStream.getAudioTracks()[0];
@@ -145,7 +129,6 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
     }
   }, [localStream]);
 
-  // Toggle video
   const toggleVideo = useCallback(() => {
     if (localStream) {
       const videoTrack = localStream.getVideoTracks()[0];
@@ -156,14 +139,12 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
     }
   }, [localStream]);
 
-  // Send message via data channel
   const sendDataMessage = useCallback((message: string) => {
     if (dataChannelRef.current?.readyState === 'open') {
       dataChannelRef.current.send(message);
     }
   }, []);
 
-  // Cleanup
   const cleanup = useCallback(() => {
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
@@ -184,11 +165,8 @@ export const useWebRTC = (config: WebRTCConfig = {}) => {
     setConnectionState('closed');
   }, [localStream]);
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      cleanup();
-    };
+    return cleanup;
   }, []);
 
   return {

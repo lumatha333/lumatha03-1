@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,8 +12,17 @@ import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
 export function NotificationBell() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, fetchNotifications } = useNotifications();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
+    if (newOpen) {
+      // Refresh notifications each time the popup opens to ensure freshness.
+      fetchNotifications();
+    }
+  };
 
   const handleNotificationClick = (notification: any) => {
     markAsRead(notification.id);
@@ -22,14 +32,12 @@ export function NotificationBell() {
   };
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.7)' }} />
           )}
         </Button>
       </PopoverTrigger>
@@ -51,6 +59,9 @@ export function NotificationBell() {
           ) : (
             <div className="divide-y">
               {notifications.map((notification) => (
+                (() => {
+                  const actor = (notification as any).from_user || (notification as any).from_user_profile;
+                  return (
                 <div
                   key={notification.id}
                   className={`p-4 cursor-pointer transition-colors hover:bg-muted/50 ${
@@ -59,16 +70,16 @@ export function NotificationBell() {
                   onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex gap-3">
-                    {notification.from_user_profile?.avatar_url && (
+                    {actor?.avatar_url && (
                       <img
-                        src={notification.from_user_profile.avatar_url}
-                        alt={notification.from_user_profile.name}
+                        src={actor.avatar_url}
+                        alt={actor.name}
                         className="h-10 w-10 rounded-full object-cover"
                       />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">
-                        {notification.from_user_profile?.name || 'Unknown'}
+                        {actor?.name || 'Lumatha'}
                       </p>
                       <p className="text-sm text-muted-foreground line-clamp-2">
                         {notification.content}
@@ -84,6 +95,8 @@ export function NotificationBell() {
                     )}
                   </div>
                 </div>
+                  );
+                })()
               ))}
             </div>
           )}

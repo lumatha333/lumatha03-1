@@ -64,6 +64,29 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/2789737d-1b91-4c38-809c-4faf9b1c0396) and click on Share -> Publish.
 
+## One-command auto commit and deploy
+
+If your Vercel project is connected to this GitHub repository and branch, pushing code will auto-trigger deployment.
+
+Use this command to build, commit, push, and trigger Vercel deploy:
+
+```sh
+npm run ship
+```
+
+Useful variants:
+
+```sh
+# Commit + push without running build
+npm run ship:skip-build
+
+# Build + commit only (no push)
+npm run ship:local
+
+# Custom commit message
+SHIP_MESSAGE="feat: your message" npm run ship
+```
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
@@ -71,4 +94,5 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
-.
+
+# Test modification by Gemini CLI

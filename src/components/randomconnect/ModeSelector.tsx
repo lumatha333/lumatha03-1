@@ -1,9 +1,8 @@
-import React from 'react';
-import { Mic, Video, MessageCircle, Globe, Languages, Info, Shield, Clock, Heart, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import React, { useState } from 'react';
+import { MessageCircle, Mic, Video, Shield, ArrowRight, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { ConnectionMode } from '@/hooks/useRandomConnect';
-import { SecurityTips } from './SecurityTips';
+import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ModeSelectorProps {
   mode: ConnectionMode;
@@ -12,237 +11,304 @@ interface ModeSelectorProps {
   setLanguage: (language: string) => void;
   region: string;
   setRegion: (region: string) => void;
+  interests: string[];
+  setInterests: (interests: string[]) => void;
   onStart: () => void;
   isBanned: boolean;
+  onOpenMemories: () => void;
 }
 
 const languages = [
-  { code: 'en', name: 'English' },
-  { code: 'ne', name: 'Nepali' },
-  { code: 'hi', name: 'Hindi' },
-  { code: 'es', name: 'Spanish' },
-  { code: 'fr', name: 'French' },
-  { code: 'de', name: 'German' },
-  { code: 'zh', name: 'Chinese' },
-  { code: 'ja', name: 'Japanese' },
-  { code: 'ko', name: 'Korean' },
-  { code: 'ar', name: 'Arabic' },
+  { code: 'any', label: 'All', emoji: '🌐' },
+  { code: 'ne', label: 'Nepali', emoji: '🇳🇵' },
+  { code: 'en', label: 'English', emoji: '🇬🇧' },
+  { code: 'hi', label: 'Hindi', emoji: '🇮🇳' },
+  { code: 'ne+en', label: 'NP + EN', emoji: '🇳🇵' },
+  { code: 'ne+hi', label: 'NP + HI', emoji: '🇳🇵' },
+  { code: 'en+hi', label: 'EN + HI', emoji: '🌐' },
 ];
 
-const regions = [
-  { code: 'international', name: 'International' },
-  { code: 'local', name: 'Local / Nearby' },
+const regionGroups = [
+  {
+    label: '🌍 Global',
+    items: [
+      { code: 'any', label: 'All' },
+      { code: 'international', label: 'International' },
+    ],
+  },
+  {
+    label: '🇳🇵 Nepal',
+    items: [
+      { code: 'nepal', label: 'All Nepal' },
+      { code: 'lumbini', label: 'Lumbini' },
+      { code: 'bagmati', label: 'Bagmati' },
+      { code: 'gandaki', label: 'Gandaki' },
+      { code: 'province1', label: 'Koshi' },
+      { code: 'madhesh', label: 'Madhesh' },
+      { code: 'karnali', label: 'Karnali' },
+      { code: 'sudurpashchim', label: 'Sudurpashchim' },
+    ],
+  },
+  {
+    label: '🇮🇳 India',
+    items: [
+      { code: 'india', label: 'All India' },
+      { code: 'delhi', label: 'Delhi' },
+      { code: 'mumbai', label: 'Mumbai' },
+      { code: 'kolkata', label: 'Kolkata' },
+      { code: 'bangalore', label: 'Bangalore' },
+      { code: 'chennai', label: 'Chennai' },
+    ],
+  },
 ];
 
-interface ModeInfo {
-  id: ConnectionMode;
-  icon: typeof Mic;
-  label: string;
-  desc: string;
-  details: string;
-  color: string;
-  gradient: string;
-  features: string[];
-}
+const interestTags = [
+  { id: 'all', emoji: '✨', label: 'All' },
+  { id: 'gaming', emoji: '🎮', label: 'Gaming' },
+  { id: 'music', emoji: '🎵', label: 'Music' },
+  { id: 'travel', emoji: '🏔️', label: 'Travel' },
+  { id: 'study', emoji: '📚', label: 'Study' },
+  { id: 'work', emoji: '💼', label: 'Work' },
+  { id: 'food', emoji: '🍕', label: 'Food' },
+  { id: 'dating', emoji: '❤️', label: 'Dating' },
+  { id: 'art', emoji: '🎨', label: 'Art' },
+  { id: 'sports', emoji: '⚽', label: 'Sports' },
+  { id: 'fun', emoji: '😂', label: 'Fun' },
+  { id: 'deep-talk', emoji: '💭', label: 'Deep Talk' },
+  { id: 'nepal', emoji: '🇳🇵', label: 'Nepal' },
+  { id: 'tech', emoji: '💻', label: 'Tech' },
+  { id: 'movies', emoji: '🎬', label: 'Movies' },
+];
 
-const modes: ModeInfo[] = [
-  { 
-    id: 'video', 
-    icon: Video, 
-    label: 'Video', 
-    desc: 'Face to face', 
-    details: 'Both of you see each other\'s real faces and hear each other\'s voices clearly',
-    color: 'text-purple-500',
-    gradient: 'from-purple-500 to-pink-500',
-    features: ['Real face-to-face', 'Two-way voice', 'Blur option', '15 min limit']
-  },
-  { 
-    id: 'audio', 
-    icon: Mic, 
-    label: 'Audio', 
-    desc: 'Voice only', 
-    details: 'Both of you speak and hear each other in both ears - like a phone call',
-    color: 'text-blue-500',
-    gradient: 'from-blue-500 to-cyan-500',
-    features: ['Crystal clear voice', 'Both ears', 'Ambient sounds', 'No video pressure']
-  },
-  { 
-    id: 'text', 
-    icon: MessageCircle, 
-    label: 'Text', 
-    desc: 'Thoughtful chat', 
-    details: 'Instant two-way messaging with typing indicators',
-    color: 'text-green-500',
-    gradient: 'from-green-500 to-emerald-500',
-    features: ['Instant delivery', 'Typing indicator', 'Memory feature', 'Pressure-free']
-  },
+const modes = [
+  { id: 'text' as ConnectionMode, icon: MessageCircle, label: 'Text', desc: 'Anonymous chat', gradient: 'from-[hsl(270,70%,50%)] to-[hsl(280,80%,60%)]' },
+  { id: 'audio' as ConnectionMode, icon: Mic, label: 'Audio', desc: 'Voice connect', gradient: 'from-[hsl(210,100%,55%)] to-[hsl(200,90%,60%)]' },
+  { id: 'video' as ConnectionMode, icon: Video, label: 'Video', desc: 'Face to face', gradient: 'from-[hsl(330,80%,55%)] to-[hsl(340,90%,60%)]' },
 ];
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({
-  mode,
-  setMode,
-  language,
-  setLanguage,
-  region,
-  setRegion,
-  onStart,
-  isBanned
+  mode, setMode, language, setLanguage, region, setRegion,
+  interests, setInterests, onStart, isBanned, onOpenMemories
 }) => {
-  const selectedMode = modes.find(m => m.id === mode);
+  const [buttonPulsing, setButtonPulsing] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+  const toggleSection = (section: string) => {
+    setExpandedSection(prev => prev === section ? null : section);
+  };
+
+  const toggleInterest = (id: string) => {
+    if (id === 'all') { setInterests(['all']); return; }
+    const without = interests.filter(i => i !== 'all');
+    if (without.includes(id)) {
+      const result = without.filter(i => i !== id);
+      setInterests(result.length === 0 ? ['all'] : result);
+    } else {
+      if (without.length >= 3) { toast('Max 3 interests', { description: 'Deselect one first' }); return; }
+      setInterests([...without, id]);
+    }
+  };
+
+  const handleStart = () => {
+    setButtonPulsing(true);
+    setTimeout(() => { setButtonPulsing(false); onStart(); }, 300);
+  };
+
+  const selectedLangLabel = languages.find(l => l.code === language)?.label || 'All';
+  const selectedRegionLabel = regionGroups.flatMap(g => g.items).find(r => r.code === region)?.label || 'All';
+  const selectedInterestLabels = interests.includes('all') ? 'All' : interests.map(i => interestTags.find(t => t.id === i)?.label).filter(Boolean).join(', ');
 
   return (
-    <div className="flex flex-col gap-6 p-4 max-w-md mx-auto">
-      {/* Header */}
-      <div className="text-center space-y-2">
-        <div className="flex items-center justify-center gap-2">
-          <Heart className="w-6 h-6 text-primary fill-primary/30" />
-          <h2 className="text-2xl font-bold gradient-text">Random Connect</h2>
-        </div>
-        <p className="text-muted-foreground text-sm">
-          Share a moment, not a profile
-        </p>
+    <div className="relative min-h-screen pb-8" style={{ background: 'hsl(220, 60%, 8%)' }}>
+      {/* Animated gradient orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[10%] left-[20%] w-72 h-72 rounded-full opacity-30 blur-[80px] animate-[orbFloat1_8s_ease-in-out_infinite]"
+          style={{ background: 'radial-gradient(circle, hsl(270,70%,50%), transparent)' }} />
+        <div className="absolute top-[30%] right-[10%] w-60 h-60 rounded-full opacity-20 blur-[80px] animate-[orbFloat2_10s_ease-in-out_infinite]"
+          style={{ background: 'radial-gradient(circle, hsl(210,100%,55%), transparent)' }} />
       </div>
 
-      {/* Mode Selection with Icons */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 px-1">
-          <Users className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">Choose Connection Type</span>
+      <div className="relative z-10 px-4 pt-4">
+        {/* Hero */}
+        <div className="text-center pt-1 pb-3 relative">
+          <button onClick={onOpenMemories} className="absolute top-1 right-0 p-2 rounded-full hover:bg-white/5 transition-colors" title="Memories">
+            <Clock className="w-5 h-5 text-foreground" />
+          </button>
+          <div className="relative w-14 h-14 mx-auto mb-3">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[hsl(270,70%,50%)] to-[hsl(210,100%,55%)] opacity-20 blur-xl animate-pulse" />
+            <div className="relative w-14 h-14 flex items-center justify-center">
+              <svg viewBox="0 0 80 80" className="w-14 h-14">
+                <defs><linearGradient id="rcGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="hsl(270,70%,50%)" /><stop offset="100%" stopColor="hsl(210,100%,55%)" /></linearGradient></defs>
+                <g className="animate-[spin_12s_linear_infinite]" style={{ transformOrigin: '40px 40px' }}><circle cx="28" cy="40" r="10" fill="url(#rcGrad)" opacity="0.9" /></g>
+                <g className="animate-[spin_12s_linear_infinite_reverse]" style={{ transformOrigin: '40px 40px', animationDirection: 'reverse' }}><circle cx="52" cy="40" r="10" fill="url(#rcGrad)" opacity="0.9" /></g>
+                <line x1="32" y1="40" x2="48" y2="40" stroke="url(#rcGrad)" strokeWidth="2" strokeDasharray="4 3" opacity="0.5" />
+              </svg>
+            </div>
+          </div>
+          <h1 className="text-[26px] font-black tracking-[-0.5px] text-foreground" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Random Connect</h1>
+          <p className="text-[13px] mt-0.5" style={{ color: 'hsl(215, 20%, 65%)' }}>Share a moment, not a profile</p>
         </div>
-        
-        <div className="grid grid-cols-3 gap-2">
-          {modes.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setMode(m.id)}
-              className={`relative p-3 rounded-xl border-2 transition-all duration-300 flex flex-col items-center gap-1.5 ${
-                mode === m.id
-                  ? `border-primary bg-gradient-to-br ${m.gradient} text-white shadow-lg scale-[1.02]`
-                  : 'border-border bg-card hover:border-muted-foreground/50 hover:bg-muted/50'
-              }`}
-            >
-              <m.icon className={`w-5 h-5 ${mode === m.id ? 'text-white' : m.color}`} />
-              <span className={`text-xs font-medium ${mode === m.id ? 'text-white' : 'text-foreground'}`}>
-                {m.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
 
-      {/* Selected Mode Details */}
-      {selectedMode && (
-        <div className="glass-card p-4 rounded-xl space-y-3">
-          <div className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${selectedMode.gradient} flex items-center justify-center`}>
-              <selectedMode.icon className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-foreground">{selectedMode.label} Connect</h3>
-              <p className="text-xs text-muted-foreground">{selectedMode.details}</p>
-            </div>
+        {/* Connection Mode */}
+        <div className="mt-2">
+          <p className="text-[11px] font-medium mb-1.5 uppercase tracking-wider" style={{ color: 'hsl(215, 20%, 45%)' }}>Connect via</p>
+          <div className="grid grid-cols-3 gap-2">
+            {modes.map((m) => {
+              const isSelected = mode === m.id;
+              return (
+                <motion.button key={m.id} whileTap={{ scale: 0.97 }} onClick={() => setMode(m.id)}
+                  className={`relative flex flex-col items-center gap-1 py-3.5 px-2 rounded-2xl border-2 transition-all duration-200 ${isSelected ? 'border-[hsl(270,70%,50%)]' : 'border-transparent'}`}
+                  style={{ background: isSelected ? 'hsla(270, 70%, 50%, 0.1)' : 'hsl(220, 45%, 14%)', boxShadow: isSelected ? '0 0 20px hsla(270, 70%, 50%, 0.2)' : 'none' }}>
+                  <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${m.gradient} flex items-center justify-center`}>
+                    <m.icon className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <span className="text-[13px] font-bold text-foreground" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{m.label}</span>
+                  <span className="text-[9px]" style={{ color: isSelected ? 'hsl(160,84%,39%)' : 'hsl(215,20%,50%)' }}>{m.desc}</span>
+                </motion.button>
+              );
+            })}
           </div>
           
-          <div className="flex flex-wrap gap-1.5">
-            {selectedMode.features.map((feature, i) => (
-              <span 
-                key={i}
-                className="text-[10px] px-2 py-1 rounded-full bg-muted text-muted-foreground"
-              >
-                {feature}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <Languages className="w-4 h-4 text-muted-foreground" />
-          <Select value={language} onValueChange={setLanguage}>
-            <SelectTrigger className="flex-1 h-10 rounded-xl">
-              <SelectValue placeholder="Select language" />
-            </SelectTrigger>
-            <SelectContent>
-              {languages.map((lang) => (
-                <SelectItem key={lang.code} value={lang.code}>
-                  {lang.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Globe className="w-4 h-4 text-muted-foreground" />
-          <Select value={region} onValueChange={setRegion}>
-            <SelectTrigger className="flex-1 h-10 rounded-xl">
-              <SelectValue placeholder="Select region" />
-            </SelectTrigger>
-            <SelectContent>
-              {regions.map((reg) => (
-                <SelectItem key={reg.code} value={reg.code}>
-                  {reg.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Start Button - FIRST, above security tips */}
-      <Button
-        onClick={onStart}
-        disabled={isBanned}
-        className="w-full py-6 text-lg font-semibold btn-cosmic rounded-2xl"
-      >
-        {isBanned ? '🔒 You are temporarily banned' : '💙 Start Connecting'}
-      </Button>
-
-      {/* How Connection Works - Simple Explanation */}
-      <div className="space-y-3">
-        {/* Video/Audio explanation */}
-        {(mode === 'video' || mode === 'audio') && (
-          <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-semibold text-green-600 dark:text-green-400">
-                How it works
-              </span>
+          {/* Audio/Video Development Notice */}
+          {(mode === 'audio' || mode === 'video') && (
+            <div className="mt-3 p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+              <p className="text-[12px] font-medium text-emerald-400 text-center">
+                🎧 Listen: 99% complete, we will try to take this into live action soon
+              </p>
             </div>
-            {mode === 'video' ? (
-              <ul className="text-[11px] text-muted-foreground space-y-1">
-                <li>✓ You see the other person's <strong>real face</strong> on screen</li>
-                <li>✓ They see your <strong>real face</strong> too (unless you turn camera off)</li>
-                <li>✓ When you speak, they hear you <strong>clearly in both ears</strong></li>
-                <li>✓ When they speak, you hear them <strong>clearly in both ears</strong></li>
-                <li>✓ It feels like sitting across from someone - natural and real</li>
-              </ul>
-            ) : (
-              <ul className="text-[11px] text-muted-foreground space-y-1">
-                <li>✓ When you speak, partner hears you <strong>clearly in both ears</strong></li>
-                <li>✓ When they speak, you hear them <strong>clearly in both ears</strong></li>
-                <li>✓ Just like a regular phone call or FaceTime audio</li>
-                <li>✓ Voice is balanced, clear, no echo or one-way issues</li>
-              </ul>
-            )}
+          )}
+        </div>
+
+        {/* Preferences - Collapsible Sections */}
+        <div className="mt-4 space-y-1.5">
+          <p className="text-[11px] font-medium mb-1 uppercase tracking-wider" style={{ color: 'hsl(215, 20%, 45%)' }}>Preferences</p>
+
+          {/* Language Section */}
+          <div className="rounded-xl overflow-hidden" style={{ background: 'hsl(220, 45%, 14%)', border: '1px solid hsl(220, 30%, 20%)' }}>
+            <button onClick={() => toggleSection('language')} className="w-full flex items-center justify-between px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px]">🌐</span>
+                <span className="text-[12px] font-medium text-foreground">Language</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'hsla(270,70%,50%,0.15)', color: 'hsl(260,80%,75%)' }}>{selectedLangLabel}</span>
+                {expandedSection === 'language' ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+              </div>
+            </button>
+            <AnimatePresence>
+              {expandedSection === 'language' && (
+                <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
+                  <div className="px-3 pb-3 flex gap-1.5 flex-wrap">
+                    {languages.map((l) => (
+                      <button key={l.code} onClick={() => setLanguage(l.code)}
+                        className={`px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all border ${language === l.code ? 'bg-[hsl(270,70%,50%)] text-white border-[hsl(270,70%,50%)]' : 'border-[hsl(220,30%,20%)] text-[hsl(215,20%,65%)]'}`}
+                        style={{ background: language === l.code ? undefined : 'hsl(220, 35%, 18%)' }}>
+                        {l.emoji} {l.label}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        )}
+
+          {/* Region Section */}
+          <div className="rounded-xl overflow-hidden" style={{ background: 'hsl(220, 45%, 14%)', border: '1px solid hsl(220, 30%, 20%)' }}>
+            <button onClick={() => toggleSection('region')} className="w-full flex items-center justify-between px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px]">📍</span>
+                <span className="text-[12px] font-medium text-foreground">Region</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'hsla(270,70%,50%,0.15)', color: 'hsl(260,80%,75%)' }}>{selectedRegionLabel}</span>
+                {expandedSection === 'region' ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+              </div>
+            </button>
+            <AnimatePresence>
+              {expandedSection === 'region' && (
+                <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
+                  <div className="px-3 pb-3 space-y-2">
+                    {regionGroups.map((group) => (
+                      <div key={group.label}>
+                        <p className="text-[10px] font-medium mb-1" style={{ color: 'hsl(215, 20%, 45%)' }}>{group.label}</p>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {group.items.map((r) => (
+                            <button key={r.code} onClick={() => setRegion(r.code)}
+                              className={`px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all border ${region === r.code ? 'bg-[hsl(270,70%,50%)] text-white border-[hsl(270,70%,50%)]' : 'border-[hsl(220,30%,20%)] text-[hsl(215,20%,65%)]'}`}
+                              style={{ background: region === r.code ? undefined : 'hsl(220, 35%, 18%)' }}>
+                              {r.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Interests Section */}
+          <div className="rounded-xl overflow-hidden" style={{ background: 'hsl(220, 45%, 14%)', border: '1px solid hsl(220, 30%, 20%)' }}>
+            <button onClick={() => toggleSection('interests')} className="w-full flex items-center justify-between px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px]">🎯</span>
+                <span className="text-[12px] font-medium text-foreground">Match by Interest</span>
+                <span className="text-[9px]" style={{ color: 'hsl(220, 15%, 40%)' }}>(optional)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] px-2 py-0.5 rounded-full max-w-[100px] truncate" style={{ background: 'hsla(270,70%,50%,0.15)', color: 'hsl(260,80%,75%)' }}>{selectedInterestLabels}</span>
+                {expandedSection === 'interests' ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+              </div>
+            </button>
+            <AnimatePresence>
+              {expandedSection === 'interests' && (
+                <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
+                  <div className="px-3 pb-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[9px]" style={{ color: 'hsl(220, 15%, 40%)' }}>Select up to 3</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {interestTags.map((tag) => {
+                        const selected = interests.includes(tag.id);
+                        return (
+                          <button key={tag.id} onClick={() => toggleInterest(tag.id)}
+                            className={`px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all border ${selected ? 'border-[hsl(270,70%,50%)]' : 'border-[hsl(220,30%,20%)]'}`}
+                            style={{ background: selected ? 'hsla(270, 70%, 50%, 0.15)' : 'hsl(220, 35%, 18%)', color: selected ? 'hsl(260, 80%, 75%)' : 'hsl(215, 20%, 65%)' }}>
+                            {tag.emoji} {tag.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Start Button */}
+        <motion.div className="mt-5 mb-2">
+          <motion.button whileTap={{ scale: 0.97 }} animate={buttonPulsing ? { scale: [1, 1.03, 1] } : {}} onClick={handleStart} disabled={isBanned}
+            className="w-full h-[54px] rounded-2xl flex items-center justify-center gap-3 text-white font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-shadow hover:shadow-[0_0_30px_hsla(270,70%,50%,0.3)]"
+            style={{ background: isBanned ? 'hsl(220, 30%, 25%)' : 'linear-gradient(135deg, hsl(270,70%,50%), hsl(210,100%,55%))', fontFamily: "'Space Grotesk', sans-serif" }}>
+            {isBanned ? '🔒 Temporarily Banned' : <><span className="text-xl">💜</span>Start Connecting<ArrowRight className="w-5 h-5" /></>}
+          </motion.button>
+        </motion.div>
 
         {/* Privacy note */}
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-muted/30">
-          <Shield className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Your identity is protected with a new random name each session. 
-            No profile, no name, no history. Everything auto-deletes after 24 hours. 
-            20 seconds minimum stay before skip.
-          </p>
+        <div className="flex items-center justify-center gap-2 py-2">
+          <Shield className="w-3 h-3" style={{ color: 'hsl(215, 20%, 55%)' }} />
+          <p className="text-[10px] text-center" style={{ color: 'hsl(215, 20%, 55%)' }}>Anonymous • Auto-deletes in 24h • No screenshots</p>
         </div>
-        
-        {/* Security Tips */}
-        <SecurityTips />
       </div>
+
+      <style>{`
+        @keyframes orbFloat1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(30px, -20px); } }
+        @keyframes orbFloat2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-25px, 15px); } }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </div>
   );
 };

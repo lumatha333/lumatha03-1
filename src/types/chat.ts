@@ -8,6 +8,8 @@ export interface Message {
   is_read: boolean;
   is_forwarded: boolean;
   original_message_id?: string;
+  reply_to_id?: string;
+  edited_at?: string;
   created_at: string;
   updated_at: string;
   sender_profile?: {
@@ -15,6 +17,31 @@ export interface Message {
     name: string;
     avatar_url?: string;
   };
+  sender?: {
+    id: string;
+    name: string;
+    avatar_url?: string | null;
+  };
+}
+
+export interface MessageReaction {
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+}
+
+export interface ChatSettings {
+  user_id: string;
+  chat_user_id: string;
+  theme_color?: string;
+  nickname?: string;
+  is_muted?: boolean;
+  is_archived?: boolean;
+  is_private?: boolean;
+  disappear_timer?: number;
+  updated_at: string;
 }
 
 export interface ChatConversation {

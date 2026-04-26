@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
@@ -14,35 +14,25 @@ export function useSupabaseData() {
   const [likesCount, setLikesCount] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-    const cleanup = setupRealtime();
-    return cleanup;
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch profile
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, name, avatar_url, bio, username, country, location')
         .eq('id', user.id)
         .single();
+      setProfile(profileData as Profile | null);
 
-      setProfile(profileData);
-
-      // Fetch posts with profile info
       const { data: postsData } = await supabase
         .from('posts')
-        .select('*, profiles(*)')
-        .order('created_at', { ascending: false });
+        .select('*, profiles(id, name, avatar_url)')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      setPosts((postsData as any) || []);
 
-      setPosts(postsData || []);
-
-      // Batch fetch likes count efficiently
       if (postsData && postsData.length > 0) {
         const postIds = postsData.map(p => p.id);
         const { data: allLikes } = await supabase
@@ -57,110 +47,65 @@ export function useSupabaseData() {
         setLikesCount(counts);
       }
 
-      // Fetch saved posts
-      const { data: savedData } = await supabase
-        .from('saved')
-        .select('post_id')
-        .eq('user_id', user.id);
-
-      setSaved(savedData?.map(s => s.post_id) || []);
-
-      // Fetch user's likes
-      const { data: likesData } = await supabase
-        .from('likes')
-        .select('post_id')
-        .eq('user_id', user.id);
-
-      setLikes(likesData || []);
-    } catch (error: any) {
-      console.error('Error fetching data:', error);
+      const [savedResult, likesResult] = await Promise.all([
+        supabase.from('saved').select('post_id').eq('user_id', user.id).limit(100),
+        supabase.from('likes').select('post_id').eq('user_id', user.id).limit(100),
+      ]);
+      setSaved(savedResult.data?.map(s => s.post_id) || []);
+      setLikes(likesResult.data || []);
+    } catch {
+      // Silent fail
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const setupRealtime = () => {
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
     const postsChannel = supabase
       .channel('posts-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'posts'
-        },
-        () => fetchData()
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, fetchData)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts' }, fetchData)
       .subscribe();
 
-    const likesChannel = supabase
-      .channel('likes-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'likes'
-        },
-        () => fetchData()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(postsChannel);
-      supabase.removeChannel(likesChannel);
-    };
-  };
+    return () => { supabase.removeChannel(postsChannel); };
+  }, [fetchData]);
 
   const toggleSave = async (postId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       if (saved.includes(postId)) {
-        await supabase
-          .from('saved')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('post_id', postId);
-
+        await supabase.from('saved').delete().eq('user_id', user.id).eq('post_id', postId);
         setSaved(saved.filter(id => id !== postId));
       } else {
-        await supabase
-          .from('saved')
-          .insert({ user_id: user.id, post_id: postId });
-
+        await supabase.from('saved').insert({ user_id: user.id, post_id: postId });
         setSaved([...saved, postId]);
       }
-    } catch (error: any) {
+    } catch {
       toast.error('Failed to update saved status');
     }
   };
 
   const deletePost = async (postId: string) => {
     try {
-      await supabase
-        .from('posts')
-        .delete()
-        .eq('id', postId);
-
+      await supabase.from('posts').delete().eq('id', postId);
       setPosts(posts.filter(p => p.id !== postId));
       toast.success('Post deleted');
-    } catch (error: any) {
+    } catch {
       toast.error('Failed to delete post');
     }
   };
 
   const updatePost = async (postId: string, updates: Partial<Post>) => {
     try {
-      await supabase
-        .from('posts')
-        .update(updates)
-        .eq('id', postId);
-
+      await supabase.from('posts').update(updates).eq('id', postId);
       setPosts(posts.map(p => p.id === postId ? { ...p, ...updates } : p));
       toast.success('Post updated');
-    } catch (error: any) {
+    } catch {
       toast.error('Failed to update post');
     }
   };
@@ -169,42 +114,23 @@ export function useSupabaseData() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       const isLiked = likes.some(l => l.post_id === postId);
-      
       if (isLiked) {
-        await supabase
-          .from('likes')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('post_id', postId);
-
+        await supabase.from('likes').delete().eq('user_id', user.id).eq('post_id', postId);
         setLikes(likes.filter(l => l.post_id !== postId));
-        setLikesCount(prev => ({ ...prev, [postId]: (prev[postId] || 1) - 1 }));
+        setLikesCount(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 1) - 1) }));
       } else {
-        await supabase
-          .from('likes')
-          .insert({ user_id: user.id, post_id: postId });
-
+        await supabase.from('likes').insert({ user_id: user.id, post_id: postId });
         setLikes([...likes, { post_id: postId }]);
         setLikesCount(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
       }
-    } catch (error: any) {
+    } catch {
       toast.error('Failed to update like status');
     }
   };
 
   return {
-    posts,
-    profile,
-    saved,
-    likes,
-    likesCount,
-    loading,
-    toggleSave,
-    toggleLike,
-    deletePost,
-    updatePost,
-    refreshData: fetchData
+    posts, profile, saved, likes, likesCount, loading,
+    toggleSave, toggleLike, deletePost, updatePost, refreshData: fetchData,
   };
 }

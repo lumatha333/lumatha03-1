@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Backup and temporary files
+*.bak
+*.backup
+*.orig
+*.tmp
+public/original.*
+.vercel
+.env*.local

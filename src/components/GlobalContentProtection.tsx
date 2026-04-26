@@ -119,7 +119,7 @@ export function GlobalBlurOverlay() {
   return (
     <div
       id="global-blur-overlay"
-      className="fixed inset-0 z-[9991] backdrop-blur-2xl bg-background/90 items-center justify-center"
+      className="fixed inset-0 z-[9991] bg-background/95 items-center justify-center"
       style={{ display: 'none' }}
     >
       <div className="text-center space-y-3">

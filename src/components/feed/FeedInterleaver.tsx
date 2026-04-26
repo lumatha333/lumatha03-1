@@ -1,1 +1,46 @@
-import { ReactNode } from 'react';\nimport { AdventureTeasersInsert } from './AdventureTeasersInsert';\nimport { QuickConnectInsert } from './QuickConnectInsert';\nimport { QuickNavInsert } from './QuickNavWidgets';\nimport { StopPointCard } from './StopPointCard';\n\ninterface FeedInterleaverProps {\n  posts: any[];\n  renderPost: (post: any, index: number) => ReactNode;\n}\n\n// Deterministic rotation: every 4 posts inject a mini-section\nconst INSERT_CYCLE = [\n  { Component: AdventureTeasersInsert, key: 'adventure' },\n  { Component: QuickConnectInsert, key: 'connect' },\n];\n\nconst STOP_POINT_INTERVAL = 16;\n\nexport function FeedInterleaver({ posts, renderPost }: FeedInterleaverProps) {\n  const elements: ReactNode[] = [];\n  let insertIndex = 0;\n  let totalItems = 0;\n  let quickNavCount = 0;\n\n  for (let i = 0; i < posts.length; i++) {\n    elements.push(renderPost(posts[i], i));\n    totalItems++;\n\n    // Insert mini-section after every 4 posts\n    if ((i + 1) % 4 === 0 && i < posts.length - 1) {\n      const { Component, key } = INSERT_CYCLE[insertIndex % INSERT_CYCLE.length];\n      elements.push(<Component key={`insert-${key}-${i}`} />);\n      insertIndex++;\n      totalItems++;\n\n      // After every 2 inserts, also add QuickNav widgets\n      if (insertIndex % 2 === 0) {\n        elements.push(<QuickNavInsert key={`quicknav-${i}`} insertIndex={quickNavCount} />);\n        quickNavCount++;\n        totalItems++;\n      }\n    }\n\n    // Show stop point after STOP_POINT_INTERVAL items\n    if (totalItems === STOP_POINT_INTERVAL && i < posts.length - 1) {\n      elements.push(<StopPointCard key={`stop-${i}`} />);\n      totalItems++;\n    }\n  }\n\n  return <div className=\"space-y-3 animate-stagger\">{elements}</div>;\n}\n
+import { memo, ReactNode, useMemo } from 'react';
+import { StopPointCard } from './StopPointCard';
+import { PromotionalCard } from './PromotionalCards';
+
+interface FeedInterleaverProps {
+  posts: any[];
+  renderPost: (post: any, index: number) => ReactNode;
+  widgets?: ReactNode[];
+}
+
+const WIDGET_INTERVAL = 2; // Insert one vertically every 2 posts
+const STOP_POINT_INTERVAL = 16;
+
+export const FeedInterleaver = memo(function FeedInterleaver({ posts, renderPost, widgets = [] }: FeedInterleaverProps) {
+  const elements = useMemo(() => {
+    const rendered: ReactNode[] = [];
+    let totalItems = 0;
+    let widgetIndex = 0;
+
+    for (let i = 0; i < posts.length; i++) {
+      rendered.push(renderPost(posts[i], i));
+      totalItems++;
+
+      // Interleave one premium widget vertically after posts
+      if ((i + 1) % WIDGET_INTERVAL === 0 && widgetIndex < widgets.length) {
+        rendered.push(
+          <div key={`widget-${widgetIndex}`} className="w-full flex-shrink-0 animate-stagger mb-4">
+            {widgets[widgetIndex]}
+          </div>
+        );
+        widgetIndex++;
+        totalItems++;
+      }
+
+      // Show stop point after STOP_POINT_INTERVAL items
+      if (totalItems === STOP_POINT_INTERVAL && i < posts.length - 1) {
+        rendered.push(<StopPointCard key={`stop-${i}`} />);
+        totalItems++;
+      }
+    }
+
+    return rendered;
+  }, [posts, renderPost]);
+
+  return <div className="space-y-4 animate-stagger">{elements}</div>;
+});

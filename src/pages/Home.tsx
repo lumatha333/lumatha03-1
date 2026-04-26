@@ -304,19 +304,7 @@ export default function Home() {
           {mobileFeedChips.map((chip) => {
             const active = subFilter === chip.id;
             return (
-              <button 
-                key={chip.id} 
-                onClick={() => setSubFilter(chip.id)} 
-                className="shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition-all duration-300 active:scale-90 shadow-sm" 
-                style={{ 
-                  borderColor: active ? 'transparent' : 'rgba(148, 163, 184, 0.1)', 
-                  background: active ? chip.gradient : 'rgba(30, 41, 59, 0.5)', 
-                  color: active ? '#ffffff' : '#94A3B8',
-                  boxShadow: active ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none'
-                }}
-              >
-                {chip.label}
-              </button>
+              <button key={chip.id} onClick={() => setSubFilter(chip.id)} className="shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition-all" style={{ borderColor: active ? 'transparent' : 'rgba(148, 163, 184, 0.1)', background: active ? chip.gradient : 'rgba(30, 41, 59, 0.5)', color: active ? '#ffffff' : '#94A3B8' }}>{chip.label}</button>
             );
           })}
         </div>

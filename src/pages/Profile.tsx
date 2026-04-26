@@ -1,256 +1,226 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFriends } from '@/hooks/useFriends';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { FullScreenMediaViewer } from '@/components/FullScreenMediaViewer';
 import { FriendTick } from '@/components/lumatha/FriendTick';
 import { 
-  ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, Mountain, ShoppingBag,
-  MapPin, Calendar, Globe, Star, Trophy, Eye, MessageCircle, UserCheck, Clock, Users,
-  UserCircle2, X, Shield, Ban, Flag, Lock
+  ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, 
+  MapPin, Calendar, Globe, Star, Trophy, Eye, MessageCircle, UserCheck, 
+  Clock, Users, UserCircle2, X, Shield, Ban, Flag, Lock, Play, Share2, Camera, Pencil, Trash2, BookOpen, Download, ExternalLink, MoreVertical
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
 import { cn } from '@/lib/utils';
+import { EditProfileSheet } from '@/components/EditProfileSheet';
+import { StoriesBar } from '@/components/stories/StoriesBar';
+import { useVisibleTabContent } from '@/hooks/useProfileOptimization';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'] & { profiles?: Profile };
 type Document = Database['public']['Tables']['documents']['Row'];
 
-// Smooth blur-up avatar with ring like Facebook
-function ProfileAvatar({ src, name, size = 'lg', onClick }: { src?: string | null; name: string; size?: 'sm' | 'md' | 'lg'; onClick?: () => void }) {
-  const [loaded, setLoaded] = useState(false);
-  const sizeClass = size === 'lg' ? 'w-28 h-28 sm:w-32 sm:h-32' : size === 'md' ? 'w-16 h-16' : 'w-10 h-10';
-  const textSize = size === 'lg' ? 'text-4xl' : size === 'md' ? 'text-xl' : 'text-sm';
-
-  return (
-    <div
-      className={cn(
-        sizeClass,
-        'relative rounded-full flex-shrink-0',
-        onClick && 'cursor-pointer group'
-      )}
-      onClick={onClick}
-      style={{ boxShadow: '0 0 0 4px hsl(var(--background)), 0 0 0 6px hsl(var(--primary) / 0.4)' }}
-    >
-      {/* Background skeleton */}
-      {!loaded && src && (
-        <div className={cn('absolute inset-0 rounded-full bg-muted animate-pulse')} />
-      )}
-      {src ? (
-        <img
-          src={src}
-          alt={name}
-          className={cn(
-            'w-full h-full rounded-full object-cover transition-all duration-500',
-            loaded ? 'opacity-100 blur-0' : 'opacity-0 blur-sm',
-            onClick && 'group-hover:opacity-90'
-          )}
-          onLoad={() => setLoaded(true)}
-        />
-      ) : (
-        <div className={cn('w-full h-full rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center', textSize, 'font-bold text-primary-foreground')}>
-          {name?.[0]?.toUpperCase() || <UserCircle2 />}
-        </div>
-      )}
-    </div>
-  );
+interface SavedTravelStory {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  photos: string[];
+  created_at: string;
 }
 
-// Profile skeleton loader
+function AnimatedNumber({ value }: { value: number }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    if (value === 0) { setDisplay(0); return; }
+    const duration = 600;
+    const start = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(elapsed / duration, 1);
+      setDisplay(Math.floor(progress * value));
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [value]);
+  return <>{display}</>;
+}
+
 function ProfileSkeleton() {
   return (
-    <div className="max-w-3xl mx-auto space-y-4 p-3 pb-24">
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-8 w-16" />
-      </div>
-      <Card className="glass-card border-border overflow-hidden">
-        <CardContent className="p-4">
-          {/* Cover skeleton */}
-          <Skeleton className="h-24 w-full rounded-lg mb-4" />
-          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-            <Skeleton className="w-28 h-28 rounded-full flex-shrink-0 -mt-8" />
-            <div className="flex-1 space-y-3 pt-2">
-              <Skeleton className="h-6 w-40" />
-              <div className="flex gap-6">
-                <Skeleton className="h-10 w-16" />
-                <Skeleton className="h-10 w-16" />
-                <Skeleton className="h-10 w-16" />
-              </div>
-              <Skeleton className="h-4 w-60" />
-              <div className="flex gap-2">
-                <Skeleton className="h-8 w-20" />
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-8 w-20" />
-              </div>
+    <div className="min-h-screen pb-24" style={{ background: '#0a0f1e' }}>
+      {/* Profile pic higher up with no cover image space */}
+      <div className="px-5 pt-5">
+        <div className="flex items-start gap-4">
+          <Skeleton className="w-[86px] h-[86px] rounded-full shrink-0" style={{ boxShadow: '0 0 0 2px #7C3AED' }} />
+          <div className="flex-1 pt-1 space-y-2">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-28" />
+            <div className="flex gap-4 mt-3">
+              <Skeleton className="h-5 w-12" />
+              <Skeleton className="h-5 w-12" />
+              <Skeleton className="h-5 w-12" />
             </div>
           </div>
-        </CardContent>
-      </Card>
-      <Skeleton className="h-12 w-full rounded-xl" />
-      <div className="space-y-3">
-        <Skeleton className="h-48 w-full rounded-xl" />
-        <Skeleton className="h-48 w-full rounded-xl" />
+        </div>
+        <Skeleton className="h-4 w-3/4 mt-3" />
+      </div>
+      <div className="px-5 mt-4 space-y-3">
+        <Skeleton className="h-11 w-full rounded-2xl" />
+        <div className="flex gap-2 overflow-hidden">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-9 w-20 rounded-full" />)}
+        </div>
+      </div>
+      <div className="px-4 mt-5 space-y-3">
+        {[1, 2].map(i => <Skeleton key={i} className="h-36 rounded-3xl" />)}
       </div>
     </div>
   );
 }
 
-// Mini people list for dialogs
-const PeopleList = ({ 
-  people, 
-  title, 
-  onClose, 
-  onNavigate, 
-  isOwner, 
-  onAddFriend 
-}: { 
-  people: Profile[]; 
-  title: string; 
-  onClose: () => void; 
-  onNavigate: (id: string) => void;
-  isOwner: (id: string) => boolean;
-  onAddFriend: (id: string) => void;
-}) => (
-  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 animate-in fade-in duration-200" onClick={onClose}>
-    <div 
-      className="bg-background w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden glass-card border-border animate-in slide-in-from-bottom duration-300"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <h3 className="text-lg font-bold gradient-text">{title}</h3>
-        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-8 w-8">
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
-      <div className="max-h-[60vh] overflow-y-auto p-2">
-        {people.length === 0 ? (
-          <div className="py-12 text-center text-muted-foreground italic text-sm">No {title.toLowerCase()} yet</div>
-        ) : (
-          people.map((person) => (
-            <div 
-              key={person.id} 
-              className="flex items-center justify-between p-3 hover:bg-primary/5 rounded-xl transition-all cursor-pointer group"
-              onClick={() => { onNavigate(person.id); onClose(); }}
-            >
-              <div className="flex items-center gap-3">
-                <ProfileAvatar src={person.avatar_url} name={person.name} size="sm" />
-                <div>
-                  <p className="font-semibold text-sm group-hover:text-primary transition-colors">{person.name}</p>
-                  <p className="text-[10px] text-muted-foreground truncate max-w-[150px]">{person.bio || 'Explorer'}</p>
-                </div>
-              </div>
-              {!isOwner(person.id) && (
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  className="h-8 text-xs font-bold px-4 rounded-full active:scale-90"
-                  onClick={(e) => { e.stopPropagation(); onAddFriend(person.id); }}
-                >
-                  Add
-                </Button>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  </div>
-);
-
 export default function Profile() {
-  const { userId } = useParams();
+  const { userId: rawUserId } = useParams();
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // Resolve the special "me" alias to the authenticated user's real ID.
+  // This allows /profile/me to work for the logged-in user from nav shortcuts.
+  // Falls back to undefined (not the literal string 'me') so that the query
+  // effect stays dormant until currentUser is available.
+  const userId = rawUserId === 'me' ? (currentUser?.id ?? undefined) : rawUserId;
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
-  const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0, friends: 0 });
-  const [isOwner, setIsOwner] = useState(false);
+  const [isFollowedBy, setIsFollowedBy] = useState(false);
+  const [friendsCount, setFriendsCount] = useState(0);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
   const [followersList, setFollowersList] = useState<Profile[]>([]);
   const [followingList, setFollowingList] = useState<Profile[]>([]);
   const [friendsList, setFriendsList] = useState<Profile[]>([]);
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [unfollowConfirm, setUnfollowConfirm] = useState(false);
   const [saved, setSaved] = useState<string[]>([]);
   const [likes, setLikes] = useState<{ post_id: string }[]>([]);
   const [likesCount, setLikesCount] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [avatarOpen, setAvatarOpen] = useState(false);
-  const [adventurePoints, setAdventurePoints] = useState({ challenges: 0, discovery: 0, explore: 0, total: 0 });
-  const [isFriend, setIsFriend] = useState(false);
-  const [friendRequestStatus, setFriendRequestStatus] = useState<'none' | 'pending_sent' | 'pending_received' | 'accepted'>('none');
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const skeletonTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [activeTab, setActiveTab] = useState('posts');
+  const [savedStories, setSavedStories] = useState<SavedTravelStory[]>([]);
+  const [marketplaceListings, setMarketplaceListings] = useState<any[]>([]);
+  const [marketplaceProfile, setMarketplaceProfile] = useState<any | null>(null);
   const [mutualFriendsCount, setMutualFriendsCount] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
-  const { sendFriendRequest, acceptFriendRequest } = useFriends();
+  const [editOpen, setEditOpen] = useState(false);
+  const [profileStories, setProfileStories] = useState<SavedTravelStory[]>([]);
+  const [profileMediaViewer, setProfileMediaViewer] = useState<{ open: boolean; urls: string[]; types: string[]; index: number }>({ open: false, urls: [], types: [], index: 0 });
+  const [postFilter, setPostFilter] = useState<'all' | 'pictures' | 'videos' | 'thoughts'>('all');
+  const [postSort, setPostSort] = useState<'latest' | 'oldest' | 'popular'>('latest');
+  const [mediaFilter, setMediaFilter] = useState<'all' | 'pictures' | 'videos'>('all');
+  const [mediaSort, setMediaSort] = useState<'latest' | 'oldest' | 'popular'>('latest');
+  const [marketplaceLoaded, setMarketplaceLoaded] = useState(false);
+  const [documentsLoaded, setDocumentsLoaded] = useState(false);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
 
-  const fetchProfileData = useCallback(async () => {
-    if (!userId) return;
-    
-    // Check if we're visiting ourselves
-    const isSelf = userId === currentUser?.id || userId === 'me';
-    const effectiveUserId = userId === 'me' ? currentUser?.id : userId;
-    
-    if (!effectiveUserId) return;
+  // Wait for currentUser to resolve before fetching when userId is 'me'
+  useEffect(() => { if (userId && userId !== 'me') fetchProfileData(); }, [userId]);
 
-    setLoading(true);
+  const downloadDocument = async (fileUrl: string, fileName: string) => {
+    try {
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error('Failed to fetch file');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      toast.success('Download started');
+    } catch {
+      toast.error('Failed to download document');
+    }
+  };
+
+  const editDocumentTitle = async (doc: Document) => {
+    if (!currentUser || currentUser.id !== userId) return;
+    const nextTitle = window.prompt('Edit document title', doc.title)?.trim();
+    if (!nextTitle || nextTitle === doc.title) return;
+    try {
+      const { error } = await supabase.from('documents').update({ title: nextTitle }).eq('id', doc.id).eq('user_id', currentUser.id);
+      if (error) throw error;
+      setDocuments((prev) => prev.map((item) => (item.id === doc.id ? { ...item, title: nextTitle } : item)));
+      toast.success('Document updated');
+    } catch {
+      toast.error('Failed to update document');
+    }
+  };
+
+  const deleteDocument = async (docId: string, fileUrl: string, coverUrl?: string | null) => {
+    if (!currentUser || currentUser.id !== userId) return;
+
+    const extractDocumentPath = (url?: string | null) => {
+      if (!url) return null;
+      const parts = url.split('/documents/');
+      return parts[1] || null;
+    };
 
     try {
-      // Step 1: Fetch profile first to ensure it exists
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', effectiveUserId)
-        .maybeSingle();
+      const filePath = extractDocumentPath(fileUrl);
+      const coverPath = extractDocumentPath(coverUrl);
 
-      if (profileError) throw profileError;
-      
-      if (!profileData) {
-        setProfile(null);
-        setLoading(false);
-        return;
+      const pathsToRemove = [filePath, coverPath].filter((path): path is string => Boolean(path));
+      if (pathsToRemove.length > 0) {
+        await supabase.storage.from('documents').remove(pathsToRemove);
       }
 
-      setProfile(profileData);
-      setIsOwner(currentUser?.id === profileData.id);
+      await supabase.from('documents').delete().eq('id', docId).eq('user_id', currentUser.id);
+      setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+      toast.success('Document deleted');
+    } catch {
+      toast.error('Failed to delete document');
+    }
+  };
 
-      // Step 2: Fetch everything else in parallel
-      const [postsRes, docsRes, userPointsRes, friendsCountRes, followStatusRes, savedRes, likesRes, friendRequestRes, mutualRes, blockRes] = await Promise.all([
-        supabase.from('posts').select('*, profiles(*)').eq('user_id', effectiveUserId).eq('visibility', 'public').neq('category', 'ghost').order('created_at', { ascending: false }),
-        supabase.from('documents').select('*').eq('user_id', effectiveUserId).eq('visibility', 'public').order('created_at', { ascending: false }),
-        supabase.from('user_points').select('total_points').eq('user_id', effectiveUserId).maybeSingle(),
-        supabase.from('friend_requests').select('*', { count: 'exact', head: true }).or(`sender_id.eq.${effectiveUserId},receiver_id.eq.${effectiveUserId}`).eq('status', 'accepted'),
-        currentUser ? supabase.from('follows').select('id').eq('follower_id', currentUser.id).eq('following_id', effectiveUserId).maybeSingle() : Promise.resolve({ data: null }),
-        currentUser ? supabase.from('saved').select('post_id').eq('user_id', currentUser.id) : Promise.resolve({ data: [] }),
-        currentUser ? supabase.from('likes').select('post_id').eq('user_id', currentUser.id) : Promise.resolve({ data: [] }),
-        currentUser ? supabase.from('friend_requests').select('*').or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${effectiveUserId}),and(sender_id.eq.${effectiveUserId},receiver_id.eq.${currentUser.id})`).maybeSingle() : Promise.resolve({ data: null }),
-        currentUser && currentUser.id !== effectiveUserId ? (supabase.rpc as any)('get_mutual_friends_count', { user1: currentUser.id, user2: effectiveUserId }) : Promise.resolve({ data: 0 }),
-        currentUser ? supabase.from('blocks').select('blocker_id').or(`and(blocker_id.eq.${currentUser.id},blocked_id.eq.${effectiveUserId}),and(blocker_id.eq.${effectiveUserId},blocked_id.eq.${currentUser.id})`) : Promise.resolve({ data: [] }),
+  const fetchProfileData = async () => {
+    // Only show skeleton if loading takes more than 400ms (slow internet)
+    skeletonTimerRef.current = setTimeout(() => {
+      setShowSkeleton(true);
+    }, 400);
+    
+    try {
+      // CRITICAL PATH: Load only essential data first for fast initial render
+      const [profileResult, postsResult, friendsCountResult, followersResult, followingResult] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('posts').select('*, profiles(*)').eq('user_id', userId).eq('visibility', 'public').neq('category', 'ghost').order('created_at', { ascending: false }).limit(20),
+        supabase.from('friend_requests').select('*', { count: 'exact', head: true }).or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).eq('status', 'accepted'),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
       ]);
+      
+      setProfile(profileResult.data);
+      setPosts(postsResult.data || []);
+      setFriendsCount(friendsCountResult.count || 0);
+      setFollowersCount(followersResult.count || 0);
+      setFollowingCount(followingResult.count || 0);
 
-      // Set state from parallel results
-      const postsData = postsRes.data || [];
-      setPosts(postsData);
-      setDocuments(docsRes.data || []);
-      setFriendsCount(friendsCountRes.count || 0);
-
-      if (userPointsRes.data) {
-        const pts = userPointsRes.data.total_points;
-        setAdventurePoints({ challenges: Math.floor(pts * 0.4), discovery: Math.floor(pts * 0.35), explore: Math.floor(pts * 0.25), total: pts });
-      }
-
-      if (postsData.length > 0) {
-        const postIds = postsData.map(p => p.id);
+      // Calculate likes for displayed posts
+      if ((postsResult.data || []).length > 0) {
+        const postIds = (postsResult.data || []).map(p => p.id);
         const { data: allLikes } = await supabase.from('likes').select('post_id').in('post_id', postIds);
         const counts: Record<string, number> = {};
         postIds.forEach(id => { counts[id] = 0; });
@@ -258,637 +228,1056 @@ export default function Profile() {
         setLikesCount(counts);
       }
 
-      setIsFollowing(!!followStatusRes.data);
-      setSaved(savedRes.data?.map((s: any) => s.post_id) || []);
-      setLikes(likesRes.data || []);
-      setMutualFriendsCount(mutualRes.data || 0);
+      // Fetch follow/save/like data for current user
+      if (currentUser && currentUser.id !== userId) {
+        const [followResult, followBackResult, savedResult, likesResult, mutualResult, blockResult] = await Promise.all([
+          supabase.from('follows').select('id').eq('follower_id', currentUser.id).eq('following_id', userId).maybeSingle(),
+          supabase.from('follows').select('id').eq('follower_id', userId).eq('following_id', currentUser.id).maybeSingle(),
+          supabase.from('saved').select('post_id').eq('user_id', currentUser.id),
+          supabase.from('likes').select('post_id').eq('user_id', currentUser.id),
+          (supabase.rpc as any)('get_mutual_friends_count', { user1: currentUser.id, user2: userId }),
+          supabase.from('blocks').select('blocker_id').or(`and(blocker_id.eq.${currentUser.id},blocked_id.eq.${userId}),and(blocker_id.eq.${userId},blocked_id.eq.${currentUser.id})`),
+        ]);
+        setIsFollowing(!!followResult.data);
+        setIsFollowedBy(!!followBackResult.data);
+        setSaved(savedResult.data?.map(s => s.post_id) || []);
+        setLikes(likesResult.data || []);
+        setMutualFriendsCount(mutualResult.data || 0);
+        const blockData = blockResult.data || [];
+        setIsBlocked(blockData.some((b: any) => b.blocker_id === currentUser.id));
+        setHasBlockedMe(blockData.some((b: any) => b.blocker_id === userId));
+      } else if (currentUser) {
+        const [savedResult, likesResult] = await Promise.all([
+          supabase.from('saved').select('post_id').eq('user_id', currentUser.id),
+          supabase.from('likes').select('post_id').eq('user_id', currentUser.id),
+        ]);
+        setSaved(savedResult.data?.map(s => s.post_id) || []);
+        setLikes(likesResult.data || []);
+      }
 
-      const blockData = blockRes.data || [];
-      setIsBlocked(blockData.some((b: any) => b.blocker_id === currentUser?.id));
-      setHasBlockedMe(blockData.some((b: any) => b.blocker_id === effectiveUserId));
+      // Fetch profile stories
+      {
+        const { data: modernStoriesData } = await supabase
+          .from('posts')
+          .select('id,title,content,location,media_urls,created_at')
+          .eq('user_id', userId)
+          .eq('visibility', 'public')
+          .eq('post_type', 'travel_story')
+          .order('created_at', { ascending: false });
 
-      const friendData = friendRequestRes.data;
-      if (friendData) {
-        if (friendData.status === 'accepted') { setIsFriend(true); setFriendRequestStatus('accepted'); }
-        else if (friendData.status === 'pending') { setFriendRequestStatus(friendData.sender_id === currentUser?.id ? 'pending_sent' : 'pending_received'); }
-      } else { setIsFriend(false); setFriendRequestStatus('none'); }
+        let storyRows = modernStoriesData || [];
+        if ((!storyRows || storyRows.length === 0)) {
+          const { data: legacyData } = await supabase
+            .from('posts')
+            .select('id,title,content,location,media_urls,created_at')
+            .eq('user_id', userId)
+            .eq('visibility', 'public')
+            .in('category', ['travel_story', 'travel'])
+            .order('created_at', { ascending: false });
+          storyRows = legacyData || [];
+        }
 
-      setStats({
-        posts: postsData.length,
-        followers: profileData.total_followers ?? 0,
-        following: profileData.total_following ?? 0,
-        friends: friendsCountRes.count || 0
-      });
+        setProfileStories(storyRows.map((s) => ({
+          id: s.id,
+          title: s.title || '',
+          description: s.content || '',
+          location: typeof s.location === 'string' ? s.location : '',
+          photos: Array.isArray(s.media_urls) ? s.media_urls.filter((u: any) => typeof u === 'string') : [],
+          created_at: s.created_at,
+        })));
+      }
+
+      // DEFERRED: Load marketplace and documents only when tab is visible
+      // This happens via lazy loading hooks, not here
+      setMarketplaceListings([]);
+      setDocuments([]);
 
     } catch (error) {
-      console.error('Error fetching profile data:', error);
+      console.error('Error fetching profile:', error);
       toast.error('Failed to load profile');
-    } finally {
-      setLoading(false);
+    } finally { 
+      // Clear skeleton timer and hide skeleton immediately when data is ready
+      if (skeletonTimerRef.current) {
+        clearTimeout(skeletonTimerRef.current);
+      }
+      setShowSkeleton(false);
+      setLoading(false); 
     }
-  }, [userId, currentUser]);
+  };
 
-  useEffect(() => {
-    fetchProfileData();
-  }, [fetchProfileData]);
-
-  // Lazy-load followers list
   const loadFollowers = async () => {
-    const { data } = await supabase
-      .from('follows')
-      .select('follower_id')
-      .eq('following_id', userId);
+    const { data } = await supabase.from('follows').select('follower_id').eq('following_id', userId);
     if (data && data.length > 0) {
-      const ids = data.map(f => f.follower_id);
-      const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, bio').in('id', ids);
+      const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, bio, username').in('id', data.map(f => f.follower_id));
       setFollowersList(profiles as Profile[] || []);
     }
     setShowFollowers(true);
   };
-
-  // Lazy-load following list
   const loadFollowing = async () => {
-    const { data } = await supabase
-      .from('follows')
-      .select('following_id')
-      .eq('follower_id', userId);
+    const { data } = await supabase.from('follows').select('following_id').eq('follower_id', userId);
     if (data && data.length > 0) {
-      const ids = data.map(f => f.following_id);
-      const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, bio').in('id', ids);
+      const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, bio, username').in('id', data.map(f => f.following_id));
       setFollowingList(profiles as Profile[] || []);
     }
     setShowFollowing(true);
   };
-
-  // Lazy-load friends (only if own profile)
   const loadFriends = async () => {
-    const { data } = await supabase
-      .from('friend_requests')
-      .select('sender_id, receiver_id')
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .eq('status', 'accepted');
+    const { data } = await supabase.from('friend_requests').select('sender_id, receiver_id').or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).eq('status', 'accepted');
     if (data && data.length > 0) {
       const ids = data.map(f => f.sender_id === userId ? f.receiver_id : f.sender_id);
-      const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, bio').in('id', ids);
+      const { data: profiles } = await supabase.from('profiles').select('id, name, avatar_url, bio, username').in('id', ids);
       setFriendsList(profiles as Profile[] || []);
     }
     setShowFriends(true);
   };
 
+  const loadDeferredMarketplace = async () => {
+    if (marketplaceLoaded || marketplaceLoading) return;
+    setMarketplaceLoading(true);
+    try {
+      const [marketplaceProfileResult, marketplaceListingsResult] = await Promise.all([
+        supabase.from('marketplace_profiles').select('*').eq('user_id', userId).maybeSingle(),
+        supabase.from('marketplace_listings').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(24),
+      ]);
+      setMarketplaceProfile(marketplaceProfileResult.data || null);
+      setMarketplaceListings(marketplaceListingsResult.data || []);
+      setMarketplaceLoaded(true);
+    } catch {
+      toast.error('Failed to load marketplace section');
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  };
+
+  const loadDeferredDocuments = async () => {
+    if (documentsLoaded || documentsLoading) return;
+    setDocumentsLoading(true);
+    try {
+      const { data } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('visibility', 'public')
+        .order('created_at', { ascending: false });
+      setDocuments(data || []);
+      setDocumentsLoaded(true);
+    } catch {
+      toast.error('Failed to load documents');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'marketplace') {
+      loadDeferredMarketplace();
+      return;
+    }
+    if (activeTab === 'info' || postFilter === 'documents') {
+      loadDeferredDocuments();
+    }
+  }, [activeTab, postFilter, userId]);
+
   const handleFollow = async () => {
-    if (!currentUser) { toast.error('Please login to follow users'); return; }
+    if (!currentUser) return;
     try {
       if (isFollowing) {
+        // If mutual, show confirmation
+        if (isFollowedBy && !unfollowConfirm) {
+          setUnfollowConfirm(true);
+          return;
+        }
         await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', userId);
         setIsFollowing(false);
+        setFollowersCount(c => Math.max(0, c - 1));
+        setUnfollowConfirm(false);
         toast.success('Unfollowed');
       } else {
         await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: userId });
         setIsFollowing(true);
+        setFollowersCount(c => c + 1);
         toast.success('Following!');
       }
-    } catch { toast.error('Failed to update follow status'); }
+    } catch { toast.error('Failed'); }
   };
 
   const toggleSave = async (postId: string) => {
     if (!currentUser) return;
-    try {
-      if (saved.includes(postId)) {
-        await supabase.from('saved').delete().eq('user_id', currentUser.id).eq('post_id', postId);
-        setSaved(saved.filter(id => id !== postId));
-      } else {
-        await supabase.from('saved').insert({ user_id: currentUser.id, post_id: postId });
-        setSaved([...saved, postId]);
-      }
-    } catch { toast.error('Failed to update saved status'); }
+    if (saved.includes(postId)) {
+      await supabase.from('saved').delete().eq('user_id', currentUser.id).eq('post_id', postId);
+      setSaved(saved.filter(id => id !== postId));
+    } else {
+      await supabase.from('saved').insert({ user_id: currentUser.id, post_id: postId });
+      setSaved([...saved, postId]);
+    }
   };
-
   const toggleLike = async (postId: string) => {
     if (!currentUser) return;
-    try {
-      const isLiked = likes.some(l => l.post_id === postId);
-      if (isLiked) {
-        await supabase.from('likes').delete().eq('user_id', currentUser.id).eq('post_id', postId);
-        setLikes(likes.filter(l => l.post_id !== postId));
-        setLikesCount(prev => ({ ...prev, [postId]: (prev[postId] || 1) - 1 }));
-      } else {
-        await supabase.from('likes').insert({ user_id: currentUser.id, post_id: postId });
-        setLikes([...likes, { post_id: postId }]);
-        setLikesCount(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
-      }
-    } catch { toast.error('Failed to update like status'); }
+    const isLiked = likes.some(l => l.post_id === postId);
+    if (isLiked) {
+      await supabase.from('likes').delete().eq('user_id', currentUser.id).eq('post_id', postId);
+      setLikes(likes.filter(l => l.post_id !== postId));
+      setLikesCount(prev => ({ ...prev, [postId]: (prev[postId] || 1) - 1 }));
+    } else {
+      await supabase.from('likes').insert({ user_id: currentUser.id, post_id: postId });
+      setLikes([...likes, { post_id: postId }]);
+      setLikesCount(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+    }
   };
 
-  if (loading) return <ProfileSkeleton />;
+  const profileTabs = [
+    { id: 'posts', label: 'Posts' },
+    { id: 'info', label: 'Info' },
+    { id: 'marketplace', label: 'Marketplace' },
+  ];
+  const visibleTabs = useVisibleTabContent(activeTab, profileTabs.map((tab) => tab.id));
 
-  if (!profile && !loading) {
+  if (showSkeleton || loading || !userId) return <ProfileSkeleton />;
+  if (!profile) {
     return (
-      <div className="max-w-4xl mx-auto text-center py-20 px-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-6">
-          <User className="w-10 h-10 text-muted-foreground/40" />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0f1e' }}>
+        <div className="text-center">
+          <h2 className="text-white text-xl font-bold mb-4">Profile not found</h2>
+          <Button onClick={() => navigate(-1)}>Go Back</Button>
         </div>
-        <h2 className="text-2xl font-bold mb-2">Profile not found</h2>
-        <p className="text-muted-foreground mb-8 max-w-xs mx-auto">The profile you are looking for might have been removed or is private.</p>
-        <Button onClick={() => navigate(-1)} className="rounded-full px-8 shadow-glow active:scale-90 transition-all">Go Back</Button>
       </div>
     );
   }
 
-  // Final check to prevent rendering with null profile if loading somehow finished without profile
-  if (!profile) return <ProfileSkeleton />;
+  const isOwnProfile = currentUser?.id === userId;
+  const canMessage = !!currentUser && isFollowing && isFollowedBy;
+  const mediaPosts = posts.filter(p => p.file_url || (p.media_urls && p.media_urls.length > 0));
+  const videoPosts = posts.filter(p => p.file_type?.includes('video'));
 
-  const isOwnProfile = currentUser?.id === profile.id;
-  const mediaPosts = posts.filter(post => post.file_url || (post.media_urls && post.media_urls.length > 0));
-
-  const getLevel = (points: number) => {
-    if (points >= 5000) return { level: 5, title: 'Legend', stars: 5 };
-    if (points >= 2000) return { level: 4, title: 'Expert', stars: 4 };
-    if (points >= 1000) return { level: 3, title: 'Advanced', stars: 3 };
-    if (points >= 500) return { level: 2, title: 'Intermediate', stars: 2 };
-    return { level: 1, title: 'Beginner', stars: 1 };
+  const getInterestGradient = () => {
+    const interest = profile.primary_interest;
+    if (interest === 'connect') return 'linear-gradient(135deg, #7C3AED, #3B82F6)';
+    if (interest === 'learn') return 'linear-gradient(135deg, #0F766E, #065F46)';
+    if (interest === 'games') return 'linear-gradient(135deg, #B45309, #92400E)';
+    if (interest === 'buy_sell') return 'linear-gradient(135deg, #065F46, #0891B2)';
+    return 'linear-gradient(135deg, #1e293b, #334155)';
   };
-  const levelInfo = getLevel(adventurePoints.total);
+
+  // People list modal with follow buttons
+  const PeopleList = ({ people, title, onClose }: { people: Profile[]; title: string; onClose: () => void }) => {
+    const [localFollowing, setLocalFollowing] = useState<Set<string>>(new Set());
+    const [loadedFollowing, setLoadedFollowing] = useState(false);
+
+    useEffect(() => {
+      if (!currentUser || loadedFollowing) return;
+      (async () => {
+        const ids = people.map(p => p.id).filter(id => id !== currentUser.id);
+        if (ids.length === 0) return;
+        const { data } = await supabase.from('follows').select('following_id').eq('follower_id', currentUser.id).in('following_id', ids);
+        setLocalFollowing(new Set(data?.map(f => f.following_id) || []));
+        setLoadedFollowing(true);
+      })();
+    }, [people, loadedFollowing]);
+
+    const toggleListFollow = async (personId: string) => {
+      if (!currentUser || personId === currentUser.id) return;
+      if (localFollowing.has(personId)) {
+        await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', personId);
+        setLocalFollowing(prev => { const n = new Set(prev); n.delete(personId); return n; });
+      } else {
+        await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: personId });
+        setLocalFollowing(prev => new Set(prev).add(personId));
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" onClick={onClose}>
+        <div className="w-full sm:max-w-sm max-h-[70vh] flex flex-col overflow-hidden" style={{ background: '#0a0f1e', borderRadius: '24px 24px 0 0' }} onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #1f2937' }}>
+            <h3 className="font-semibold text-white">{title}</h3>
+            <button onClick={onClose} className="p-1 rounded-full" style={{ background: '#111827' }}><X className="w-4 h-4 text-white" /></button>
+          </div>
+          <div className="overflow-y-auto flex-1 p-2">
+            {people.length === 0 ? (
+              <p className="text-center py-8 text-sm" style={{ color: '#94A3B8' }}>No one here yet</p>
+            ) : people.map(person => (
+              <div key={person.id} className="flex items-center gap-3 w-full p-3 rounded-xl">
+                <button className="flex items-center gap-3 flex-1 min-w-0 text-left" onClick={() => { onClose(); navigate(`/profile/${person.id}`); }}>
+                  <Avatar className="w-11 h-11 shrink-0">
+                    <AvatarImage src={person.avatar_url} />
+                    <AvatarFallback style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)', color: 'white' }}>{person.name?.[0]?.toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-white truncate">{person.name}</p>
+                    {person.username && <p className="text-xs truncate" style={{ color: '#94A3B8' }}>@{person.username}</p>}
+                  </div>
+                </button>
+                {currentUser && person.id !== currentUser.id && (
+                  <button
+                    onClick={() => toggleListFollow(person.id)}
+                    className="shrink-0 text-xs font-bold py-1.5 px-4 rounded-full transition-colors duration-200 active:scale-95 hover:text-orange-600"
+                    style={{
+                      color: localFollowing.has(person.id) ? '#94A3B8' : '#ff8c42',
+                      background: 'transparent',
+                      border: localFollowing.has(person.id) ? '1.5px solid #374151' : 'none',
+                    }}
+                  >
+                    {localFollowing.has(person.id) ? 'Following' : 'Follow'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const mediaEntries = mediaPosts.flatMap((post) => {
+    const urls = post.file_url ? [post.file_url] : post.media_urls || [];
+    const postSaysVideo = (post.file_type || '').includes('video');
+    return urls
+      .filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+      .map((url, index) => {
+        const urlLooksVideo = /\.(mp4|mov|webm|m4v|avi)(\?|$)/i.test(url);
+        return {
+          id: `${post.id}-${index}`,
+          postId: post.id,
+          url,
+          isVideo: postSaysVideo || urlLooksVideo,
+        };
+      });
+  });
+  const imageCount = mediaEntries.filter((entry) => !entry.isVideo).length;
+  const videoCount = mediaEntries.filter((entry) => entry.isVideo).length;
+  const filteredMediaEntries = mediaEntries.filter((entry) => {
+    if (mediaFilter === 'pictures') return !entry.isVideo;
+    if (mediaFilter === 'videos') return entry.isVideo;
+    return true;
+  }).sort((a, b) => {
+    if (mediaSort === 'oldest') return a.id.localeCompare(b.id);
+    if (mediaSort === 'popular') return Number(b.isVideo) - Number(a.isVideo);
+    return b.id.localeCompare(a.id);
+  });
+
+  const marketplaceListingsCount = marketplaceListings.length;
+
+  const hasOpenableAvatar = Boolean(
+    profile.avatar_url &&
+      profile.avatar_url.trim() &&
+      !/dicebear|ui-avatars|avatar\.vercel|placeholder/i.test(profile.avatar_url),
+  );
+
+  // Extra data stored in section_order JSON
+  const extraData = (profile.section_order as any)?.extra_data || {};
+  const profileVisibility = (profile as any).profile_visibility || extraData.profile_visibility || {};
+  const canShowProfileField = (field: string) => isOwnProfile || profileVisibility[field] !== false;
+
+  const profileVisiblePosts = [...posts]
+    .filter((post) => {
+      const urls = post.media_urls?.length ? post.media_urls : (post.file_url ? [post.file_url] : []);
+      const hasMedia = urls.some((url) => typeof url === 'string' && url.trim().length > 0);
+      const isThought = post.post_type === 'thought' || post.category === 'thought' || (!hasMedia && post.content?.trim());
+
+      if (postFilter === 'pictures') {
+        const types = post.media_types?.length ? post.media_types : (post.file_type ? [post.file_type] : []);
+        const hasVideo = types.some((type) => typeof type === 'string' && type.includes('video'));
+        return hasMedia && !hasVideo;
+      }
+      if (postFilter === 'videos') {
+        const types = post.media_types?.length ? post.media_types : (post.file_type ? [post.file_type] : []);
+        const hasVideo = types.some((type) => typeof type === 'string' && type.includes('video'));
+        return hasMedia && hasVideo;
+      }
+      if (postFilter === 'thoughts') return isThought && !hasMedia;
+      return true;
+    })
+    .sort((a, b) => {
+      if (postSort === 'oldest') return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+      if (postSort === 'popular') return (likesCount[b.id] || 0) - (likesCount[a.id] || 0);
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+
+  const mediaOnlyPosts = profileVisiblePosts.filter(post => {
+    const urls = post.media_urls?.length ? post.media_urls : (post.file_url ? [post.file_url] : []);
+    return urls.some((url) => typeof url === 'string' && url.trim().length > 0);
+  });
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4 p-3 pb-24 animate-in fade-in duration-500">
-      {/* People List Modals */}
-      {showFollowers && (
-        <PeopleList 
-          people={followersList} 
-          title="Followers" 
-          onClose={() => setShowFollowers(false)} 
-          onNavigate={(id) => navigate(`/profile/${id}`)}
-          isOwner={(id) => currentUser?.id === id}
-          onAddFriend={sendFriendRequest}
-        />
-      )}
-      {showFollowing && (
-        <PeopleList 
-          people={followingList} 
-          title="Following" 
-          onClose={() => setShowFollowing(false)} 
-          onNavigate={(id) => navigate(`/profile/${id}`)}
-          isOwner={(id) => currentUser?.id === id}
-          onAddFriend={sendFriendRequest}
-        />
-      )}
-      {showFriends && (
-        <PeopleList 
-          people={friendsList} 
-          title="Friends" 
-          onClose={() => setShowFriends(false)} 
-          onNavigate={(id) => navigate(`/profile/${id}`)}
-          isOwner={(id) => currentUser?.id === id}
-          onAddFriend={sendFriendRequest}
-        />
+    <div className="min-h-screen pb-24" style={{ background: '#0a0f1e' }}>
+      {/* Unfollow confirmation */}
+      {unfollowConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setUnfollowConfirm(false)}>
+          <div className="w-72 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200" style={{ background: '#111827' }} onClick={e => e.stopPropagation()}>
+            <div className="p-5 text-center">
+              <Avatar className="w-16 h-16 mx-auto mb-3 ring-2 ring-primary/20">
+                <AvatarImage src={profile?.avatar_url} />
+                <AvatarFallback>{profile?.name?.[0]}</AvatarFallback>
+              </Avatar>
+              <p className="text-white text-sm font-semibold mb-1">Unfollow {profile?.name}?</p>
+              <p className="text-xs" style={{ color: '#94A3B8' }}>You are currently mutual friends.</p>
+            </div>
+            <button onClick={handleFollow} className="w-full py-3 text-sm font-bold active:bg-red-500/10 transition-colors" style={{ color: '#ef4444', borderTop: '1px solid #1f2937' }}>
+              Unfollow
+            </button>
+            <button onClick={() => setUnfollowConfirm(false)} className="w-full py-3 text-sm text-white active:bg-white/5 transition-colors" style={{ borderTop: '1px solid #1f2937' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => navigate(-1)} 
-          className="gap-1.5 h-8 rounded-full hover:bg-primary/10 active:scale-90 transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </Button>
-        {isOwnProfile && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => navigate('/settings')} 
-            className="gap-1.5 h-8 rounded-full hover:bg-primary/10 active:scale-90 transition-all"
+      {/* Modals */}
+      {showFollowers && <PeopleList people={followersList} title="Followers" onClose={() => setShowFollowers(false)} />}
+      {showFollowing && <PeopleList people={followingList} title="Following" onClose={() => setShowFollowing(false)} />}
+      {showFriends && <PeopleList people={friendsList} title="Friends" onClose={() => setShowFriends(false)} />}
+
+      <div className="px-5 pt-5">
+        <div className="flex items-start gap-4">
+          <div
+            className={cn('w-[86px] h-[86px] rounded-full overflow-hidden relative shrink-0', hasOpenableAvatar ? 'cursor-pointer' : 'cursor-default')}
+            onClick={() => {
+              if (!hasOpenableAvatar || !profile.avatar_url) return;
+              setProfileMediaViewer({ open: true, urls: [profile.avatar_url], types: ['image'], index: 0 });
+            }}
+            style={{
+              border: '2px solid #111827',
+              boxShadow: '0 0 0 2px #7C3AED',
+            }}
           >
-            <Settings className="w-4 h-4" /> Settings
-          </Button>
+            <Avatar className="w-full h-full">
+              <AvatarImage src={profile.avatar_url || undefined} className="object-cover" />
+              <AvatarFallback className="text-3xl font-bold text-white" style={{ background: 'linear-gradient(135deg, #7C3AED, #3B82F6)' }}>
+                {profile.name?.[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {isOwnProfile && (
+              <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center shadow-lg" style={{ background: '#7C3AED' }}>
+                <Pencil className="w-3 h-3 text-white" />
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-white truncate" style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 20 }}>{profile.name}</h1>
+                {profile.username && <p style={{ color: '#94A3B8', fontSize: 13, fontFamily: "'Inter'" }}>@{profile.username}</p>}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {!isOwnProfile && currentUser && !hasBlockedMe && !isBlocked && (
+                  <button
+                    onClick={handleFollow}
+                    className={cn(
+                      "px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 border shadow-lg",
+                      isFollowing ? "bg-slate-800 text-white border-white/20" : "bg-orange-500 text-white border-white"
+                    )}
+                  >
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <div className="mt-2.5 flex items-center gap-4">
+              <button onClick={() => setActiveTab('posts')} className="text-center group">
+                <p className="text-sm font-bold text-white group-active:scale-95 transition-transform">{posts.length}</p>
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: '#94A3B8' }}>Posts</p>
+              </button>
+              <button onClick={loadFollowers} className="text-center group">
+                <p className="text-sm font-bold text-white group-active:scale-95 transition-transform">{followersCount}</p>
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: '#94A3B8' }}>Followers</p>
+              </button>
+              <button onClick={loadFollowing} className="text-center group">
+                <p className="text-sm font-bold text-white group-active:scale-95 transition-transform">{followingCount}</p>
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: '#94A3B8' }}>Following</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bio */}
+      {profile.bio && (
+        <p className="px-5 mt-3 text-[14px] text-slate-200 leading-relaxed font-medium" style={{ fontFamily: "'Inter'" }}>
+          {profile.bio}
+        </p>
+      )}
+
+      {/* Action Buttons */}
+      <div className="px-5 mt-4">
+        {hasBlockedMe ? (
+          <div className="p-3 rounded-xl text-center" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <Ban className="w-5 h-5 mx-auto mb-1" style={{ color: '#ef4444' }} />
+            <p className="text-xs" style={{ color: '#ef4444' }}>This profile is not available</p>
+          </div>
+        ) : isBlocked ? (
+          <button
+            className="w-full py-2.5 rounded-xl text-sm font-bold transition-transform active:scale-[0.98]"
+            style={{ background: '#111827', border: '1px solid #374151', color: '#ef4444' }}
+            onClick={async () => {
+              await supabase.from('blocks').delete().eq('blocker_id', currentUser!.id).eq('blocked_id', userId);
+              setIsBlocked(false); toast.success('Unblocked');
+            }}
+          >
+            <Ban className="w-4 h-4 inline mr-2" /> Unblock User
+          </button>
+        ) : isOwnProfile ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditOpen(true)}
+              className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold transition-all active:scale-[0.98] shadow-sm flex items-center justify-center gap-2"
+              style={{ background: '#111827', border: '1px solid #374151', fontFamily: "'Inter'" }}
+            >
+              <Pencil className="w-4 h-4" />
+              Edit Profile
+            </button>
+            <button 
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: profile.name, url: window.location.href });
+                }
+              }} 
+              className="py-2.5 px-4 rounded-xl active:scale-[0.98] transition-transform" 
+              style={{ background: '#111827', border: '1px solid #374151' }}
+            >
+              <Share2 className="w-4 h-4 text-white" />
+            </button>
+            <button onClick={() => navigate('/settings')} className="py-2.5 px-4 rounded-xl active:scale-[0.98] transition-transform" style={{ background: '#111827', border: '1px solid #374151' }}>
+              <Settings className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        ) : currentUser && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/chat')}
+              className="flex-1 py-2.5 px-4 rounded-xl transition-all text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] bg-orange-500 text-white border-orange-400 shadow-lg"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Message</span>
+            </button>
+            <button
+               onClick={() => {
+                 if (navigator.share) {
+                   navigator.share({
+                     title: profile.name,
+                     url: window.location.href
+                   });
+                 }
+               }}
+               className="py-2.5 px-4 rounded-xl active:scale-[0.98] transition-transform" style={{ background: '#111827', border: '1px solid #374151' }}
+            >
+              <Share2 className="w-4 h-4 text-white" />
+            </button>
+            <button
+               onClick={async () => {
+                 await supabase.from('blocks').insert({ blocker_id: currentUser.id, blocked_id: userId });
+                 setIsBlocked(true); toast.success('Blocked');
+               }}
+               className="py-2.5 px-4 rounded-xl active:scale-[0.98] transition-transform" style={{ background: '#111827', border: '1px solid #374151' }}
+            >
+              <Ban className="w-4 h-4 text-red-500" />
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Profile Header Card */}
-      <Card className="glass-card border-border overflow-hidden">
-        {/* Facebook-style cover */}
-        <div className="h-28 bg-gradient-to-br from-primary/30 via-secondary/20 to-primary/10 relative overflow-hidden">
-          {profile.cover_url && (
-            <img src={profile.cover_url} alt="cover" className="absolute inset-0 w-full h-full object-cover" />
-          )}
-        </div>
-
-        <CardContent className="p-4 -mt-14">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-            {/* Facebook-style avatar overlapping cover */}
-            <ProfileAvatar
-              src={profile.avatar_url}
-              name={profile.name}
-              size="lg"
-              onClick={() => setAvatarOpen(true)}
-            />
-
-            <div className="flex-1 min-w-0 space-y-2 sm:pb-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold truncate">{profile.name}</h1>
-                <FriendTick friendsCount={friendsCount} showLabel />
-              </div>
-
-              <div className="flex gap-5 flex-wrap">
-                {/* Friends — only owner can view list */}
-                <button
-                  className="flex flex-col items-center hover:opacity-80 transition-all active:scale-95 group"
-                  onClick={isOwnProfile ? loadFriends : undefined}
-                  disabled={!isOwnProfile}
-                  title={!isOwnProfile ? 'Friends list is private' : 'View friends'}
-                >
-                  <span className="text-lg font-bold text-primary group-hover:scale-110 transition-transform">{friendsCount}</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-black">Friends</span>
-                </button>
-
-                {/* Followers — public, anyone can view */}
-                <button
-                  className="flex flex-col items-center hover:opacity-80 transition-all active:scale-95 group"
-                  onClick={loadFollowers}
-                >
-                  <span className="text-lg font-bold text-primary group-hover:scale-110 transition-transform">{profile.total_followers ?? 0}</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-black">Followers</span>
-                </button>
-
-                {/* Following — public, anyone can view */}
-                <button
-                  className="flex flex-col items-center hover:opacity-80 transition-all active:scale-95 group"
-                  onClick={loadFollowing}
-                >
-                  <span className="text-lg font-bold text-primary group-hover:scale-110 transition-transform">{profile.total_following ?? 0}</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-black">Following</span>
-                </button>
-
-                <div className="flex flex-col items-center group">
-                  <span className="text-lg font-bold text-primary group-hover:scale-110 transition-transform">{posts.length}</span>
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-black">Posts</span>
-                </div>
-              </div>
-
-              {profile.bio && <p className="text-sm text-muted-foreground leading-snug">{profile.bio}</p>}
-
-              {profile.location && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="w-3 h-3" /> {profile.location}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Mutual friends indicator */}
-          {!isOwnProfile && currentUser && mutualFriendsCount > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
-              <Users className="w-3 h-3" />
-              <span>{mutualFriendsCount} mutual friend{mutualFriendsCount > 1 ? 's' : ''}</span>
-            </div>
-          )}
-
-          {/* Blocked state */}
-          {hasBlockedMe ? (
-            <div className="mt-4 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-center">
-              <Ban className="w-5 h-5 mx-auto text-destructive mb-1" />
-              <p className="text-xs text-destructive">This profile is not available</p>
-            </div>
-          ) : isBlocked ? (
-            <div className="flex flex-wrap gap-2 mt-4">
-              <Button size="sm" variant="outline" className="gap-1.5 border-destructive/30 text-destructive"
-                onClick={async () => {
-                  await supabase.from('blocks').delete().eq('blocker_id', currentUser!.id).eq('blocked_id', userId);
-                  setIsBlocked(false);
-                  toast.success('Unblocked');
-                }}>
-                <Ban className="w-4 h-4" /> Unblock
-              </Button>
-            </div>
-          ) : !isOwnProfile && currentUser && (
-            <div className="space-y-2 mt-4">
-              <div className="flex flex-wrap gap-2">
-                {/* Follow Button */}
-                <Button size="sm" onClick={handleFollow}
-                  className={cn("gap-1.5 font-semibold transition-all duration-300",
-                    isFollowing ? "bg-muted/60 text-muted-foreground border border-border hover:bg-destructive/10 hover:text-destructive" : "text-white border-0"
-                  )}
-                  style={!isFollowing ? { background: 'linear-gradient(135deg, hsl(175 70% 45%), hsl(160 60% 50%), hsl(200 70% 55%))' } : undefined}>
-                  {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                  {isFollowing ? 'Unfollow' : '+ Follow'}
-                </Button>
-
-                {/* Friend request states */}
-                {friendRequestStatus === 'none' && (
-                  <Button size="sm" variant="outline" onClick={() => { sendFriendRequest(userId!); setFriendRequestStatus('pending_sent'); }} className="gap-1.5 border-primary/30 hover:bg-primary/10">
-                    <UserPlus className="w-4 h-4" /> Add Friend
-                  </Button>
-                )}
-                {friendRequestStatus === 'pending_sent' && (
-                  <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-60">
-                    <Clock className="w-4 h-4" /> Request Sent
-                  </Button>
-                )}
-                {friendRequestStatus === 'pending_received' && (
-                  <Button size="sm" onClick={async () => {
-                    const { data } = await supabase.from('friend_requests').select('id').eq('sender_id', userId).eq('receiver_id', currentUser.id).single();
-                    if (data) { acceptFriendRequest(data.id, userId!); setFriendRequestStatus('accepted'); setIsFriend(true); }
-                  }} className="gap-1.5" style={{ background: 'linear-gradient(135deg, hsl(270 70% 60%), hsl(340 75% 58%))' }}>
-                    <UserCheck className="w-4 h-4" /> Accept
-                  </Button>
-                )}
-                {friendRequestStatus === 'accepted' && (
-                  <Button size="sm" variant="outline" disabled className="gap-1.5 border-emerald-500/40 text-emerald-400">
-                    <UserCheck className="w-4 h-4" /> Friends
-                  </Button>
-                )}
-
-                {/* Message */}
-                {isFriend ? (
-                  <Button size="sm" variant="secondary" onClick={() => navigate('/chat')} className="gap-1.5">
-                    <MessageCircle className="w-4 h-4" /> Message
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" disabled className="gap-1.5 opacity-40" title="Only friends can message">
-                    <MessageCircle className="w-4 h-4" /> Message
-                  </Button>
-                )}
-              </div>
-
-              {/* Block & Report — subtle row */}
-              <div className="flex gap-2">
-                <Button size="sm" variant="ghost" className="gap-1 text-[10px] text-muted-foreground h-6 px-2 hover:text-destructive"
-                  onClick={async () => {
-                    await supabase.from('blocks').insert({ blocker_id: currentUser!.id, blocked_id: userId! });
-                    // Remove follow & friend
-                    await supabase.from('follows').delete().eq('follower_id', currentUser!.id).eq('following_id', userId);
-                    await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', currentUser!.id);
-                    setIsBlocked(true); setIsFollowing(false);
-                    toast.success('User blocked');
-                  }}>
-                  <Ban className="w-3 h-3" /> Block
-                </Button>
-                <Button size="sm" variant="ghost" className="gap-1 text-[10px] text-muted-foreground h-6 px-2 hover:text-amber-500">
-                  <Flag className="w-3 h-3" /> Report
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Full Screen Avatar Dialog */}
-      <Dialog open={avatarOpen} onOpenChange={setAvatarOpen}>
-        <DialogContent className="max-w-sm p-0 bg-black/95 border-none" aria-describedby={undefined}>
-          <DialogTitle className="sr-only">Profile Photo</DialogTitle>
-          <img src={profile.avatar_url || '/placeholder.svg'} alt={profile.name} className="w-full h-auto" />
-        </DialogContent>
-      </Dialog>
-
-      {/* Profile Tabs — 5 tabs (liked moved to Private) */}
-      <Tabs defaultValue="posts" className="w-full">
-        <TabsList className="glass-card w-full grid grid-cols-5 h-auto p-1 rounded-2xl mb-6 shadow-glow border-border/40">
-          <TabsTrigger 
-            value="posts" 
-            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
+      {/* Profile Tabs */}
+      <div className="mt-4 flex justify-around border-t border-slate-800/50">
+        {profileTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "flex-1 py-3.5 relative transition-colors",
+              activeTab === tab.id ? "text-white" : "text-slate-500"
+            )}
           >
-            <Image className="w-4 h-4" /> Posts
-          </TabsTrigger>
-          <TabsTrigger 
-            value="info" 
-            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
-          >
-            <User className="w-4 h-4" /> Info
-          </TabsTrigger>
-          <TabsTrigger 
-            value="docs" 
-            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
-          >
-            <FileText className="w-4 h-4" /> Docs
-          </TabsTrigger>
-          <TabsTrigger 
-            value="adventure" 
-            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
-          >
-            <Mountain className="w-4 h-4" /> Adventure
-          </TabsTrigger>
-          <TabsTrigger 
-            value="marketplace" 
-            className="flex flex-col gap-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow-primary active:scale-90"
-          >
-            <ShoppingBag className="w-4 h-4" /> Market
-          </TabsTrigger>
-        </TabsList>
+            {tab.id === 'posts' && <Image className={cn("w-5 h-5 mx-auto", activeTab === tab.id && "text-primary")} />}
+            {tab.id === 'info' && <FileText className={cn("w-5 h-5 mx-auto", activeTab === tab.id && "text-primary")} />}
+            {tab.id === 'marketplace' && <Star className={cn("w-5 h-5 mx-auto", activeTab === tab.id && "text-primary")} />}
+            
+            {activeTab === tab.id && (
+              <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-primary animate-in fade-in slide-in-from-top-1 duration-300" />
+            )}
+          </button>
+        ))}
+      </div>
 
-        {/* POSTS TAB — own posts */}
-        <TabsContent value="posts" className="space-y-4 mt-4">
-          {posts.length === 0 ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-12 text-center">
-                <Image className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">No posts yet</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {posts.map((post) => (
-                <EnhancedPostCard key={post.id} post={post} isSaved={saved.includes(post.id)} isLiked={likes.some(l => l.post_id === post.id)} likesCount={likesCount[post.id] || 0} currentUserId={currentUser?.id || ''} onToggleSave={toggleSave} onToggleLike={toggleLike} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* INFO TAB */}
-        <TabsContent value="info" className="space-y-3 mt-4">
-          <Card className="glass-card border-border">
-            <CardContent className="p-4 space-y-3">
-              <h3 className="font-semibold text-sm mb-3">Profile Information</h3>
-              {profile.location && (
-                <div className="flex items-center gap-3 text-sm">
-                  <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span>{profile.location}</span>
-                </div>
-              )}
-              {profile.country && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span>{profile.country}</span>
-                </div>
-              )}
-              {profile.age_group && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span>Age group: {profile.age_group}</span>
-                </div>
-              )}
-              {profile.website && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{profile.website}</a>
-                </div>
-              )}
-              <div className="flex items-center gap-3 text-sm">
-                <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span>Joined {new Date(profile.created_at || '').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
-              </div>
-
-              {/* Social stats in info card */}
-              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-border">
-                <button
-                  className={cn('flex flex-col items-center p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors', !isOwnProfile && 'cursor-default opacity-70')}
-                  onClick={isOwnProfile ? loadFriends : undefined}
-                >
-                  <Users className="w-4 h-4 text-primary mb-1" />
-                  <span className="font-bold text-sm">{friendsCount}</span>
-                  <span className="text-[10px] text-muted-foreground">Friends {!isOwnProfile && '🔒'}</span>
-                </button>
-                <button
-                  className="flex flex-col items-center p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
-                  onClick={loadFollowers}
-                >
-                  <UserPlus className="w-4 h-4 text-blue-500 mb-1" />
-                  <span className="font-bold text-sm">{profile.total_followers ?? 0}</span>
-                  <span className="text-[10px] text-muted-foreground">Followers</span>
-                </button>
-                <button
-                  className="flex flex-col items-center p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
-                  onClick={loadFollowing}
-                >
-                  <UserCheck className="w-4 h-4 text-green-500 mb-1" />
-                  <span className="font-bold text-sm">{profile.total_following ?? 0}</span>
-                  <span className="text-[10px] text-muted-foreground">Following</span>
-                </button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* MEDIA TAB */}
-        <TabsContent value="media" className="space-y-3 mt-4">
-          {mediaPosts.length === 0 ? (
-            <Card className="glass-card border-border">
-              <CardContent className="py-12 text-center">
-                <Image className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">No media posts yet</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {mediaPosts.map((post) => (
-                <EnhancedPostCard
-                  key={post.id}
-                  post={post}
-                  isSaved={saved.includes(post.id)}
-                  isLiked={likes.some(l => l.post_id === post.id)}
-                  likesCount={likesCount[post.id] || 0}
-                  currentUserId={currentUser?.id || ''}
-                  onToggleSave={toggleSave}
-                  onToggleLike={toggleLike}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* DOCS TAB */}
-        <TabsContent value="docs" className="space-y-3 mt-4">
-          <Card className="glass-card border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-sm">Documents</h3>
-                <span className="text-xs text-muted-foreground">{documents.length} documents</span>
-              </div>
-              {documents.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                  <p className="text-muted-foreground text-sm">No public documents</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {documents.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => window.open(doc.file_url, '_blank')}>
-                      <FileText className="w-8 h-8 text-primary shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{doc.title}</p>
-                        <p className="text-[10px] text-muted-foreground">{doc.file_type || 'Document'}</p>
-                      </div>
-                      <Eye className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ADVENTURE TAB */}
-        <TabsContent value="adventure" className="space-y-3 mt-4">
-          <Card className="glass-card border-border">
-            <CardContent className="p-4">
-              <div className="text-center mb-6">
-                <div className="flex justify-center gap-1 mb-2">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} className={`w-5 h-5 ${i < levelInfo.stars ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'}`} />
-                  ))}
-                </div>
-                <h3 className="text-xl font-bold">{levelInfo.title}</h3>
-                <p className="text-xs text-muted-foreground">Level {levelInfo.level}</p>
-              </div>
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="text-center p-3 rounded-lg bg-blue-500/10">
-                  <Trophy className="w-5 h-5 mx-auto text-blue-500 mb-1" />
-                  <p className="font-bold">{adventurePoints.challenges}</p>
-                  <p className="text-[9px] text-muted-foreground">Challenges</p>
-                </div>
-                <div className="text-center p-3 rounded-lg bg-green-500/10">
-                  <Mountain className="w-5 h-5 mx-auto text-green-500 mb-1" />
-                  <p className="font-bold">{adventurePoints.discovery}</p>
-                  <p className="text-[9px] text-muted-foreground">Discovery</p>
-                </div>
-                <div className="text-center p-3 rounded-lg bg-purple-500/10">
-                  <Globe className="w-5 h-5 mx-auto text-purple-500 mb-1" />
-                  <p className="font-bold">{adventurePoints.explore}</p>
-                  <p className="text-[9px] text-muted-foreground">Explore</p>
-                </div>
-              </div>
-              <div className="text-center p-4 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10">
-                <p className="text-3xl font-bold gradient-text">{adventurePoints.total}</p>
-                <p className="text-xs text-muted-foreground">Total Adventure Points</p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* MARKETPLACE TAB */}
-        <TabsContent value="marketplace" className="space-y-3 mt-4">
-          <Card className="glass-card border-border">
-            <CardContent className="p-4">
-              <h3 className="font-semibold text-sm mb-4">Marketplace Listings</h3>
-              <div className="grid grid-cols-2 gap-2">
+      {/* Tab Content */}
+      <div className="mt-0.5">
+        {visibleTabs.has('posts') && activeTab === 'posts' && (
+          <div>
+            <div className="px-4 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-slate-900">
                 {[
-                  { icon: '🛒', label: 'Sell / Buy', count: 0 },
-                  { icon: '🏠', label: 'Rent', count: 0 },
-                  { icon: '💼', label: 'Business', count: 0 },
-                  { icon: '💚', label: 'NGOs', count: 0 },
-                  { icon: '👔', label: 'Jobs', count: 0 },
-                ].map((category) => (
-                  <div key={category.label} className="flex items-center gap-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors">
-                    <span className="text-xl">{category.icon}</span>
-                    <div className="flex-1">
-                      <p className="text-xs font-medium">{category.label}</p>
-                      <p className="text-[10px] text-muted-foreground">{category.count} listings</p>
-                    </div>
+                  { id: 'all', label: 'All' },
+                  { id: 'pictures', label: 'Pictures' },
+                  { id: 'videos', label: 'Videos' },
+                  { id: 'thoughts', label: 'Thoughts' },
+                  { id: 'news', label: 'News' },
+                  { id: 'nature', label: 'Nature' },
+                  { id: 'fun', label: 'Fun' },
+                  { id: 'love', label: 'Love' },
+                  { id: 'nepal', label: 'Nepal' },
+                  { id: 'popular', label: 'Popular' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setPostFilter(item.id as any)}
+                    className={cn(
+                      "shrink-0 px-4 py-1.5 rounded-full text-[11px] font-bold transition-all",
+                      postFilter === item.id ? "bg-primary text-white" : "bg-slate-900 text-slate-400 border border-slate-800"
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+            </div>
+
+            {profileVisiblePosts.length === 0 && postFilter !== 'travel_stories' && postFilter !== 'documents' ? (
+              <div className="text-center py-20">
+                <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Camera className="w-8 h-8 text-slate-700" />
+                </div>
+                <p className="text-slate-400 font-medium">No posts yet</p>
+              </div>
+            ) : postFilter === 'thoughts' ? (
+              <div className="px-4 py-4 space-y-4">
+                {profileVisiblePosts.map(post => (
+                  <EnhancedPostCard
+                    key={post.id}
+                    post={post}
+                    isSaved={saved.includes(post.id)}
+                    isLiked={likes.some((l) => l.post_id === post.id)}
+                    likesCount={likesCount[post.id] || 0}
+                    currentUserId={currentUser?.id || ''}
+                    onToggleSave={() => toggleSave(post.id)}
+                    onToggleLike={() => toggleLike(post.id)}
+                    onDelete={fetchProfileData}
+                    onUpdate={fetchProfileData}
+                  />
+                ))}
+              </div>
+            ) : postFilter === 'travel_stories' ? (
+              <div className="px-4 py-4 space-y-4">
+                {profileStories.length === 0 ? (
+                  <div className="text-center py-20 text-slate-500">No travel stories yet</div>
+                ) : profileStories.map(story => (
+                  <div key={story.id} className="bg-[#111827] border border-[#1f2937] rounded-2xl p-4">
+                    <h3 className="text-white font-bold">{story.title}</h3>
+                    <p className="text-slate-400 text-xs mt-1">{story.location}</p>
+                    <p className="text-slate-200 text-sm mt-2 line-clamp-3">{story.description}</p>
+                    {story.photos.length > 0 && (
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        {story.photos.slice(0, 2).map((p, i) => (
+                          <img key={i} src={p} className="w-full h-24 object-cover rounded-lg" alt="" />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
-              <div className="text-center py-8 mt-4">
-                <ShoppingBag className="w-10 h-10 mx-auto text-muted-foreground/50 mb-2" />
-                <p className="text-sm text-muted-foreground">No marketplace listings yet</p>
-                {isOwnProfile && (
-                  <Button size="sm" variant="outline" className="mt-3" onClick={() => navigate('/marketplace')}>
-                    Create Listing
-                  </Button>
+            ) : postFilter === 'documents' ? (
+              <div className="px-4 py-4 space-y-3">
+                {documentsLoading ? (
+                  <div className="text-center py-20 text-slate-500">Loading documents...</div>
+                ) : (
+                  <>
+                {documents.length === 0 ? (
+                  <div className="text-center py-20 text-slate-500">No documents yet</div>
+                ) : documents.map(doc => (
+                  <div key={doc.id} className="bg-[#111827] border border-[#1f2937] rounded-xl p-3 flex items-center gap-3">
+                    <div className="relative w-16 h-20 sm:w-20 sm:h-24 rounded-lg overflow-hidden shrink-0 border border-violet-500/20 bg-violet-950/80">
+                      {doc.cover_url ? (
+                        <img src={doc.cover_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-violet-300 px-1 text-center">
+                          <BookOpen className="w-5 h-5" />
+                          <span className="text-[9px] font-semibold uppercase leading-tight line-clamp-2">
+                            {(doc.file_type || 'doc').replace(/[^a-z0-9]+/gi, ' ').trim().slice(0, 12) || 'DOC'}
+                          </span>
+                        </div>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-black/75 transition-colors"
+                            aria-label={`Document options for ${doc.title}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 bg-[#0f172a] border-white/10 text-white shadow-2xl">
+                          <DropdownMenuItem onClick={() => window.open(doc.file_url, '_blank', 'noopener,noreferrer')}>
+                            <ExternalLink className="w-4 h-4 mr-2" /> Open in Browser
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => downloadDocument(doc.file_url, doc.file_name)}>
+                            <Download className="w-4 h-4 mr-2" /> Download
+                          </DropdownMenuItem>
+                          {currentUser?.id === userId && (
+                            <>
+                              <DropdownMenuItem onClick={() => editDocumentTitle(doc)}>
+                                <Pencil className="w-4 h-4 mr-2" /> Edit Title
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => deleteDocument(doc.id, doc.file_url, doc.cover_url)} className="text-red-400 focus:text-red-400 focus:bg-red-500/10">
+                                <Trash2 className="w-4 h-4 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium text-sm truncate">{doc.title}</p>
+                      <p className="text-slate-500 text-[11px]">{new Date(doc.created_at).toLocaleDateString()}</p>
+                      {doc.file_name && (
+                        <p className="text-slate-400 text-[11px] mt-1 truncate">{doc.file_name}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                  </>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            ) : (
+              <div className="grid grid-cols-3 gap-[1px]">
+                {profileVisiblePosts.map((post) => {
+                  const urls = post.media_urls?.length ? post.media_urls : (post.file_url ? [post.file_url] : []);
+                  const types = post.media_types?.length ? post.media_types : (post.file_type ? [post.file_type] : []);
+                  const hasMedia = urls.some((url) => typeof url === 'string' && url.trim().length > 0);
+                  const isVideo = types.some((type) => typeof type === 'string' && type.includes('video'));
+
+                  if (!hasMedia) return null;
+
+                  return (
+                    <div
+                      key={post.id}
+                      onClick={() => {
+                        const mediaUrls = profileVisiblePosts
+                          .filter(p => (p.media_urls?.length || p.file_url))
+                          .flatMap(p => p.media_urls?.length ? p.media_urls : [p.file_url]);
+                        const mediaTypes = profileVisiblePosts
+                          .filter(p => (p.media_urls?.length || p.file_url))
+                          .flatMap(p => p.media_types?.length ? p.media_types : [p.file_type]);
+                        
+                        const idx = mediaUrls.indexOf(urls[0]);
+                        
+                        setProfileMediaViewer({
+                          open: true,
+                          urls: mediaUrls as string[],
+                          types: (mediaTypes as string[]).map(t => t?.includes('video') ? 'video' : 'image'),
+                          index: idx >= 0 ? idx : 0
+                        });
+                      }}
+                      className="relative aspect-square bg-slate-900 overflow-hidden group cursor-pointer"
+                    >
+                      {isVideo ? (
+                         <video
+                           src={urls[0]}
+                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                           muted
+                           playsInline
+                         />
+                      ) : (
+                        <img
+                          src={urls[0]}
+                          alt=""
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          loading="lazy"
+                        />
+                      )}
+                      {isVideo && (
+                        <div className="absolute top-2 right-2">
+                          <Play className="w-4 h-4 text-white fill-white shadow-lg" />
+                        </div>
+                      )}
+                      {urls.length > 1 && (
+                        <div className="absolute top-2 right-2">
+                           <Star className="w-4 h-4 text-white fill-white" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/0 group-active:bg-black/20 transition-colors" />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {visibleTabs.has('info') && activeTab === 'info' && (
+          <div className="space-y-3">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+              {[
+                { label: 'Posts', value: posts.length },
+                { label: 'Stories', value: profileStories.length },
+                { label: 'Followers', value: followersCount },
+                { label: 'Marketplace', value: marketplaceListingsCount },
+                { label: 'Travel Stories', value: profileStories.length },
+                { label: 'Docs', value: documents.length },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl p-3 min-w-[130px]" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+                  <p className="text-[11px]" style={{ color: '#94A3B8' }}>{item.label}</p>
+                  <p className="text-lg font-bold text-white">{item.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Profile Info Fields */}
+            <div className="space-y-2">
+              {[
+                isOwnProfile && profile.id && { key: 'user_id', icon: '🪪', label: 'User ID', value: profile.id.slice(0, 8) + '...', isPublic: true },
+                profile.location && canShowProfileField('location') && { key: 'location', icon: '📍', label: 'Location', value: profile.location, isPublic: profileVisibility.location !== false },
+                profile.country && canShowProfileField('country') && { key: 'country', icon: '🌍', label: 'Country', value: profile.country, isPublic: profileVisibility.country !== false },
+                profile.age_group && canShowProfileField('age_group') && { key: 'age_group', icon: '👤', label: 'Age Group', value: profile.age_group, isPublic: profileVisibility.age_group !== false },
+                profile.gender && canShowProfileField('gender') && { key: 'gender', icon: '⚧️', label: 'Gender', value: profile.gender, isPublic: profileVisibility.gender !== false },
+                profile.website && canShowProfileField('website') && { key: 'website', icon: '🔗', label: 'Website', value: profile.website, isLink: true, isPublic: profileVisibility.website !== false },
+                extraData.school_name && canShowProfileField('school_name') && { key: 'school_name', icon: '🏫', label: 'School name', value: extraData.school_name, isPublic: profileVisibility.school_name !== false },
+                extraData.hobbies && canShowProfileField('hobbies') && { key: 'hobbies', icon: '🎯', label: 'Hobbies', value: extraData.hobbies, isPublic: profileVisibility.hobbies !== false },
+                extraData.favorite_club && canShowProfileField('favorite_club') && { key: 'favorite_club', icon: '⚽', label: 'Favourite Club', value: extraData.favorite_club, isPublic: profileVisibility.favorite_club !== false },
+                extraData.favorite_show_movie_song && canShowProfileField('favorite_show_movie_song') && { key: 'favorite_show_movie_song', icon: '🎬', label: 'Favorite Show / Movie / Song', value: extraData.favorite_show_movie_song, isPublic: profileVisibility.favorite_show_movie_song !== false },
+                extraData.favorite_actor_athlete_person && canShowProfileField('favorite_actor_athlete_person') && { key: 'favorite_actor_athlete_person', icon: '⭐', label: 'Favorite Actor / Athlete / Person', value: extraData.favorite_actor_athlete_person, isPublic: profileVisibility.favorite_actor_athlete_person !== false },
+                extraData.games && canShowProfileField('games') && { key: 'games', icon: '🎮', label: 'Games', value: extraData.games, isPublic: profileVisibility.games !== false },
+                extraData.contact_email && canShowProfileField('contact_email') && { key: 'contact_email', icon: '✉️', label: 'Contact email', value: extraData.contact_email, isPublic: profileVisibility.contact_email !== false },
+                extraData.contact_phone && canShowProfileField('contact_phone') && { key: 'contact_phone', icon: '📱', label: 'Contact phone', value: extraData.contact_phone, isPublic: profileVisibility.contact_phone !== false },
+                profile.created_at && { key: 'joined', icon: '📅', label: 'Joined', value: new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), isPublic: true },
+              ].filter(Boolean).map((item: any, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl min-w-0" style={{ background: '#111827' }}>
+                  <span className="text-lg shrink-0">{item.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs" style={{ color: '#94A3B8' }}>{item.label}</p>
+                    {item.isLink ? (
+                      <a href={item.value} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline break-all block">
+                        {item.value}
+                      </a>
+                    ) : (
+                      <p className="text-sm text-white break-words">{item.value}</p>
+                    )}
+                  </div>
+                  {isOwnProfile && item.label !== 'User ID' && (
+                    <span className="text-[10px] px-2 py-1 rounded shrink-0" style={{ background: item.isPublic ? '#065f46' : '#7c2d12', color: item.isPublic ? '#10b981' : '#fb923c' }}>
+                      {item.isPublic ? 'Public' : 'Private'}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'medias' && (
+          <div className="space-y-4">
+            <div className="rounded-xl p-3" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">Media Hub</p>
+                <p className="text-xs" style={{ color: '#94A3B8' }}>
+                  {imageCount} pics • {videoCount} videos
+                </p>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                  {[
+                    { id: 'all', label: `All (${mediaEntries.length})` },
+                    { id: 'pictures', label: `Pic (${imageCount})` },
+                    { id: 'videos', label: `Vdos (${videoCount})` },
+                  ].map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setMediaFilter(filter.id as 'all' | 'pictures' | 'videos')}
+                      className="shrink-0 px-3 py-1.5 rounded-full text-xs"
+                      style={{
+                        background: mediaFilter === filter.id ? '#7C3AED' : '#0b1220',
+                        color: mediaFilter === filter.id ? 'white' : '#94A3B8',
+                        border: mediaFilter === filter.id ? '1px solid #7C3AED' : '1px solid #1f2937',
+                      }}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1 text-[11px]">
+                  {[
+                    { id: 'latest', label: 'Latest' },
+                    { id: 'oldest', label: 'Oldest' },
+                    { id: 'popular', label: 'Popular' },
+                  ].map((sort) => (
+                    <button
+                      key={sort.id}
+                      onClick={() => setMediaSort(sort.id as 'latest' | 'oldest' | 'popular')}
+                      className="px-2 py-1 rounded"
+                      style={{
+                        color: mediaSort === sort.id ? 'white' : '#94A3B8',
+                        background: mediaSort === sort.id ? '#334155' : 'transparent',
+                      }}
+                    >
+                      {sort.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {filteredMediaEntries.length === 0 ? (
+              <div className="text-center py-12 rounded-xl" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+                {mediaFilter === 'videos' ? (
+                  <Play className="w-8 h-8 mx-auto mb-2" style={{ color: '#374151' }} />
+                ) : (
+                  <Image className="w-8 h-8 mx-auto mb-2" style={{ color: '#374151' }} />
+                )}
+                <p style={{ color: '#94A3B8', fontSize: 13 }}>No media in this section yet</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-2 px-2">
+                  {filteredMediaEntries.slice(0, 6).map((entry) => (
+                    <button
+                      key={entry.id}
+                      className="relative aspect-square rounded-md overflow-hidden hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        const urls = filteredMediaEntries.map((item) => item.url);
+                        const types = filteredMediaEntries.map((item) => (item.isVideo ? 'video' : 'image'));
+                        const index = urls.findIndex((url) => url === entry.url);
+                        setProfileMediaViewer({ open: true, urls, types, index: index >= 0 ? index : 0 });
+                      }}
+                    >
+                      {entry.isVideo ? (
+                        <video src={entry.url} className="w-full h-full object-cover" />
+                      ) : (
+                        <img src={entry.url} alt="" className="w-full h-full object-cover" />
+                      )}
+                      {entry.isVideo && (
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                          <Play className="w-6 h-6 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {filteredMediaEntries.length > 6 && (
+                  <div className="text-center mt-4">
+                    <button className="px-6 py-2 rounded-lg text-sm font-medium" style={{ background: '#7C3AED', color: 'white' }}>
+                      See All
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {visibleTabs.has('marketplace') && activeTab === 'marketplace' && (
+          <div className="space-y-3">
+            {marketplaceLoading ? (
+              <div className="text-center py-20 text-slate-500">Loading marketplace...</div>
+            ) : (
+              <>
+            <div className="rounded-xl p-3" style={{ background: '#111827', border: '1px solid #1f2937' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs" style={{ color: '#94A3B8' }}>Seller profile</p>
+                  <p className="text-sm font-semibold text-white">{marketplaceProfile?.username || profile?.name || 'Unnamed Seller'}</p>
+                </div>
+                <span
+                  className="px-2.5 py-1 rounded-full text-[11px]"
+                  style={{
+                    background: marketplaceProfile?.is_phone_verified ? 'rgba(16,185,129,0.1)' : 'rgba(148,163,184,0.1)',
+                    color: marketplaceProfile?.is_phone_verified ? '#10B981' : '#94A3B8',
+                    border: marketplaceProfile?.is_phone_verified ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(148,163,184,0.25)',
+                  }}
+                >
+                  {marketplaceProfile?.is_phone_verified ? 'Verified' : 'Unverified'}
+                </span>
+              </div>
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => navigate(`/marketplace/profile/${userId}`)}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold"
+                  style={{ background: '#1f2937', color: 'white' }}
+                >
+                  View Marketplace Profile
+                </button>
+                {isOwnProfile && (
+                  <button
+                    onClick={() => navigate('/marketplace/edit-profile')}
+                    className="px-3 py-2 rounded-lg text-sm font-semibold"
+                    style={{ background: '#7C3AED', color: 'white' }}
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {marketplaceListingsCount === 0 ? (
+              <div className="text-center py-10 rounded-xl" style={{ background: '#111827' }}>
+                <p className="text-sm text-white mb-1">No marketplace listings yet</p>
+                <p className="text-xs" style={{ color: '#94A3B8' }}>Listings will appear here.</p>
+              </div>
+            ) : (
+              marketplaceListings.map((listing) => (
+                <button
+                  key={listing.id}
+                  onClick={() => navigate(`/marketplace?listing=${listing.id}`)}
+                  className="w-full p-3 rounded-xl text-left"
+                  style={{ background: '#111827', border: '1px solid #1f2937' }}
+                >
+                  <div className="flex items-center gap-3">
+                    {listing.media_urls?.[0] ? (
+                      <img src={listing.media_urls[0]} alt="" className="w-14 h-14 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg flex items-center justify-center" style={{ background: '#1f2937' }}>
+                        <Image className="w-4 h-4" style={{ color: '#94A3B8' }} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white truncate">{listing.title}</p>
+                      <p className="text-xs" style={{ color: '#94A3B8' }}>{listing.type?.toUpperCase()} {listing.location ? `• ${listing.location}` : ''}</p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+              </>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* Edit Profile Sheet */}
+      {isOwnProfile && profile && (
+        <EditProfileSheet
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          profile={profile}
+          onSaved={fetchProfileData}
+        />
+      )}
+
+      {/* Profile Media Fullscreen Viewer — download + close only */}
+      <FullScreenMediaViewer
+        open={profileMediaViewer.open}
+        onOpenChange={(open) => setProfileMediaViewer(prev => ({ ...prev, open }))}
+        mediaUrls={profileMediaViewer.urls}
+        mediaTypes={profileMediaViewer.types}
+        initialIndex={profileMediaViewer.index}
+        minimal
+        onSave={async () => {
+          const url = profileMediaViewer.urls[profileMediaViewer.index];
+          try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            const ext = profileMediaViewer.types[profileMediaViewer.index]?.includes('video') ? 'mp4' : 'jpg';
+            a.download = `profile-media-${Date.now()}.${ext}`;
+            a.click();
+            URL.revokeObjectURL(blobUrl);
+          } catch {
+            toast.error('Failed to download media');
+          }
+        }}
+      />
     </div>
   );
 }
