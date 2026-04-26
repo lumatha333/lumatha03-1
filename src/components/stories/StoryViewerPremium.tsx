@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Heart, MessageCircle, Send, MoreVertical, ChevronLeft, ChevronRight,
   Volume2, VolumeX, Flag, Settings, Trash2, Download, Share2, Lock, Globe, Users,
-  Play, Pause, Eye, Bookmark, Link2
+  Play, Eye, Bookmark, Link2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -30,9 +30,17 @@ interface Comment {
 
 interface FloatingHeart {
   id: number;
+  type: 'heart' | 'sparkle';
+  variant: 'main' | 'mini' | 'flow' | 'sparkle';
   x: number;
+  y: number;
+  driftX: number;
+  driftY: number;
   delay: number;
   size: number;
+  rotate: number;
+  duration: number;
+  gradient: string;
 }
 
 export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteStory }: StoryViewerPremiumProps) {
@@ -47,18 +55,29 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
   const [isMuted, setIsMuted] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [likedStories, setLikedStories] = useState<Set<string>>(new Set());
+  const [storyLikeCounts, setStoryLikeCounts] = useState<Record<string, number>>({});
   const [viewers, setViewers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const [floatingHearts, setFloatingHearts] = useState<FloatingHeart[]>([]);
+  const [showFingerGlow, setShowFingerGlow] = useState(false);
+  const [fingerGlowPoint, setFingerGlowPoint] = useState<{ x: number; y: number } | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const burstTimesRef = useRef<number[]>([]);
+  const longPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const holdIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const holdReleaseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartTimeRef = useRef<number | null>(null);
+  const touchMovedRef = useRef(false);
+  const isLongPressActiveRef = useRef(false);
+  const ignoreClickAfterTouchRef = useRef(false);
+  const holdStartTimeRef = useRef<number | null>(null);
+  const lastHapticTimeRef = useRef(0);
 
   const currentGroup = groups[currentGroupIndex];
   const currentStory = currentGroup?.stories?.[currentStoryIndex];
@@ -68,21 +87,155 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
   const activeStoryDurationMs = Math.max(15000, Number(currentStory?.duration || 15) * 1000);
   const progressStep = 100 / (activeStoryDurationMs / 50);
 
-  const spawnFloatingHearts = useCallback(() => {
-    const now = Date.now();
-    const burst: FloatingHeart[] = Array.from({ length: 10 }).map((_, idx) => ({
-      id: now + idx,
-      x: Math.floor(Math.random() * 26) - 13,
-      delay: Math.random() * 0.3,
-      size: 16 + Math.floor(Math.random() * 12),
-    }));
+  const HEART_GRADIENTS = [
+    'from-[#ff4d6d] to-[#ff85a1]',
+    'from-[#c77dff] to-[#f72585]',
+    'from-[#ff3d3d] to-[#ff8fa3]',
+  ] as const;
 
-    setFloatingHearts((prev) => [...prev, ...burst]);
+  const clearHoldTimers = useCallback(() => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+
+    if (holdIntervalRef.current) {
+      clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
+    }
+
+    if (holdReleaseTimeoutRef.current) {
+      clearTimeout(holdReleaseTimeoutRef.current);
+      holdReleaseTimeoutRef.current = null;
+    }
+  }, []);
+
+  const triggerHaptic = useCallback(() => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
+  }, []);
+
+  const pointInUiEdge = useCallback((x: number, y: number) => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    return x < 24 || x > w - 24 || y < 84 || y > h - 138;
+  }, []);
+
+  const clampPoint = useCallback((x: number, y: number) => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    return {
+      x: Math.min(Math.max(x, 24), w - 24),
+      y: Math.min(Math.max(y, 88), h - 140),
+    };
+  }, []);
+
+  const pushHearts = useCallback((items: FloatingHeart[]) => {
+    setFloatingHearts((prev) => {
+      const merged = [...prev, ...items];
+      return merged.length > 25 ? merged.slice(merged.length - 25) : merged;
+    });
+
+    const maxDuration = Math.max(...items.map((item) => item.duration + item.delay * 1000), 1500);
 
     setTimeout(() => {
-      setFloatingHearts((prev) => prev.filter((heart) => !burst.some((newHeart) => newHeart.id === heart.id)));
-    }, 1800);
+      setFloatingHearts((prev) => prev.filter((heart) => !items.some((item) => item.id === heart.id)));
+    }, maxDuration + 280);
   }, []);
+
+  const spawnHeartBurst = useCallback((rawX: number, rawY: number) => {
+    const now = Date.now();
+    burstTimesRef.current = burstTimesRef.current.filter((t) => t > now - 1000);
+    if (burstTimesRef.current.length >= 3) return;
+    burstTimesRef.current.push(now);
+
+    const { x, y } = clampPoint(rawX, rawY);
+    const miniCount = 6 + Math.floor(Math.random() * 5);
+
+    const main: FloatingHeart = {
+      id: now,
+      type: 'heart',
+      variant: 'main',
+      x,
+      y,
+      driftX: 0,
+      driftY: -26,
+      delay: 0,
+      size: 34,
+      rotate: Math.random() * 12 - 6,
+      duration: 420,
+      gradient: HEART_GRADIENTS[Math.floor(Math.random() * HEART_GRADIENTS.length)],
+    };
+
+    const miniHearts: FloatingHeart[] = Array.from({ length: miniCount }).map((_, idx) => {
+      const angle = (Math.random() * 140 - 70) * (Math.PI / 180);
+      const distance = 40 + Math.random() * 80;
+      return {
+        id: now + idx + 1,
+        type: 'heart',
+        variant: 'mini',
+        x: x + (Math.random() * 20 - 10),
+        y,
+        driftX: Math.cos(angle) * distance,
+        driftY: -(40 + Math.sin(Math.abs(angle)) * 70 + Math.random() * 50),
+        delay: Math.random() * 0.12,
+        size: 6 + Math.floor(Math.random() * 7),
+        rotate: -15 + Math.random() * 30,
+        duration: 1100 + Math.random() * 350,
+        gradient: HEART_GRADIENTS[Math.floor(Math.random() * HEART_GRADIENTS.length)],
+      };
+    });
+
+    const sparkles: FloatingHeart[] = Array.from({ length: 2 + Math.floor(Math.random() * 2) }).map((_, idx) => ({
+      id: now + miniCount + idx + 50,
+      type: 'sparkle',
+      variant: 'sparkle',
+      x: x + (Math.random() * 18 - 9),
+      y: y + (Math.random() * 18 - 9),
+      driftX: Math.random() * 16 - 8,
+      driftY: -(10 + Math.random() * 12),
+      delay: Math.random() * 0.04,
+      size: 2 + Math.floor(Math.random() * 3),
+      rotate: 0,
+      duration: 320,
+      gradient: 'from-white to-pink-200',
+    }));
+
+    pushHearts([main, ...miniHearts, ...sparkles]);
+    triggerHaptic();
+  }, [HEART_GRADIENTS, clampPoint, pushHearts, triggerHaptic]);
+
+  const spawnFlowHeart = useCallback((rawX: number, rawY: number, elapsedMs: number) => {
+    const { x, y } = clampPoint(rawX + (Math.random() * 16 - 8), rawY + (Math.random() * 10 - 5));
+    const intensity = Math.min(elapsedMs / 1000, 1.5);
+    const gradient = intensity > 1
+      ? HEART_GRADIENTS[Math.floor(Math.random() * HEART_GRADIENTS.length)]
+      : 'from-[#ff85a1] to-[#ffc2d1]';
+
+    const flow: FloatingHeart = {
+      id: Date.now() + Math.floor(Math.random() * 10000),
+      type: 'heart',
+      variant: 'flow',
+      x,
+      y,
+      driftX: Math.random() * 80 - 40,
+      driftY: -(60 + Math.random() * 100),
+      delay: Math.random() * 0.02,
+      size: 8 + Math.floor(Math.random() * 9) + Math.floor(intensity * 2),
+      rotate: -20 + Math.random() * 40,
+      duration: 900 + Math.random() * 350,
+      gradient,
+    };
+
+    pushHearts([flow]);
+
+    const now = Date.now();
+    if (now - lastHapticTimeRef.current > 300) {
+      triggerHaptic();
+      lastHapticTimeRef.current = now;
+    }
+  }, [HEART_GRADIENTS, clampPoint, pushHearts, triggerHaptic]);
 
   // Progress timer
   useEffect(() => {
@@ -141,10 +294,20 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
         .eq('story_id', currentStory.id)
         .eq('user_id', user?.id)
         .single();
+
+      const { count: reactionCount } = await supabase
+        .from('story_reactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('story_id', currentStory.id);
       
       if (likeData) {
         setLikedStories(prev => new Set([...prev, currentStory.id]));
       }
+
+      setStoryLikeCounts((prev) => ({
+        ...prev,
+        [currentStory.id]: typeof reactionCount === 'number' ? reactionCount : (prev[currentStory.id] || 0),
+      }));
 
       // Record view
       if (!isOwnStory && user) {
@@ -189,40 +352,88 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
 
   // Handle tap areas for navigation
   const handleTap = (e: React.MouseEvent | React.TouchEvent) => {
+    if (ignoreClickAfterTouchRef.current) {
+      ignoreClickAfterTouchRef.current = false;
+      return;
+    }
+
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     const screenWidth = window.innerWidth;
-    
-    const now = Date.now();
-    
-    // Double tap detection for like
-    if (lastTapRef.current && now - lastTapRef.current.time < 300) {
-      const dx = Math.abs(clientX - lastTapRef.current.x);
-      const dy = Math.abs(clientY - lastTapRef.current.y);
-      
-      if (dx < 50 && dy < 50) {
-        handleLike();
-        return;
-      }
-    }
-    
-    lastTapRef.current = { time: now, x: clientX, y: clientY };
 
-    // Single tap for navigation
-    // Left 30% = prev, Right 30% = next, Middle = pause/play
-    if (clientX < screenWidth * 0.3) {
+    if (pointInUiEdge(clientX, clientY)) {
+      return;
+    }
+
+    if (clientX < screenWidth * 0.22) {
       handlePrev();
-    } else if (clientX > screenWidth * 0.7) {
+    } else if (clientX > screenWidth * 0.92) {
       handleNext();
     } else {
-      setIsPaused(prev => !prev);
+      spawnHeartBurst(clientX, clientY);
+      handleLike({ withAnimation: false });
     }
   };
 
   // Swipe handling
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.touches[0].clientX);
-    setTouchStartY(e.touches[0].clientY);
+    const startX = e.touches[0].clientX;
+    const startY = e.touches[0].clientY;
+
+    setTouchStartX(startX);
+    setTouchStartY(startY);
+    touchStartTimeRef.current = Date.now();
+    touchMovedRef.current = false;
+    isLongPressActiveRef.current = false;
+
+    clearHoldTimers();
+
+    if (pointInUiEdge(startX, startY)) {
+      return;
+    }
+
+    longPressTimeoutRef.current = setTimeout(() => {
+      isLongPressActiveRef.current = true;
+      holdStartTimeRef.current = Date.now();
+      setShowFingerGlow(true);
+      setFingerGlowPoint(clampPoint(startX, startY));
+      spawnHeartBurst(startX, startY);
+
+      holdIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - (holdStartTimeRef.current || Date.now());
+        const rate = elapsed < 300 ? 3 : elapsed < 1000 ? 5 : 7;
+        const tickMs = Math.max(130, Math.floor(1000 / rate));
+
+        spawnFlowHeart(startX, startY, elapsed);
+
+        if (holdIntervalRef.current) {
+          clearInterval(holdIntervalRef.current);
+          holdIntervalRef.current = setInterval(() => {
+            const e2 = Date.now() - (holdStartTimeRef.current || Date.now());
+            spawnFlowHeart(startX, startY, e2);
+          }, tickMs + Math.floor(Math.random() * 20) - 10);
+        }
+      }, 170);
+    }, 120);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX === null || touchStartY === null) return;
+
+    const moveX = e.touches[0].clientX;
+    const moveY = e.touches[0].clientY;
+    const moved = Math.abs(moveX - touchStartX) > 14 || Math.abs(moveY - touchStartY) > 14;
+
+    if (moved) {
+      touchMovedRef.current = true;
+      if (!isLongPressActiveRef.current) {
+        clearHoldTimers();
+      }
+    }
+
+    if (isLongPressActiveRef.current) {
+      setFingerGlowPoint(clampPoint(moveX, moveY));
+    }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -237,6 +448,9 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
 
     // Vertical swipe down closes the viewer for a smoother back gesture.
     if (Math.abs(diffY) > Math.abs(diffX) && diffY > closeThreshold) {
+      clearHoldTimers();
+      setShowFingerGlow(false);
+      setFingerGlowPoint(null);
       onClose();
       setTouchStartX(null);
       setTouchStartY(null);
@@ -244,25 +458,52 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
     }
 
     if (Math.abs(diffX) > horizontalThreshold) {
+      clearHoldTimers();
       if (diffX > 0) {
         handleNext();
       } else {
         handlePrev();
       }
+    } else {
+      const endTapX = e.changedTouches[0].clientX;
+      const endTapY = e.changedTouches[0].clientY;
+      const touchDuration = Date.now() - (touchStartTimeRef.current || Date.now());
+
+      if (!touchMovedRef.current && !isLongPressActiveRef.current && touchDuration < 220 && !pointInUiEdge(endTapX, endTapY)) {
+        ignoreClickAfterTouchRef.current = true;
+        spawnHeartBurst(endTapX, endTapY);
+        handleLike({ withAnimation: false });
+      }
+
+      if (isLongPressActiveRef.current) {
+        holdReleaseTimeoutRef.current = setTimeout(() => {
+          clearHoldTimers();
+          setShowFingerGlow(false);
+          setFingerGlowPoint(null);
+        }, 220);
+      } else {
+        clearHoldTimers();
+      }
     }
+
+    if (!isLongPressActiveRef.current) {
+      setShowFingerGlow(false);
+      setFingerGlowPoint(null);
+    }
+
+    isLongPressActiveRef.current = false;
     setTouchStartX(null);
     setTouchStartY(null);
   };
 
-  const handleLike = useCallback(async () => {
+  const handleLike = useCallback(async ({ withAnimation = true }: { withAnimation?: boolean } = {}) => {
     if (!currentStory?.id || !user) return;
 
     const isLiked = likedStories.has(currentStory.id);
-    
-    // Show animation
-    setShowHeartAnimation(true);
-    spawnFloatingHearts();
-    setTimeout(() => setShowHeartAnimation(false), 800);
+
+    if (withAnimation) {
+      spawnHeartBurst(window.innerWidth * 0.5, window.innerHeight * 0.52);
+    }
 
     if (isLiked) {
       await supabase
@@ -276,6 +517,11 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
         next.delete(currentStory.id);
         return next;
       });
+
+      setStoryLikeCounts((prev) => ({
+        ...prev,
+        [currentStory.id]: Math.max((prev[currentStory.id] || 1) - 1, 0),
+      }));
     } else {
       await supabase
         .from('story_reactions')
@@ -286,8 +532,13 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
         });
       
       setLikedStories(prev => new Set([...prev, currentStory.id]));
+
+      setStoryLikeCounts((prev) => ({
+        ...prev,
+        [currentStory.id]: (prev[currentStory.id] || 0) + 1,
+      }));
     }
-  }, [currentStory?.id, likedStories, spawnFloatingHearts, user]);
+  }, [currentStory?.id, likedStories, spawnHeartBurst, user]);
 
   const handleComment = async () => {
     if (!newComment.trim() || !currentStory?.id || !user) return;
@@ -405,7 +656,7 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
   if (!currentGroup || !currentStory) return null;
 
   const isLiked = likedStories.has(currentStory.id);
-  const likeCount = isLiked ? 1 : 0;
+  const likeCount = storyLikeCounts[currentStory.id] || 0;
 
   return createPortal(
     <motion.div
@@ -457,19 +708,19 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={onClose}
-              className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
+              className="w-10 h-10 rounded-full bg-white/15 border border-white/20 backdrop-blur-md flex items-center justify-center text-white"
             >
               <ChevronLeft size={20} />
             </motion.button>
 
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1.5">
+            <div className="flex items-center gap-2 px-0.5 py-0.5">
               <Avatar className="w-7 h-7 border border-white/20">
                 <AvatarImage src={currentGroup.profile?.avatar_url || undefined} />
                 <AvatarFallback className="bg-gradient-to-br from-purple-500 to-blue-500 text-white text-[10px] font-bold">
                   {currentGroup.profile?.name?.[0] || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <p className="text-white text-sm font-semibold max-w-[38vw] truncate">
+              <p className="text-white text-sm font-semibold max-w-[38vw] truncate drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]">
                 {currentGroup.profile?.name || 'User'}
               </p>
             </div>
@@ -477,14 +728,14 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
 
           {/* Right - Controls */}
           <div className="flex items-center gap-2">
-            <p className="text-white/70 text-xs font-medium px-2">
+            <p className="text-white/80 text-xs font-medium px-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.55)]">
               {new Date(currentStory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
             {currentStory.media_type === 'video' && (
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setIsMuted(m => !m)}
-                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
+                className="w-10 h-10 rounded-full bg-white/15 border border-white/20 backdrop-blur-md flex items-center justify-center text-white"
               >
                 {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
               </motion.button>
@@ -493,7 +744,7 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowOptions(true)}
-              className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
+              className="w-10 h-10 rounded-full bg-white/15 border border-white/20 backdrop-blur-md flex items-center justify-center text-white"
             >
               <MoreVertical size={18} />
             </motion.button>
@@ -506,48 +757,71 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
         className="absolute inset-0 w-full h-full"
         onClick={handleTap}
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         {getStoryContent()}
       </div>
 
-      {/* Double Tap Heart Animation - Instagram Style */}
-      <AnimatePresence>
-        {showHeartAnimation && (
-          <motion.div
-            initial={{ scale: 0, opacity: 1, y: 0 }}
-            animate={{ 
-              scale: 1.8, 
-              opacity: 0, 
-              y: -100,
-            }}
-            transition={{ 
-              duration: 1, 
-              ease: 'easeOut',
-              scale: { duration: 0.4, ease: 'easeOut' },
-              opacity: { duration: 0.6, delay: 0.4 },
-              y: { duration: 1, ease: 'easeOut' }
-            }}
-            className="absolute inset-0 flex items-center justify-center pointer-events-none z-40"
-          >
-            <Heart className="w-40 h-40 text-pink-500 fill-pink-500 drop-shadow-2xl filter blur-0" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Premium heart particles */}
+      <div className="absolute inset-0 z-40 pointer-events-none">
+        <AnimatePresence>
+          {floatingHearts.map((heart) => {
+            if (heart.type === 'sparkle') {
+              return (
+                <motion.span
+                  key={heart.id}
+                  initial={{ opacity: 0, scale: 0.4, x: heart.x, y: heart.y }}
+                  animate={{
+                    opacity: [0, 0.95, 0],
+                    scale: [0.4, 1, 0.7],
+                    x: heart.x + heart.driftX,
+                    y: heart.y + heart.driftY,
+                  }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: heart.duration / 1000, delay: heart.delay, ease: 'easeOut' }}
+                  className="absolute rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.55)]"
+                  style={{ width: heart.size, height: heart.size }}
+                />
+              );
+            }
 
-      {/* Pause Indicator */}
+            return (
+              <motion.div
+                key={heart.id}
+                initial={{ opacity: 0, scale: heart.variant === 'main' ? 0.6 : 0.4, x: heart.x, y: heart.y, rotate: heart.rotate }}
+                animate={{
+                  opacity: [0, 1, 0],
+                  scale: heart.variant === 'main' ? [0.6, 1.2, 1] : [0.4, 1, 1],
+                  x: heart.x + heart.driftX,
+                  y: heart.y + heart.driftY,
+                  rotate: heart.rotate + (Math.random() * 12 - 6),
+                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: heart.duration / 1000, delay: heart.delay, ease: [0.2, 0.8, 0.2, 1] }}
+                className="absolute"
+              >
+                <Heart
+                  className={cn('fill-current drop-shadow-[0_0_10px_rgba(244,114,182,0.45)]', `bg-gradient-to-br ${heart.gradient} bg-clip-text text-transparent`)}
+                  style={{ width: heart.size, height: heart.size, filter: 'blur(0.6px)' }}
+                />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      {/* Finger glow while holding */}
       <AnimatePresence>
-        {isPaused && !showComments && !showOptions && !showSettings && (
+        {showFingerGlow && fingerGlowPoint && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none"
-          >
-            <div className="w-16 h-16 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center">
-              <Pause className="w-8 h-8 text-white" fill="white" />
-            </div>
-          </motion.div>
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 0.45, scale: [0.9, 1.08, 0.95] }}
+            exit={{ opacity: 0, scale: 0.7 }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute z-30 pointer-events-none rounded-full bg-gradient-to-br from-[#c77dff] to-[#f72585] blur-xl"
+            style={{ left: fingerGlowPoint.x - 22, top: fingerGlowPoint.y - 22, width: 44, height: 44 }}
+          />
         )}
       </AnimatePresence>
 
@@ -588,7 +862,7 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
               />
               <motion.button
                 whileTap={{ scale: 0.85 }}
-                onClick={handleLike}
+                onClick={() => handleLike({ withAnimation: true })}
                 className="w-8 h-8 rounded-full flex items-center justify-center text-white hover:text-pink-400 transition-colors"
                 aria-label="Like story"
               >
@@ -597,6 +871,7 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
                   className={cn(isLiked ? 'fill-red-500 text-red-500' : 'fill-transparent text-white')}
                 />
               </motion.button>
+              <span className="text-white/80 text-xs min-w-[1.2rem] text-center">{likeCount}</span>
               {newComment.trim() && (
                 <motion.button
                   initial={{ scale: 0 }}
@@ -630,32 +905,6 @@ export function StoryViewerPremium({ groups, startGroupIndex, onClose, onDeleteS
             </div>
           </div>
         )}
-      </div>
-
-      {/* Floating hearts burst - YouTube livestream inspired */}
-      <div className="absolute right-10 bottom-32 z-40 pointer-events-none">
-        <AnimatePresence>
-          {floatingHearts.map((heart) => (
-            <motion.div
-              key={heart.id}
-              initial={{ opacity: 0, y: 0, x: 0, scale: 0.7 }}
-              animate={{
-                opacity: [0, 1, 0],
-                y: -170,
-                x: heart.x,
-                scale: [0.7, 1, 1.1],
-              }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1.6, ease: 'easeOut', delay: heart.delay }}
-              className="absolute"
-            >
-              <Heart
-                style={{ width: heart.size, height: heart.size }}
-                className="text-pink-500 fill-pink-500 drop-shadow-[0_0_10px_rgba(236,72,153,0.7)]"
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
       </div>
 
       {/* Navigation Hints */}
