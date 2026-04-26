@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MarketplaceFeedCard } from '@/components/marketplace/MarketplaceFeedCard';
 import { ListingDetail } from '@/components/marketplace/redesign/ListingDetail';
-import { CreateListingSheet } from '@/components/marketplace/CreateListingSheet';
+import { MarketplaceCreateDialog } from '@/components/marketplace/MarketplaceCreateDialog';
 
 // ===== CONSTANTS =====
 const CATEGORIES = [
@@ -375,14 +375,19 @@ export default function Marketplace() {
         )}
       </AnimatePresence>
 
-      {createOpen && (
-        <CreateListingSheet
-          editListing={editListing}
-          defaultDetectedLocation={detectedLocation}
-          onClose={() => { setCreateOpen(false); setEditListing(null); }}
-          onSuccess={() => { setCreateOpen(false); setEditListing(null); fetchListings(); }}
-        />
-      )}
+      <MarketplaceCreateDialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setEditListing(null);
+        }}
+        editListing={editListing}
+        onSuccess={() => {
+          setCreateOpen(false);
+          setEditListing(null);
+          fetchListings();
+        }}
+      />
 
       <MarketplaceCommentsDialog
         open={commentOpen}
