@@ -8,7 +8,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { MarketplaceCommentsDialog } from '@/components/marketplace/MarketplaceCommentsDialog';
-import { MarketplaceGalleryCard } from '@/components/marketplace/MarketplaceGalleryCard';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,9 +16,9 @@ import { useRouteLoadTrace } from '@/hooks/useRouteLoadTrace';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MarketplaceListingCard } from '@/components/marketplace/MarketplaceListingCard';
-import { ListingDetail } from '@/components/marketplace/ListingDetail';
-import { CreateListingSheet } from '@/components/marketplace/CreateListingSheet';
+import { MarketplaceFeedCard } from '@/components/marketplace/MarketplaceFeedCard';
+import { ListingDetail } from '@/components/marketplace/redesign/ListingDetail';
+import { MarketplaceCreateDialog } from '@/components/marketplace/MarketplaceCreateDialog';
 
 // ===== CONSTANTS =====
 const CATEGORIES = [
@@ -278,7 +277,7 @@ export default function Marketplace() {
       >
         {listings.map(l => (
           <motion.div key={l.id} variants={itemVariants}>
-            <MarketplaceListingCard
+            <MarketplaceFeedCard
               listing={l}
               isLiked={likedSet.has(l.id)}
               isSaved={savedSet.has(l.id)}
@@ -288,7 +287,7 @@ export default function Marketplace() {
               onLike={toggleLike}
               onSave={toggleSave}
               onComment={(id) => { setCommentListingId(id); setCommentOpen(true); }}
-              onShare={handleShare}
+              onShare={() => handleShare(l)}
               onChat={handleChat}
               onDelete={deleteListing}
               onEdit={(listing) => { setEditListing(listing); setCreateOpen(true); }}
@@ -385,14 +384,19 @@ export default function Marketplace() {
         )}
       </AnimatePresence>
 
-      {createOpen && (
-        <CreateListingSheet
-          editListing={editListing}
-          defaultDetectedLocation={detectedLocation}
-          onClose={() => { setCreateOpen(false); setEditListing(null); }}
-          onSuccess={() => { setCreateOpen(false); setEditListing(null); fetchListings(); }}
-        />
-      )}
+      <MarketplaceCreateDialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setEditListing(null);
+        }}
+        editListing={editListing}
+        onSuccess={() => {
+          setCreateOpen(false);
+          setEditListing(null);
+          fetchListings();
+        }}
+      />
 
       <MarketplaceCommentsDialog
         open={commentOpen}
