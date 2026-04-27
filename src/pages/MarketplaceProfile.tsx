@@ -30,40 +30,54 @@ export default function MarketplaceProfile() {
   }, [userId]);
 
   const fetchAll = async () => {
-    const [{ data: p }, { data: mp }, { data: lData }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      supabase.from('marketplace_profiles').select('*').eq('user_id', userId!).maybeSingle(),
-      supabase.from('marketplace_listings').select('*').eq('user_id', userId!).eq('status', 'active').order('created_at', { ascending: false }),
-    ]);
-    setProfile(p);
-    setMpProfile(mp);
-    if (lData) {
-      setListings(lData);
-      const s = { total: lData.length, sell: 0, job: 0, rent: 0 };
-      lData.forEach(l => { if (l.type in s) (s as any)[l.type]++; });
-      setStats(s);
+    try {
+      const [{ data: p, error: pError }, { data: mp, error: mpError }, { data: lData, error: lError }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId!).single(),
+        supabase.from('marketplace_profiles').select('*').eq('user_id', userId!).maybeSingle(),
+        supabase.from('marketplace_listings').select('*').eq('user_id', userId!).eq('status', 'active').order('created_at', { ascending: false }),
+      ]);
+
+      if (pError) throw pError;
+      
+      setProfile(p);
+      setMpProfile(mp);
+      
+      if (lData) {
+        setListings(lData);
+        const s = { total: lData.length, sell: 0, job: 0, rent: 0 };
+        lData.forEach(l => { if (l.type in s) (s as any)[l.type]++; });
+        setStats(s);
+      }
+
+      // Build seller from DB data with safe fallbacks
+      const stored: SellerProfile = {
+        displayName: (mp as any)?.username || p?.name || p?.first_name || 'Seller',
+        sellerType: (mp as any)?.seller_type || 'individual',
+        bio: mp?.bio || '',
+        qualification: mp?.qualification || '',
+        phone: (mp as any)?.phone || '',
+        whatsappSame: (mp as any)?.whatsapp_same ?? true,
+        whatsapp: (mp as any)?.whatsapp || '',
+        location: mp?.location || p?.location || '',
+        area: (mp as any)?.area || '',
+        paymentMethods: (mp as any)?.payment_methods || ['💵 Cash'],
+        responseTime: (mp as any)?.response_time || 'few_hours',
+        availability: (mp as any)?.availability || [],
+        sellingCategories: (mp as any)?.selling_categories || [],
+        showPhoneTo: (mp as any)?.show_phone_to || 'Everyone',
+        allowReviews: (mp as any)?.allow_reviews ?? true,
+        isPhoneVerified: (mp as any)?.is_phone_verified ?? false,
+      };
+      setSeller(stored);
+
+      if (isOwner && user) fetchSaved();
+    } catch (err: any) {
+      console.error('Failed to load profile data:', err);
+      // Handle missing table errors quietly
+      if (err.code !== '42P01') {
+        toast.error('Could not load profile data');
+      }
     }
-    // Build seller from DB data
-    const stored: SellerProfile = {
-      displayName: (mp as any)?.username || p?.first_name || p?.name || '',
-      sellerType: (mp as any)?.seller_type || 'individual',
-      bio: mp?.bio || '',
-      qualification: mp?.qualification || '',
-      phone: (mp as any)?.phone || '',
-      whatsappSame: (mp as any)?.whatsapp_same ?? true,
-      whatsapp: (mp as any)?.whatsapp || '',
-      location: mp?.location || p?.location || '',
-      area: (mp as any)?.area || '',
-      paymentMethods: (mp as any)?.payment_methods || ['💵 Cash'],
-      responseTime: (mp as any)?.response_time || 'few_hours',
-      availability: (mp as any)?.availability || [],
-      sellingCategories: (mp as any)?.selling_categories || [],
-      showPhoneTo: (mp as any)?.show_phone_to || 'Everyone',
-      allowReviews: (mp as any)?.allow_reviews ?? true,
-      isPhoneVerified: (mp as any)?.is_phone_verified ?? false,
-    };
-    setSeller(stored);
-    if (isOwner && user) fetchSaved();
   };
 
   const fetchSaved = async () => {

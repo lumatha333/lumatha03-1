@@ -8,7 +8,7 @@ import { AudioConnect } from '@/components/randomconnect/AudioConnect';
 import { VideoConnect } from '@/components/randomconnect/VideoConnect';
 import { TextConnectV2 } from '@/components/randomconnect/TextConnectV2';
 import { SavedMemories } from '@/components/randomconnect/SavedMemories';
-import { Heart, ArrowLeft } from 'lucide-react';
+import { Heart, ArrowLeft, Menu } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -92,12 +92,21 @@ const RandomConnect: React.FC = () => {
     return (
       <div className="min-h-screen pb-20" style={{ background: 'hsl(220,60%,8%)' }}>
         <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-border/30">
-          <button onClick={() => setShowMemories(false)} className="p-2 -ml-2">
-            <ArrowLeft className="w-5 h-5 text-foreground" />
+          <button 
+            onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
+            className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5"
+          >
+            <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
           </button>
-          <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            Memories
-          </h2>
+          <div className="flex flex-col">
+            <p className="text-xs font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
+            <h2 className="text-sm font-bold text-foreground mt-1" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Memories
+            </h2>
+          </div>
+          <button onClick={() => setShowMemories(false)} className="ml-auto text-xs text-muted-foreground hover:text-white">
+            Back
+          </button>
         </div>
         <div className="h-[calc(100vh-80px)]">
           <SavedMemories

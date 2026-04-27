@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { X, Heart, MessageCircle, Send, Pause, Play, Volume2, VolumeX, Bookmark } from 'lucide-react';
+import { X, Heart, MessageCircle, Send, Pause, Play, Volume2, VolumeX, Bookmark, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useKeyboardGallery } from '@/hooks/useKeyboardGallery';
 import { useVideoSound } from '@/contexts/VideoSoundContext';
@@ -191,7 +191,6 @@ export function FullScreenMediaViewer({
       syncVideoState(video);
     };
 
-    // Prime the timeline instantly when full view opens.
     handleUpdate();
     video.addEventListener('timeupdate', handleUpdate);
     video.addEventListener('progress', handleUpdate);
@@ -567,23 +566,42 @@ export function FullScreenMediaViewer({
                 : 'opacity 280ms cubic-bezier(0.32, 0, 0.15, 1), transform 280ms cubic-bezier(0.32, 0, 0.15, 1)',
           }}
         >
-          <div className="absolute top-0 left-0 right-0 z-30 h-[52px]" style={{ pointerEvents: 'none' }}>
+          {/* Header/Close */}
+          <div className="absolute top-0 left-0 right-0 z-50 h-[64px] flex items-center px-4" style={{ pointerEvents: 'none' }}>
             <button
-              className="w-8 h-8 rounded-full flex items-center justify-center"
+              className="w-10 h-10 rounded-full flex items-center justify-center transition-transform active:scale-90"
               style={{
                 pointerEvents: 'auto',
                 background: 'rgba(255,255,255,0.15)',
+                backdropFilter: 'blur(10px)',
                 color: '#ffffff',
-                position: 'absolute',
-                top: 'calc(env(safe-area-inset-top, 0px) + 14px)',
-                left: 14,
               }}
               onClick={() => onOpenChange(false)}
-              aria-label="Close media viewer"
+              aria-label="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
+
+          {/* Desktop Navigation Arrows */}
+          {isDesktop && hasMultiple && (
+            <>
+              <button
+                className="absolute left-6 top-1/2 -translate-y-1/2 z-50 w-12 h-12 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/40 text-white transition-all disabled:opacity-0"
+                onClick={(e) => { e.stopPropagation(); goTo(currentIndex - 1); }}
+                disabled={currentIndex === 0}
+              >
+                <ChevronLeft className="w-8 h-8" />
+              </button>
+              <button
+                className="absolute right-6 top-1/2 -translate-y-1/2 z-50 w-12 h-12 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/40 text-white transition-all disabled:opacity-0"
+                onClick={(e) => { e.stopPropagation(); goTo(currentIndex + 1); }}
+                disabled={currentIndex === mediaUrls.length - 1}
+              >
+                <ChevronRight className="w-8 h-8" />
+              </button>
+            </>
+          )}
 
           <div
             ref={mediaZoneRef}
@@ -703,10 +721,10 @@ export function FullScreenMediaViewer({
                                   max={videoDuration || 0}
                                   step={0.05}
                                   value={isSeeking ? seekValue : videoCurrentTime}
-                                  onPointerDown={onSeekStart}
+                                  onSeekStart={onSeekStart}
                                   onChange={onSeekChange}
-                                  onPointerUp={onSeekEnd}
-                                  onPointerCancel={onSeekEnd}
+                                  onSeekEnd={onSeekEnd}
+                                  onSeekCancel={onSeekEnd}
                                   onClick={(event) => event.stopPropagation()}
                                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                   aria-label="Seek video"

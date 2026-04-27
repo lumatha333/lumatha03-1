@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { ArrowLeft, BarChart3, ChevronRight, ExternalLink, Flag, GripVertical, RefreshCw, RotateCcw, Settings2, Timer } from 'lucide-react';
+import { ArrowLeft, BarChart3, ChevronRight, ExternalLink, Flag, GripVertical, Menu, RefreshCw, RotateCcw, Settings2, Timer } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -862,10 +862,19 @@ export default function Manage() {
       ) : (
         <>
           <div className="px-1 flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => setView('menu')} className="h-9 w-9">
-              <ArrowLeft className="h-5 w-5" />
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
+              className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5"
+            >
+              <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
+            </button>
+            <div className="flex flex-col">
+              <p className="text-xs font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
+              <h2 className="text-sm font-bold text-foreground mt-1">{currentTitle}</h2>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setView('menu')} className="ml-auto text-xs text-muted-foreground">
+              Back
             </Button>
-            <h2 className="text-xl md:text-2xl font-semibold text-foreground">{currentTitle}</h2>
           </div>
 
           {view === 'screen-time' && (

@@ -101,40 +101,58 @@ export function EducationModule() {
     setLoading(true);
     try {
       if (!user) return;
-      // Limit to the 100 most-recent docs to avoid fetching the entire table on
-      // every load (was previously unbounded).
+      
       const { data: docs, error: docsError } = await supabase
         .from('documents')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
-      if (docsError) throw docsError;
+      
+      if (docsError) {
+        if (docsError.code === '42P01') {
+          console.error('Documents table not found');
+          setAllDocs([]);
+          setLoading(false);
+          return;
+        }
+        throw docsError;
+      }
       
       if (docs) {
         const userIds = [...new Set(docs.map(d => d.user_id))];
-        // Only select the columns that DocCard actually needs to avoid over-fetching.
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, name, avatar_url, username')
-          .in('id', userIds);
-        const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
-        setAllDocs(docs.map(doc => ({ ...doc, profiles: profilesMap.get(doc.user_id) })));
+        try {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, name, avatar_url, username')
+            .in('id', userIds);
+          const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
+          setAllDocs(docs.map(doc => ({ ...doc, profiles: profilesMap.get(doc.user_id) })));
+        } catch (err) {
+          console.warn('Could not fetch profiles for documents:', err);
+          setAllDocs(docs.map(doc => ({ ...doc, profiles: undefined })));
+        }
       }
       
-      // Load saved, liked, and commented info
-      const [savedRes, likedRes, commentedRes] = await Promise.all([
-        supabase.from('saved').select('document_id').eq('user_id', user.id).not('document_id', 'is', null),
-        supabase.from('document_reactions').select('document_id').eq('user_id', user.id).eq('reaction', 'heart'),
-        supabase.from('comments').select('document_id').eq('user_id', user.id).not('document_id', 'is', null)
-      ]);
+      // Load saved, liked, and commented info defensively
+      try {
+        const [savedRes, likedRes, commentedRes] = await Promise.all([
+          supabase.from('saved').select('document_id').eq('user_id', user.id).not('document_id', 'is', null),
+          supabase.from('document_reactions').select('document_id').eq('user_id', user.id).eq('reaction', 'heart'),
+          supabase.from('comments').select('document_id').eq('user_id', user.id).not('document_id', 'is', null)
+        ]);
 
-      setSavedDocIds(new Set(savedRes.data?.map(s => s.document_id as string) || []));
-      setLikedDocIds(new Set(likedRes.data?.map(l => l.document_id as string) || []));
-      setCommentedDocIds(new Set(commentedRes.data?.map(c => c.document_id as string) || []));
+        setSavedDocIds(new Set(savedRes.data?.map(s => s.document_id as string) || []));
+        setLikedDocIds(new Set(likedRes.data?.map(l => l.document_id as string) || []));
+        setCommentedDocIds(new Set(commentedRes.data?.map(c => c.document_id as string) || []));
+      } catch (err) {
+        console.warn('Could not fetch social data for documents:', err);
+      }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load education data:', error);
-      toast.error('Something went wrong loading your docs');
+      if (error.code !== '42P01') {
+        toast.error('Something went wrong loading your docs');
+      }
     } finally { setLoading(false); }
   }, [user]);
 

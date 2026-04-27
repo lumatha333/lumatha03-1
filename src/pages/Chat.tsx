@@ -1856,25 +1856,36 @@ export default function Chat() {
         {isBlurred && <BlurOverlay />}
 
         {/* Header — Responsive Mobile/Desktop */}
-        <div className="flex items-center gap-1 md:gap-3 shrink-0 px-2 md:px-4" style={{ background: '#000', borderBottom: '1px solid #1f2937', height: 52 }}>
-          <button onClick={handleBackToChats} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full shrink-0 hover:bg-white/5 transition-colors active:scale-95 touch-target-44">
-            <ArrowLeft className="h-[18px] w-[18px] text-white" />
-          </button>
+        <div className="flex items-center gap-1 md:gap-3 shrink-0 px-2 md:px-4" style={{ background: '#0B0D1F', borderBottom: '1px solid rgba(255,255,255,0.05)', height: 64 }}>
+          {isMobile ? (
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
+              className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5"
+            >
+              <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
+            </button>
+          ) : (
+            <button onClick={handleBackToChats} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full shrink-0 hover:bg-white/5 transition-colors active:scale-95 touch-target-44">
+              <ArrowLeft className="h-[18px] w-[18px] text-white" />
+            </button>
+          )}
           
-          <div className="relative shrink-0 cursor-pointer" onClick={() => navigate(`/profile/${currentChatUser}`)}>
-            <Avatar className="w-9 h-9 md:w-10 md:h-10">
-              <AvatarImage src={selectedConversation?.user_avatar || undefined} />
-              <AvatarFallback style={{ background: 'rgba(124,58,237,0.15)', color: '#A78BFA', fontSize: 12, fontWeight: 700 }}>
-                {displayName?.charAt(0)?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:gap-3">
+              <p className="text-base md:text-lg font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
+              <div className="flex items-center gap-2 mt-1 lg:mt-0">
+                <Avatar className="w-7 h-7 md:w-8 md:h-8">
+                  <AvatarImage src={selectedConversation?.user_avatar || undefined} />
+                  <AvatarFallback style={{ background: 'rgba(124,58,237,0.15)', color: '#A78BFA', fontSize: 10, fontWeight: 700 }}>
+                    {displayName?.charAt(0)?.toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <h3 className="text-xs md:text-sm font-semibold text-white truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{displayName}</h3>
+              </div>
+            </div>
           </div>
           
-          <div className="flex-1 min-w-0 cursor-pointer self-center" onClick={() => navigate(`/profile/${currentChatUser}`)}>
-            <h3 className="text-sm md:text-base font-semibold text-white truncate leading-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{displayName}</h3>
-          </div>
-          
-          <div className="shrink-0 self-center pl-0.5 md:pl-1">
+          <div className="shrink-0 flex items-center gap-1">
             <button
               className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors touch-target-44"
               title="Chat settings"

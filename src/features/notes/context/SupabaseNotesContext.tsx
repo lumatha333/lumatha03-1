@@ -133,7 +133,13 @@ export const SupabaseNotesProvider: React.FC<{ children: React.ReactNode }> = ({
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(loadedNotes));
     } catch (err: any) {
       console.error('Failed to fetch notes:', err);
-      setError(err.message);
+      
+      // If table is missing, don't keep throwing errors
+      if (err.code === '42P01') {
+        setError('Notes table not found. Please run the SQL migration.');
+      } else {
+        setError(err.message || 'Failed to connect to database');
+      }
 
       // Fallback to localStorage
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -141,7 +147,9 @@ export const SupabaseNotesProvider: React.FC<{ children: React.ReactNode }> = ({
         try {
           const parsed = JSON.parse(saved);
           setNotes(parsed);
-          toast.warning('Using offline notes. Changes will sync when online.');
+          if (err.code !== '42P01') {
+            toast.warning('Using offline notes. Changes will sync when online.');
+          }
         } catch (e) {
           console.error('Failed to parse saved notes', e);
         }
