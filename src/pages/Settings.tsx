@@ -657,7 +657,22 @@ export default function Settings() {
   // ===== MAIN PAGE =====
   const MainPage = () => (
     <div className="pb-20">
-      {/* User Card - Now at top without back button */}
+      {/* Header */}
+      <div className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-[#0B0D1F]/60 backdrop-blur-md mb-4">
+        <button 
+          onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
+          className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5"
+        >
+          <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
+        </button>
+        
+        <div className="flex flex-col flex-1 min-w-0">
+          <p className="text-base font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
+          <h2 className="text-xs font-bold text-muted-foreground mt-1 uppercase tracking-widest">Settings</h2>
+        </div>
+      </div>
+
+      {/* User Card */}
       <div className="mx-4 mb-4 rounded-[20px] p-5 border border-purple-500/20 relative overflow-hidden bg-card">
         <div className="flex items-center gap-4">
           <div className="relative">

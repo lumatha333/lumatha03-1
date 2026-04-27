@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Terms() {
@@ -8,16 +8,22 @@ export default function Terms() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/40">
-        <div className="flex items-center gap-4 p-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 hover:bg-muted rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-lg font-semibold">Terms of Service</h1>
+      <div className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-[#0B0D1F]/60 backdrop-blur-md mb-2">
+        <button 
+          onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
+          className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5"
+        >
+          <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
+        </button>
+        
+        <div className="flex flex-col flex-1 min-w-0">
+          <p className="text-base font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
+          <h2 className="text-xs font-bold text-muted-foreground mt-1 uppercase tracking-widest">Terms of Service</h2>
         </div>
+
+        <button onClick={() => navigate(-1)} className="text-xs text-muted-foreground hover:text-white">
+          Back
+        </button>
       </div>
 
       {/* Content */}

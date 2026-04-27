@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, ArrowLeft, Edit3, ChevronRight, MessageCircle, Phone, ExternalLink, Star } from 'lucide-react';
+import { MapPin, ArrowLeft, Edit3, ChevronRight, MessageCircle, Phone, ExternalLink, Star, Menu } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   getTrustScore, SellerProfile, RESPONSE_TIMES, AVAILABILITY_OPTIONS, DEFAULT_SELLER,
 } from '@/lib/marketplaceTrust';
+import { toast } from 'sonner';
 
 export default function MarketplaceProfile() {
   const { userId } = useParams();
@@ -102,13 +103,24 @@ export default function MarketplaceProfile() {
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--bg-base, #0a0f1e)' }}>
       {/* Top bar */}
-      <div className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3" style={{ background: 'rgba(10,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
-        <button onClick={() => navigate('/marketplace')} className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'var(--bg-elevated, #1e293b)' }}>
-          <ArrowLeft className="w-5 h-5 text-white" />
+      <div className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-[#0B0D1F]/60 backdrop-blur-md">
+        <button 
+          onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
+          className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5"
+        >
+          <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
         </button>
-        <h1 className="text-[16px] font-bold text-white flex-1 truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          {seller.displayName || profile.name}
-        </h1>
+        
+        <div className="flex flex-col flex-1 min-w-0">
+          <p className="text-base font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
+          <h1 className="text-xs font-bold text-muted-foreground mt-1 truncate uppercase tracking-widest">
+            {seller.displayName || profile.name}
+          </h1>
+        </div>
+
+        <button onClick={() => navigate('/marketplace')} className="text-xs text-muted-foreground hover:text-white">
+          Back
+        </button>
       </div>
 
       {/* Profile header card */}
