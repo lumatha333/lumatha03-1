@@ -242,7 +242,7 @@ function DrawingPreview({ paths }: { paths: DrawingPath[] }) {
   return <canvas ref={canvasRef} className="w-full h-full" />;
 }
 
-// --- CORE COMPONENT ---
+// --- CORE COMPONENT (Optimized Rendering) ---
 export function NotesSection() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
