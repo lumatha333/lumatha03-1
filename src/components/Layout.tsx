@@ -425,8 +425,8 @@ function LayoutContent({ children }: LayoutProps) {
   const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || location.pathname.startsWith('/profile/');
   const isAdventureGrid = location.pathname === '/music-adventure';
   const isFeedPage = location.pathname === '/';
-  // Pages that manage their own top banners — hide the Layout header on mobile for them
-  const pageHasOwnHeader = isMobile && (isChatListView || isAdventureGrid);
+  // Pages that manage their own top banners — no longer hiding global header to ensure branding stability
+  const pageHasOwnHeader = false;
 
   const handleScroll = useCallback(() => {
     if (ticking.current) return;
@@ -613,6 +613,17 @@ function LayoutContent({ children }: LayoutProps) {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
+              ) : isChatListView ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] uppercase tracking-[0.14em] font-bold text-slate-400">Messages</span>
+                  <button 
+                    onClick={() => window.dispatchEvent(new CustomEvent('lumatha_chat_toggle_search'))}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 hover:bg-white/5"
+                    aria-label="Search messages"
+                  >
+                    <Search className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
               ) : (
                 <span className="text-[11px] uppercase tracking-[0.14em] font-bold text-slate-400 text-right">{sectionLabel}</span>
               )}

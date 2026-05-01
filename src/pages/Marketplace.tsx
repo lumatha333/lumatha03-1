@@ -281,7 +281,7 @@ export default function Marketplace() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 gap-4"
+        className="grid grid-cols-1 gap-10"
       >
         {listings.map(l => (
           <motion.div key={l.id} variants={itemVariants}>

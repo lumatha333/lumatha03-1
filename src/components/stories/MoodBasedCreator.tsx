@@ -120,21 +120,13 @@ const STORY_TYPES: Array<{
     gradient: 'from-blue-500/20 to-cyan-500/20'
   },
   { 
-    id: 'note', 
-    label: 'Note', 
+    id: 'note',
+    label: 'Note',
     desc: 'Quick thought',
     icon: StickyNote,
     gradient: 'from-amber-500/20 to-yellow-500/20'
-  },
-  { 
-    id: 'voice', 
-    label: 'Voice', 
-    desc: 'Speak your mind',
-    icon: Music,
-    gradient: 'from-emerald-500/20 to-teal-500/20'
-  },
-];
-
+    },
+    ];
 // ============ AUDIENCE OPTIONS ============
 const AUDIENCES: Array<{
   id: AudienceType;
@@ -291,9 +283,9 @@ export function MoodBasedCreator({ open, onClose, onCreateStory }: MoodBasedCrea
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="h-full flex flex-col px-6 py-8"
+                className="h-full flex flex-col px-6 py-4"
               >
-                <div className="mb-8">
+                <div className="mb-4">
                   <h2 className="text-3xl font-bold text-white mb-2">
                     What are you feeling?
                   </h2>
@@ -352,9 +344,9 @@ export function MoodBasedCreator({ open, onClose, onCreateStory }: MoodBasedCrea
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="h-full flex flex-col px-6 py-8"
+                className="h-full flex flex-col px-6 py-4"
               >
-                <div className="mb-8">
+                <div className="mb-4">
                   <h2 className="text-3xl font-bold text-white mb-2">
                     How do you want to express?
                   </h2>
@@ -516,9 +508,9 @@ export function MoodBasedCreator({ open, onClose, onCreateStory }: MoodBasedCrea
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
-                className="h-full flex flex-col px-6 py-8"
+                className="h-full flex flex-col px-6 py-4"
               >
-                <div className="mb-8">
+                <div className="mb-4">
                   <h2 className="text-3xl font-bold text-white mb-2">
                     Who can see this?
                   </h2>

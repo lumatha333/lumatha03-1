@@ -2682,10 +2682,10 @@ export default function Chat() {
 
   return (
     <div className={cn("pb-6 md:pb-20", isMobile ? "min-h-full" : "min-h-[calc(100vh-56px)]")} style={{ background: '#0a0f1e' }}>
-      {/* Sticky header block: on mobile sticks to top-0 since Layout header is hidden for chat list */}
-      <div className={cn("sticky z-40 bg-[#0B0D1F]/98 backdrop-blur-md", isMobile ? "top-0" : "top-16")}>
-        {/* Top Banner */}
-        <TopBanner />
+      {/* Sticky header block: offset by top-16 to sit below the global Layout header */}
+      <div className={cn("sticky z-40 bg-[#0B0D1F]/98 backdrop-blur-md", "top-16")}>
+        {/* Top Banner - hidden on mobile as Layout now handles it */}
+        {!isMobile && <TopBanner />}
 
         {/* Subsection Navigation */}
         <SubsectionNavigation />

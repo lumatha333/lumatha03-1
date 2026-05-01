@@ -1378,10 +1378,8 @@ export default function MusicAdventureFixed() {
       {/* Main Content - Full Width, No Side Constraints */}
       <div className="min-h-screen w-full">
         <div className="w-full max-w-none">
-          {/* Sticky header block: on mobile sticks to top-0 since Layout header is hidden for adventure */}
-          <div className={cn("sticky z-40 w-full", isMobile ? "top-0" : "top-16")}>
-            {/* Mobile-only top banner with LUMATHA branding */}
-            {isMobile && <MobileTopBanner />}
+          {/* Sticky header block: offset by top-16 to sit below the global Layout header */}
+          <div className={cn("sticky z-40 w-full", "top-16")}>
             {/* Shared Subsection Navigation - Visible on all tabs */}
             <SubsectionNavigation />
           </div>
