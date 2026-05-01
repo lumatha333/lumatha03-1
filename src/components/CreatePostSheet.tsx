@@ -35,6 +35,13 @@ const CREATE_TYPES: {
     iconBg: 'linear-gradient(135deg, hsl(330 81% 60%), hsl(24 95% 53%))',
   },
   {
+    type: 'mood' as any,
+    emoji: '✨',
+    label: 'Mood',
+    hint: 'Vibe creator',
+    iconBg: 'linear-gradient(135deg, #A855F7, #EC4899)',
+  },
+  {
     type: 'marketplace',
     emoji: '🛍️',
     label: 'Marketplace',
@@ -90,6 +97,12 @@ export function CreatePostSheet({ open, onOpenChange }: CreatePostSheetProps) {
 
     if (type === 'story') {
       setStoryHubOpen(true);
+      return;
+    }
+
+    if (type === 'mood' as any) {
+      setStoryCreatorMode('mood' as any);
+      setStoryCreatorOpen(true);
       return;
     }
 

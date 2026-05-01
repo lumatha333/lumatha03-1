@@ -33,7 +33,7 @@ export function LazyImage({
           observer.unobserve(entry.target);
         }
       },
-      { rootMargin: '200px' }
+      { rootMargin: '400px' }
     );
 
     observer.observe(el);
@@ -46,7 +46,11 @@ export function LazyImage({
     <div
       ref={containerRef}
       className={cn('relative overflow-hidden bg-muted', className)}
-      style={hasFixedAspect ? { aspectRatio } : undefined}
+      style={{ 
+        ...(hasFixedAspect ? { aspectRatio } : {}),
+        contentVisibility: 'auto',
+        containIntrinsicSize: aspectRatio !== 'auto' ? `auto ${aspectRatio.split('/')[1]}px` : '200px'
+      }}
     >
       {isInView && !hasError && (
         <img

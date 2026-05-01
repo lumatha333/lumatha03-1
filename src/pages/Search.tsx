@@ -57,7 +57,53 @@ function DeferredVideoTile({ src, className }: { src: string; className?: string
           }
         });
       },
-      { rootMargin: '260px 0px', threshold: 0.01 }
+      { rootMargin: '600px 0px', threshold: 0.01 }
+    );
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className={className} style={{ contentVisibility: 'auto', containIntrinsicSize: '200px' }}>
+      {shouldLoad ? (
+        <video
+          src={src}
+          className={className}
+          autoPlay
+          muted
+          loop
+          playsInline
+        />
+      ) : (
+        <div className="w-full h-full bg-[#111827] animate-pulse" />
+      )}
+    </div>
+  );
+}
+
+function DeferredImageTile({ src, alt, className }: { src: string; alt?: string; className?: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            // Use requestIdleCallback for even smoother loading if available
+            if ('requestIdleCallback' in window) {
+              window.requestIdleCallback(() => setShouldLoad(true));
+            } else {
+              setShouldLoad(true);
+            }
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: '400px 0px', threshold: 0.01 }
     );
 
     observer.observe(containerRef.current);
@@ -67,8 +113,19 @@ function DeferredVideoTile({ src, className }: { src: string; className?: string
   return (
     <div ref={containerRef} className={className}>
       {shouldLoad ? (
-        <video
+        <img
           src={src}
+          alt={alt || ""}
+          className={className}
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        <div className="w-full h-full bg-[#111827] animate-pulse" />
+      )}
+    </div>
+  );
+}
           className="w-full h-full object-cover"
           muted
           loop
@@ -512,9 +569,9 @@ export default function Search() {
   const noResults = hasResults && !loading && users.length === 0 && (activeTab === 'posts' ? visiblePosts.length === 0 : posts.length === 0);
 
   return (
-    <div className="min-h-screen pb-20" style={{ background: '#0a0f1e' }}>
-      {/* Search Bar */}
-      <div className="sticky top-0 z-30 px-2 py-3" style={{ background: '#0a0f1e' }}>
+    <div className="min-h-screen pb-20" style={{ background: '#0B0D1F' }}>
+      {/* Search Bar sticky at top-16 to match Marketplace */}
+      <div className="sticky top-16 z-30 px-4 h-16 flex items-center bg-[#0B0D1F]/95 backdrop-blur-xl border-b border-white/5">
         <div className="relative">
           <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#94A3B8' }} />
           <input
@@ -524,15 +581,15 @@ export default function Search() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            className="w-full outline-none text-white placeholder:text-[#94A3B8]"
+            className="w-full h-12 outline-none text-white placeholder:text-[#94A3B8]"
             style={{
-              background: '#111827',
-              border: isFocused ? '1px solid #7C3AED' : '1px solid #1f2937',
-              borderRadius: 100,
-              padding: '12px 44px 12px 40px',
+              background: 'rgba(255,255,255,0.05)',
+              border: isFocused ? '1px solid #7C3AED' : '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 12,
+              padding: '0 48px 0 44px',
               fontSize: 15,
               fontFamily: "'Inter', sans-serif",
-              transition: 'border-color 200ms',
+              transition: 'all 200ms',
             }}
           />
           {searchQuery && (
@@ -698,11 +755,8 @@ export default function Search() {
                       style={{ borderRadius: 12, aspectRatio: '1' }}
                       onClick={() => openSearchMediaViewer(post)}
                     >
-                      <img
+                      <DeferredImageTile
                         src={mediaUrl}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
                         className="w-full h-full object-cover transition-transform group-hover:scale-105"
                       />
                     </div>
@@ -763,7 +817,7 @@ export default function Search() {
                       onClick={() => navigate('/marketplace')}
                     >
                       {mediaUrl ? (
-                        <img src={mediaUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                        <DeferredImageTile src={mediaUrl} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center" style={{ background: '#111827', border: '1px solid #1f2937' }}>
                           <span className="text-[11px]" style={{ color: '#94A3B8' }}>Product</span>

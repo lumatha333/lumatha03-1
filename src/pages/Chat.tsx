@@ -1698,7 +1698,7 @@ export default function Chat() {
 
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
       // Ignore the trailing release event that fires right after opening by long-press.
-      if (Date.now() - messageMenuOpenedAtRef.current < 240) return;
+      if (Date.now() - messageMenuOpenedAtRef.current < 400) return;
       const target = event.target as HTMLElement | null;
       if (!target) return;
       if (target.closest('#chat-message-action-menu')) return;
@@ -1856,7 +1856,7 @@ export default function Chat() {
         {isBlurred && <BlurOverlay />}
 
         {/* Header — Responsive Mobile/Desktop */}
-        <div className="flex items-center gap-1 md:gap-3 shrink-0 px-2 md:px-4" style={{ background: '#0B0D1F', borderBottom: '1px solid rgba(255,255,255,0.05)', height: 64 }}>
+        <div className="h-16 flex items-center gap-1 md:gap-3 shrink-0 px-2 md:px-4 bg-[#0B0D1F] border-b border-white/5">
           {isMobile ? (
             <button 
               onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
@@ -1871,23 +1871,43 @@ export default function Chat() {
           )}
           
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:gap-3">
-              <p className="text-base md:text-lg font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
-              <div className="flex items-center gap-2 mt-1 lg:mt-0">
-                <Avatar className="w-7 h-7 md:w-8 md:h-8">
+            <div className="flex items-center gap-3">
+              <p className="text-base font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="flex items-center gap-2 px-2 py-1 rounded-xl transition-all active:scale-95 hover:bg-white/5 overflow-hidden group"
+              >
+                <Avatar className="w-7 h-7 md:w-8 md:h-8 group-hover:ring-1 group-hover:ring-blue-500/50 transition-all">
                   <AvatarImage src={selectedConversation?.user_avatar || undefined} />
                   <AvatarFallback style={{ background: 'rgba(124,58,237,0.15)', color: '#A78BFA', fontSize: 10, fontWeight: 700 }}>
                     {displayName?.charAt(0)?.toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <h3 className="text-xs md:text-sm font-semibold text-white truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{displayName}</h3>
-              </div>
+                <div className="flex flex-col items-start min-w-0">
+                  <h3 className="text-[13px] md:text-sm font-bold text-white truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{displayName}</h3>
+                  <span className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">Chat Info</span>
+                </div>
+              </button>
             </div>
           </div>
           
           <div className="shrink-0 flex items-center gap-1">
             <button
-              className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors touch-target-44"
+              onClick={() => setCallState({ open: true, isVideo: false })}
+              className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors active:scale-90"
+              title="Voice call"
+            >
+              <Mic className="w-4 h-4 text-white" />
+            </button>
+            <button
+              onClick={() => setCallState({ open: true, isVideo: true })}
+              className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors active:scale-90"
+              title="Video call"
+            >
+              <VideoIcon className="w-4 h-4 text-white" />
+            </button>
+            <button
+              className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors active:scale-90"
               title="Chat settings"
               onClick={() => setShowSettings(true)}
             >

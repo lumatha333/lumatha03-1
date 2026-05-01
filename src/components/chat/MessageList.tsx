@@ -125,7 +125,7 @@ const MessageItem = memo(function MessageItem({
             const deltaX = touch.clientX - start.x;
             const deltaY = touch.clientY - start.y;
 
-            if (Math.abs(deltaX) > 12 || Math.abs(deltaY) > 12) {
+            if (Math.abs(deltaX) > 20 || Math.abs(deltaY) > 20) {
               clearLongPressTimer();
             }
 
@@ -753,7 +753,7 @@ export const MessageList = memo(function MessageList({
           itemSize={getSize}
           width={'100%'}
           ref={listRef}
-          overscanCount={8}
+          overscanCount={15}
           className="no-scrollbar"
         >
           {Row}

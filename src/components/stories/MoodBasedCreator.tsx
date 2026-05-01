@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { 
   X, Camera, Type, Sparkles, Pencil, StickyNote,
   ChevronRight, Users, Lock, Globe, Heart, Image as ImageIcon,
-  Wand2, Palette, Zap, Smile, Music, Clock
+  Wand2, Palette, Zap, Smile, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -294,7 +294,7 @@ export function MoodBasedCreator({ open, onClose, onCreateStory }: MoodBasedCrea
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {(Object.keys(MOODS) as MoodType[]).map((moodKey) => {
                     const mood = MOODS[moodKey];
                     const isSelected = selectedMood === moodKey;
@@ -306,7 +306,7 @@ export function MoodBasedCreator({ open, onClose, onCreateStory }: MoodBasedCrea
                         whileTap={{ scale: 0.98 }}
                         onClick={() => handleMoodSelect(moodKey)}
                         className={cn(
-                          "relative p-5 rounded-2xl text-left transition-all duration-300",
+                          "relative p-4 rounded-xl text-left transition-all duration-300",
                           "border border-white/10 hover:border-white/20",
                           isSelected 
                             ? "bg-white/10 ring-2 ring-white/30" 
@@ -315,18 +315,18 @@ export function MoodBasedCreator({ open, onClose, onCreateStory }: MoodBasedCrea
                       >
                         {/* Gradient Background */}
                         <div className={cn(
-                          "absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300",
+                          "absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300",
                           "bg-gradient-to-br",
                           mood.gradient,
                           isSelected && "opacity-20"
                         )} />
                         
                         <div className="relative">
-                          <span className="text-4xl mb-3 block">{mood.emoji}</span>
-                          <h3 className="text-lg font-semibold text-white mb-1">
+                          <span className="text-3xl mb-2 block">{mood.emoji}</span>
+                          <h3 className="text-base font-semibold text-white mb-0.5">
                             {mood.label}
                           </h3>
-                          <p className="text-xs text-white/50">
+                          <p className="text-[10px] text-white/50 leading-tight">
                             {mood.description}
                           </p>
                         </div>

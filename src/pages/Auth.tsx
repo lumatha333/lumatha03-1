@@ -599,7 +599,7 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 overflow-y-auto relative bg-[#0B0D1F]">
+    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-start p-4 overflow-y-auto relative bg-[#0B0D1F] overflow-x-hidden py-12 md:py-20 lg:py-24">
       {/* Injected keyframes */}
       <style>{floatingDotsStyle}</style>
 

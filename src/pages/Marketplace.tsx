@@ -256,7 +256,7 @@ export default function Marketplace() {
 
   const renderListings = () => {
     if (loading) return (
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-6 pb-24 pt-4">
         {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-64 rounded-2xl" />)}
       </div>
     );
@@ -281,7 +281,7 @@ export default function Marketplace() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="grid grid-cols-1 gap-10"
+        className="grid grid-cols-2 gap-6"
       >
         {listings.map(l => (
           <motion.div key={l.id} variants={itemVariants}>
@@ -308,38 +308,27 @@ export default function Marketplace() {
   };
 
   return (
-    <div className="space-y-4 pb-24 max-w-2xl mx-auto px-4">
-      {/* Header */}
-      <div className="flex items-center gap-3 py-3 border-b border-white/5 sticky top-0 z-50 bg-[#0B0D1F]/60 backdrop-blur-md mb-2 -mx-4 px-4">
-        <button 
-          onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
-          className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5"
-        >
-          <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
-        </button>
-        
-        <div className="flex flex-col flex-1 min-w-0">
-          <p className="text-base font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
-          <h2 className="text-xs font-bold text-muted-foreground mt-1 uppercase tracking-widest">Marketplace</h2>
-        </div>
-      </div>
+    <div className="space-y-6 pb-24 max-w-2xl mx-auto px-4 pt-4 bg-[#0B0D1F]">
 
       {/* Search & Post Bar */}
-      <div className="flex gap-2 sticky top-[72px] z-40 bg-background/80 backdrop-blur-xl p-1 rounded-2xl border shadow-sm">
+      <div className="flex items-center gap-2 sticky top-16 z-40 bg-[#0B0D1F]/95 backdrop-blur-xl h-16 px-4 rounded-2xl border border-white/10 shadow-lg mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search marketplace..."
-            className="pl-9 h-10 bg-transparent border-0 focus-visible:ring-0"
+            className="pl-9 bg-white/5 border-white/10 text-white rounded-xl focus-visible:ring-blue-500/50"
           />
         </div>
-        <Button onClick={handleOpenCreate} className="h-10 px-4 gap-2 bg-primary hover:opacity-90 rounded-xl shadow-lg shadow-primary/20">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Post</span>
+        <Button 
+          onClick={() => setCreateOpen(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl px-4"
+        >
+          Sell
         </Button>
       </div>
+
 
       {/* Tabs */}
       <div className="flex items-center gap-1 p-1 rounded-2xl bg-muted/50 border overflow-x-auto no-scrollbar">

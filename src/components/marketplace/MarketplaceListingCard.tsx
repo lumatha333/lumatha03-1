@@ -68,7 +68,7 @@ export function MarketplaceListingCard({
 
   return (
     <Card className={cn(
-      "border border-white/5 overflow-hidden animate-fade-in backdrop-blur-sm shadow-xl bg-[#0B0D1F]/60",
+      "border-2 border-black overflow-hidden animate-fade-in backdrop-blur-sm shadow-2xl bg-[#0B0D1F]/80",
     )}>
       <div className="flex flex-col md:flex-row">
         {/* Left Side: Media (Halves) */}

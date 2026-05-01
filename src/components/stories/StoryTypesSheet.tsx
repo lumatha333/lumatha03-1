@@ -64,15 +64,6 @@ const STORY_TYPES: StoryTypeOption[] = [
     accent: '#f59e0b',
     features: ['Simple', 'Fast', 'Pinned'],
   },
-  {
-    id: 'voice',
-    label: 'Voice',
-    description: 'Speak your mind',
-    icon: Music,
-    gradient: 'from-emerald-500/20 to-teal-600/20',
-    accent: '#10b981',
-    features: ['Recording', 'Effects', 'Transcript'],
-  },
 ];
 
 // ============ MOOD QUICK SELECT ============
