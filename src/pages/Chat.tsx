@@ -2610,21 +2610,35 @@ export default function Chat() {
     window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'));
   };
 
-  // Top banner component - shows "Messages" label
+  // Top banner component - shows LUMATHA branding + Messages label on mobile
   const TopBanner = () => (
-    <div className="bg-[#0a0f1e]/95 backdrop-blur-xl border-b border-white/5 px-4 py-3 min-h-[64px] flex items-center justify-between">
-      <div className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500 font-bold mb-0.5">{sectionLabelByTab[chatTab]}</span>
-        <span className="text-xl md:text-lg font-black text-white tracking-tight">Messages</span>
+    <div className="h-16 bg-[#0B0D1F]/98 backdrop-blur-xl border-b border-white/5 px-4 flex items-center justify-between gap-3">
+      {/* Left: Hamburger + LUMATHA on mobile */}
+      <div className="flex items-center gap-2 min-w-0">
+        {isMobile && (
+          <button
+            onClick={openMobileSidebar}
+            className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5 shrink-0"
+            aria-label="Open menu"
+          >
+            <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
+          </button>
+        )}
+        <p className="text-base font-black tracking-wide text-blue-600 shrink-0">LUMATHA</p>
       </div>
-      <button
-        onClick={toggleMainSearch}
-        className="w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 hover:bg-white/5 bg-white/[0.02]"
-        aria-label="Search messages"
-        title="Search"
-      >
-        <Search className="w-5 h-5" style={{ color: '#94A3B8' }} />
-      </button>
+      {/* Right: Messages label + Search icon */}
+      <div className="flex items-center gap-2 ml-auto">
+        <span className="text-[11px] uppercase tracking-[0.14em] font-bold text-slate-400">Messages</span>
+        <button
+          onClick={toggleMainSearch}
+          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 hover:bg-white/5"
+          aria-label="Search messages"
+        >
+          {showSearch
+            ? <X className="w-5 h-5 text-slate-400" />
+            : <Search className="w-5 h-5 text-slate-400" />}
+        </button>
+      </div>
     </div>
   );
 
@@ -2668,7 +2682,8 @@ export default function Chat() {
 
   return (
     <div className={cn("pb-6 md:pb-20", isMobile ? "min-h-full" : "min-h-[calc(100vh-56px)]")} style={{ background: '#0a0f1e' }}>
-      <div className="sticky top-16 z-40 bg-[#0B0D1F]/98 backdrop-blur-md">
+      {/* Sticky header block: on mobile sticks to top-0 since Layout header is hidden for chat list */}
+      <div className={cn("sticky z-40 bg-[#0B0D1F]/98 backdrop-blur-md", isMobile ? "top-0" : "top-16")}>
         {/* Top Banner */}
         <TopBanner />
 
@@ -2688,8 +2703,8 @@ export default function Chat() {
                 className="w-full h-12 rounded-2xl pl-11 pr-10 text-[15px] font-medium text-white placeholder:text-[#4B5563] outline-none transition-all focus:ring-1 focus:ring-primary/30"
                 style={{ background: '#111827', border: '1px solid #1f2937' }}
               />
-              <button 
-                onClick={() => { setShowSearch(false); setSearchQuery(''); }} 
+              <button
+                onClick={() => { setShowSearch(false); setSearchQuery(''); }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 active:scale-90 transition-all"
               >
                 <X className="w-4 h-4 text-slate-400" />

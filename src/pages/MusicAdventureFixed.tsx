@@ -8,7 +8,7 @@ import {
   Search, Globe, Heart, MessageCircle, Bookmark, Plus,
   UserCircle2, Compass, Map as MapIcon, Share2, MoreVertical,
   Flag, Filter, X, Edit3, Trash2, Lock, Sparkles, Users,
-  ChevronRight, Layers, CheckCircle,
+  ChevronRight, Layers, CheckCircle, Menu,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -523,14 +523,8 @@ export default function MusicAdventureFixed() {
   const CurrentTabIcon = currentTab.icon;
 
   // Subsection Navigation Component - Shared across all tabs
-  // Mobile: Small icons in front of text (horizontal layout) to save space like Learn section
   const SubsectionNavigation = () => (
-    <motion.div
-      className="bg-[#0a0f1e]/95 backdrop-blur-md border-b border-white/5 px-2 py-2"
-      initial={{ y: 0 }}
-      animate={{ y: showHeader ? 0 : -100 }}
-      transition={{ duration: 0.3 }}
-    >
+    <div className="bg-[#0a0f1e]/95 backdrop-blur-md border-b border-white/5 px-2 py-2">
       <div className="flex items-center justify-between w-full gap-1">
         {[
           { id: 'quests', icon: Target, label: 'Quests' },
@@ -563,23 +557,24 @@ export default function MusicAdventureFixed() {
           );
         })}
       </div>
-    </motion.div>
+    </div>
   );
 
-  // Top Banner Component - Shows current section
-  // Mobile: 50% bigger size (w-7 h-7 icon, larger padding)
-  const TopBanner = () => (
-    <motion.div
-      className="bg-[#0a0f1e]/95 backdrop-blur-md border-b border-white/5 px-3 py-3 md:py-2"
-      initial={{ y: 0 }}
-      animate={{ y: showHeader ? 0 : -80 }}
-      transition={{ duration: 0.3 }}
-    >
-      <div className="flex items-center gap-3">
-        <CurrentTabIcon className={cn("w-7 h-7 md:w-5 md:h-5", currentTab.color)} />
-        <span className="text-base md:text-sm font-black uppercase tracking-wider text-white">{currentTab.label}</span>
+  // Top Banner Component - LUMATHA header bar for mobile (since Layout header is hidden for adventure)
+  const MobileTopBanner = () => (
+    <div className="h-16 bg-[#0B0D1F]/98 backdrop-blur-xl border-b border-white/5 px-4 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))}
+          className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5 shrink-0"
+          aria-label="Open menu"
+        >
+          <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
+        </button>
+        <p className="text-base font-black tracking-wide text-blue-600">LUMATHA</p>
       </div>
-    </motion.div>
+      <span className="text-[11px] uppercase tracking-[0.14em] font-bold text-slate-400">Adventure</span>
+    </div>
   );
 
   // Quests Section Component
@@ -1383,8 +1378,13 @@ export default function MusicAdventureFixed() {
       {/* Main Content - Full Width, No Side Constraints */}
       <div className="min-h-screen w-full">
         <div className="w-full max-w-none">
-          {/* Shared Subsection Navigation - Visible on all tabs */}
-          <SubsectionNavigation />
+          {/* Sticky header block: on mobile sticks to top-0 since Layout header is hidden for adventure */}
+          <div className={cn("sticky z-40 w-full", isMobile ? "top-0" : "top-16")}>
+            {/* Mobile-only top banner with LUMATHA branding */}
+            {isMobile && <MobileTopBanner />}
+            {/* Shared Subsection Navigation - Visible on all tabs */}
+            <SubsectionNavigation />
+          </div>
           
           <AnimatePresence mode="wait">
             <motion.div

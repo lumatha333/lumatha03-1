@@ -422,6 +422,11 @@ function LayoutContent({ children }: LayoutProps) {
   const isChatListView = location.pathname === '/chat';
   const isInActiveChat = location.pathname.startsWith('/chat/') && location.pathname.length > 6;
   const isChatSection = isChatListView || isInActiveChat;
+  const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || location.pathname.startsWith('/profile/');
+  const isAdventureGrid = location.pathname === '/music-adventure';
+  const isFeedPage = location.pathname === '/';
+  // Pages that manage their own top banners — hide the Layout header on mobile for them
+  const pageHasOwnHeader = isMobile && (isChatListView || isAdventureGrid);
 
   const handleScroll = useCallback(() => {
     if (ticking.current) return;
@@ -458,13 +463,13 @@ function LayoutContent({ children }: LayoutProps) {
   }, [location.pathname, isMobile, isInActiveChat]);
 
   useEffect(() => {
-    if (isInActiveChat) {
+    if (isInActiveChat || pageHasOwnHeader) {
       setHeaderVisible(false);
     } else {
       setHeaderVisible(true);
       lastScrollY.current = 0;
     }
-  }, [isInActiveChat]);
+  }, [isInActiveChat, pageHasOwnHeader]);
 
   useEffect(() => {
     const el = feedCenterRef.current;
@@ -473,9 +478,8 @@ function LayoutContent({ children }: LayoutProps) {
     return () => el.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
-  const isHomeSection = ['/', '/search', '/private', '/notifications'].includes(location.pathname) || location.pathname.startsWith('/profile/');
-  const isAdventureGrid = location.pathname === '/music-adventure';
-  const isFeedPage = location.pathname === '/';
+  // Show SubNavigation bottom bar for home, chat list, and adventure on mobile
+  const showSubNav = isMobile && (isHomeSection || isChatListView || isAdventureGrid);
   const educationTab = new URLSearchParams(location.search).get('tab')?.toLowerCase();
   const sectionLabel = location.pathname === '/search'
     ? 'Search'
@@ -559,7 +563,8 @@ function LayoutContent({ children }: LayoutProps) {
         navigate(url);
       }} unreadMessages={unreadMessages} items={currentMenuItems} hidden={false} />}
       <main ref={feedCenterRef} className="feed-center relative flex flex-col min-w-0 flex-1 h-screen overflow-y-auto scrollbar-hide">
-        {!isInActiveChat && (
+        {/* Layout header — hidden on mobile for pages that manage their own top banner (chat list, adventure) */}
+        {!isInActiveChat && !pageHasOwnHeader && (
         <header className={cn("sticky top-0 z-50 w-full h-16 bg-[#0B0D1F]/95 backdrop-blur-xl border-b border-white/5 transition-transform duration-300", headerVisible ? "translate-y-0" : "-translate-y-full")}>
           <div className="flex items-center justify-between h-full px-4 gap-3">
             {/* Left side - menu button and Lumatha branding */}
@@ -615,10 +620,15 @@ function LayoutContent({ children }: LayoutProps) {
           </div>
         </header>
         )}
-        <div className={cn("flex-1 transition-all duration-500", isMobile ? "px-0 py-0" : "p-4", isMobile && isHomeSection && "pb-24", !isMobile && isAdventureGrid && "max-w-7xl mx-auto w-full")}>
+        <div className={cn(
+          "flex-1 transition-all duration-500",
+          isMobile ? "px-0 py-0" : "p-4",
+          isMobile && showSubNav && "pb-[72px]",
+          !isMobile && isAdventureGrid && "max-w-7xl mx-auto w-full"
+        )}>
           {children}
         </div>
-        {isMobile && isHomeSection && <SubNavigation visible={headerVisible} />}
+        {showSubNav && <SubNavigation visible={true} />}
       </main>
       <CreatePostSheet open={createSheetOpen} onOpenChange={setCreateSheetOpen} />
     </div>
