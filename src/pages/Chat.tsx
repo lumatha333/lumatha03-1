@@ -2610,35 +2610,21 @@ export default function Chat() {
     window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'));
   };
 
-  // Top banner component - shows "Messages" label with sidebar
+  // Top banner component - shows "Messages" label
   const TopBanner = () => (
-    <div className="bg-[#0a0f1e]/95 backdrop-blur-xl border-b border-white/5 px-4 py-2 min-h-16">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
-          {isMobile && (
-            <button
-              onClick={openMobileSidebar}
-              className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-white/5 active:scale-95 transition-all"
-              aria-label="Open sidebar"
-            >
-              <Menu className="w-5 h-5 text-blue-500" />
-            </button>
-          )}
-          <span className="text-base md:text-sm font-black uppercase tracking-wide text-blue-600">Lumatha</span>
-        </div>
-        <span className="text-[11px] uppercase tracking-[0.12em] text-slate-500 font-semibold">{sectionLabelByTab[chatTab]}</span>
+    <div className="bg-[#0a0f1e]/95 backdrop-blur-xl border-b border-white/5 px-4 py-3 min-h-[64px] flex items-center justify-between">
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500 font-bold mb-0.5">{sectionLabelByTab[chatTab]}</span>
+        <span className="text-xl md:text-lg font-black text-white tracking-tight">Messages</span>
       </div>
-      <div className="mt-1.5 flex items-center justify-between">
-        <span className="text-lg md:text-base font-black text-white tracking-wide">Messages</span>
-        <button
-          onClick={toggleMainSearch}
-          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/5"
-          aria-label="Search messages"
-          title="Search"
-        >
-          <Search className="w-4 h-4" style={{ color: chatTab === 'main' ? '#94A3B8' : '#475569' }} />
-        </button>
-      </div>
+      <button
+        onClick={toggleMainSearch}
+        className="w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 hover:bg-white/5 bg-white/[0.02]"
+        aria-label="Search messages"
+        title="Search"
+      >
+        <Search className="w-5 h-5" style={{ color: '#94A3B8' }} />
+      </button>
     </div>
   );
 
@@ -2659,7 +2645,7 @@ export default function Chat() {
               key={tab.id}
               onClick={() => setChatTab(tab.id as any)}
               className={cn(
-                "flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl transition-all active:scale-95 flex-1",
+                "flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl transition-all active:scale-95 flex-1",
                 isActive ? "bg-primary/10 text-primary ring-1 ring-primary/20" : "text-slate-400 hover:bg-white/[0.03] hover:text-slate-200"
               )}
             >
@@ -2682,7 +2668,7 @@ export default function Chat() {
 
   return (
     <div className={cn("pb-6 md:pb-20", isMobile ? "min-h-full" : "min-h-[calc(100vh-56px)]")} style={{ background: '#0a0f1e' }}>
-      <div className="sticky top-0 z-40 bg-[#0B0D1F]/98 backdrop-blur-md">
+      <div className="sticky top-16 z-40 bg-[#0B0D1F]/98 backdrop-blur-md">
         {/* Top Banner */}
         <TopBanner />
 
@@ -2691,21 +2677,24 @@ export default function Chat() {
 
         {/* Search Bar - Only show when in main tab and search is enabled */}
         {chatTab === 'main' && showSearch && (
-          <div className="px-4 py-2.5 border-b border-white/5 bg-[#0B0D1F]">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#4B5563' }} />
-            <input
-              ref={searchInputRef}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search conversations..."
-              className="w-full h-11 rounded-full pl-11 pr-10 text-[14px] font-medium text-white placeholder:text-[#4B5563] outline-none"
-              style={{ background: '#111827', border: '1px solid #1f2937' }}
-            />
-            <button onClick={() => { setShowSearch(false); setSearchQuery(''); }} className="absolute right-3 top-1/2 -translate-y-1/2">
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
-          </div>
+          <div className="px-4 py-3 border-b border-white/5 bg-[#0B0D1F] animate-in slide-in-from-top-2 duration-200">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#64748B' }} />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search conversations..."
+                className="w-full h-12 rounded-2xl pl-11 pr-10 text-[15px] font-medium text-white placeholder:text-[#4B5563] outline-none transition-all focus:ring-1 focus:ring-primary/30"
+                style={{ background: '#111827', border: '1px solid #1f2937' }}
+              />
+              <button 
+                onClick={() => { setShowSearch(false); setSearchQuery(''); }} 
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 active:scale-90 transition-all"
+              >
+                <X className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -430,8 +430,8 @@ function LayoutContent({ children }: LayoutProps) {
       const st = feedCenterRef.current?.scrollTop || 0;
       const lastY = lastScrollY.current;
       
-      // On mobile chat sections: always hide the main header
-      if (isChatSection) {
+      // On mobile active chat: always hide the main header
+      if (isInActiveChat) {
         setHeaderVisible(false);
         lastScrollY.current = st <= 0 ? 0 : st;
         ticking.current = false;
@@ -455,16 +455,16 @@ function LayoutContent({ children }: LayoutProps) {
       lastScrollY.current = st <= 0 ? 0 : st;
       ticking.current = false;
     });
-  }, [location.pathname, isMobile, isChatSection]);
+  }, [location.pathname, isMobile, isInActiveChat]);
 
   useEffect(() => {
-    if (isChatSection) {
+    if (isInActiveChat) {
       setHeaderVisible(false);
     } else {
       setHeaderVisible(true);
       lastScrollY.current = 0;
     }
-  }, [isChatSection]);
+  }, [isInActiveChat]);
 
   useEffect(() => {
     const el = feedCenterRef.current;
@@ -539,8 +539,8 @@ function LayoutContent({ children }: LayoutProps) {
         }
         navigate(url); 
         setMobileSidebarOpen(false); 
-      }} isActive={(p) => location.pathname === p} unreadMessages={unreadMessages} items={currentMenuItems} />}
-      {!isMobile && <DesktopSidebar isActive={(p) => location.pathname === p} onNavigate={(url) => {
+      }} isActive={(p) => location.pathname === p || (p !== '/' && location.pathname.startsWith(p))} unreadMessages={unreadMessages} items={currentMenuItems} />}
+      {!isMobile && <DesktopSidebar isActive={(p) => location.pathname === p || (p !== '/' && location.pathname.startsWith(p))} onNavigate={(url) => {
         // Set active zone based on navigation for Layout 2 & 3
         let zone = '';
         if (layoutMode === 2) {

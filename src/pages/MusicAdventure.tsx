@@ -279,7 +279,7 @@ export default function MusicAdventure() {
 
   return (
     <div className="min-h-screen bg-[#0a0f1e] text-slate-200">
-      <div className="sticky top-0 z-30 w-full bg-[#0a0f1e]/80 backdrop-blur-xl border-b border-white/5">
+      <div className="sticky top-16 z-30 w-full bg-[#0a0f1e]/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center justify-around h-14 max-w-md mx-auto">
           {[
             { id: 'quests', icon: Target, label: 'Quests' },
