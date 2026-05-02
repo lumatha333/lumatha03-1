@@ -126,21 +126,7 @@ function DeferredImageTile({ src, alt, className }: { src: string; alt?: string;
     </div>
   );
 }
-          className="w-full h-full object-cover"
-          muted
-          loop
-          playsInline
-          preload="none"
-          poster="/placeholder.svg"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-black/70">
-          <Play className="w-6 h-6 text-white/80" />
-        </div>
-      )}
-    </div>
-  );
-}
+
 
 export default function Search() {
   const navigate = useNavigate();

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { 
   Plus, Search, MoreVertical, Pin, Bell, Archive, Trash2, 
@@ -521,7 +521,7 @@ function EditorView({ note, isSaving, onClose, onUpdate, onDelete, onNext, onPre
           </SlidePanel>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
 
@@ -635,4 +635,3 @@ function MenuItem({ icon: Icon, label, onClick, color }: any) {
     </button>
   );
 }
-
