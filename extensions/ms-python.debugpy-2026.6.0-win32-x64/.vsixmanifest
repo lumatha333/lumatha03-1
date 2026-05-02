@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 	<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
 		<Metadata>
-			<Identity Language="en-US" Id="debugpy" Version="2026.4.0" Publisher="ms-python" TargetPlatform="win32-x64"/>
+			<Identity Language="en-US" Id="debugpy" Version="2026.6.0" Publisher="ms-python" TargetPlatform="win32-x64"/>
 			<DisplayName>Python Debugger</DisplayName>
 			<Description xml:space="preserve">Python Debugger extension using debugpy.</Description>
 			<Tags>python,debugger,debugpy,debuggers</Tags>

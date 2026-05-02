@@ -2,7 +2,7 @@
 	"name": "debugpy",
 	"displayName": "Python Debugger",
 	"description": "Python Debugger extension using debugpy.",
-	"version": "2026.4.0",
+	"version": "2026.6.0",
 	"publisher": "ms-python",
 	"enabledApiProposals": [
 		"portsAttributes",
@@ -695,8 +695,8 @@
 		"vscode-languageclient": "^8.0.2"
 	},
 	"__metadata": {
-		"installedTimestamp": 1777470031435,
+		"installedTimestamp": 1777717159603,
 		"targetPlatform": "win32-x64",
-		"size": 20711965
+		"size": 20711752
 	}
 }
