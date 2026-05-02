@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useMemo, RefObject, useState, useRef, useCallback } from 'react';
-import { Check, CheckCheck, Eye, EyeOff, Forward, Paperclip, Pin, CornerUpLeft, ChevronUp, Loader2, Camera, MapPin, Shield, X as XIcon } from 'lucide-react';
+import { Check, CheckCheck, Eye, EyeOff, Forward, Paperclip, Pin, CornerUpLeft, ChevronUp, Loader2, Camera, MapPin, Shield, X as XIcon, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatImageGrid } from '@/components/chat/ChatImageGrid';
 import { ChatVideoPlayer } from '@/components/chat/ChatVideoPlayer';
@@ -93,8 +93,14 @@ const MessageItem = memo(function MessageItem({
           </span>
         </div>
       )}
-      <div className={cn('flex mb-1 items-start gap-1 group', isOwn ? 'justify-end' : 'justify-start')}>
-        {/* Three dots removed - using long press for message options */}
+      <div className={cn('flex mb-1 items-center gap-1 group', isOwn ? 'flex-row-reverse' : 'flex-row')}>
+        <button
+          onClick={() => onLongPress(msg.id)}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-full hover:bg-white/5 text-slate-500 active:scale-90 shrink-0"
+          title="Options"
+        >
+          <MoreHorizontal className="w-4 h-4" />
+        </button>
 
         <div
           className={cn(
@@ -115,7 +121,7 @@ const MessageItem = memo(function MessageItem({
             longPressTimerRef.current = setTimeout(() => {
               if (navigator.vibrate) navigator.vibrate(30);
               onLongPress(msg.id);
-            }, 500);
+            }, 650);
           }}
           onTouchMove={(e) => {
             const start = touchStartRef.current;

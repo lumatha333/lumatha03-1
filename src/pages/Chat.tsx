@@ -1987,9 +1987,23 @@ export default function Chat() {
           </div>
         </div>
 
+        {/* Message long-press action menu backdrop */}
+        <AnimatePresence>
+          {longPressTarget && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[35]"
+              onClick={() => setLongPressTarget(null)}
+              onTouchStart={() => setLongPressTarget(null)}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Message long-press action menu with enhanced animations */}
         <AnimatePresence>
-          {longPressTarget && messages.some((m) => m.id === longPressTarget) && (
+          {longPressTarget && longPressMenuPos && messages.some((m) => m.id === longPressTarget) && (
             <motion.div
               id="chat-message-action-menu"
               initial={{ opacity: 0, scale: 0.9, y: 10 }}
@@ -2000,9 +2014,9 @@ export default function Chat() {
               style={{ 
                 background: 'rgba(15, 23, 42, 0.98)', 
                 backdropFilter: 'blur(14px)',
-                left: longPressMenuPos?.left ?? undefined, 
-                top: longPressMenuPos?.top ?? undefined,
-                width: Math.min(292, (longPressMenuPos?.width ?? 268)),
+                left: longPressMenuPos.left, 
+                top: longPressMenuPos.top,
+                width: Math.min(292, longPressMenuPos.width),
                 maxWidth: 'calc(100vw - 24px)',
                 transformOrigin: 'top center',
                 willChange: 'transform, opacity'

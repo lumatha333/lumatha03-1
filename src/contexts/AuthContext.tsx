@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
+import { createContext, useContext, ReactNode, useState, useEffect, useRef } from 'react';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -71,6 +71,7 @@ const buildStoredSession = (session: Session, profile?: any): StoredAccountSessi
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const initStartedRef = useRef(false);
   const [profile, setProfile] = useState<any>(null);
   const [accountSessions, setAccountSessions] = useState<StoredAccountSession[]>(() => parseStoredSessions());
 
@@ -105,6 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (initStartedRef.current) return;
+    initStartedRef.current = true;
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
