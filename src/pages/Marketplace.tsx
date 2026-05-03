@@ -310,20 +310,20 @@ export default function Marketplace() {
   return (
     <div className="space-y-6 pb-24 max-w-2xl mx-auto px-4 pt-4 bg-[#0B0D1F]">
 
-      {/* Search & Post Bar */}
-      <div className="flex items-center gap-2 sticky top-16 z-40 bg-[#0B0D1F]/95 backdrop-blur-xl h-16 px-4 rounded-2xl border border-white/10 shadow-lg mb-4">
+      {/* Search & Post Bar - Standardized to Medium Style */}
+      <div className="sticky top-16 z-40 bg-[#0B0D1F]/95 backdrop-blur-xl h-16 flex items-center px-4 border-b border-white/5 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search marketplace..."
-            className="pl-9 bg-white/5 border-white/10 text-white rounded-xl focus-visible:ring-blue-500/50"
+            className="pl-9 h-11 bg-white/5 border-white/10 text-white rounded-xl focus-visible:ring-blue-500/50"
           />
         </div>
         <Button 
           onClick={() => setCreateOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl px-4"
+          className="bg-blue-600 hover:bg-blue-700 h-11 text-white font-bold rounded-xl px-4 ml-2"
         >
           Sell
         </Button>

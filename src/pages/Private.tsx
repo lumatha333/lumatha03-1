@@ -148,19 +148,19 @@ export default function Private() {
 
   return (
     <div className="min-h-screen pb-20">
-      {/* Header - Matching Feed Style */}
+      {/* Header - Standardized to Medium Style */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between px-4 py-3 border-b border-white/5"
+        className="sticky top-16 z-40 bg-[#0B0D1F]/95 backdrop-blur-xl h-16 flex items-center justify-between px-4 border-b border-white/5"
       >
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 flex items-center justify-center border border-white/10">
-            <Shield className="w-5 h-5 text-violet-400" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/20 flex items-center justify-center border border-white/10">
+            <Shield className="w-4 h-4 text-violet-400" />
           </div>
           <div>
-            <h1 className="text-white font-bold text-lg">Private Zone</h1>
-            <p className="text-xs text-slate-400">Your personal space</p>
+            <h1 className="text-white font-bold text-base">Private Zone</h1>
+            <p className="text-[10px] text-slate-400 -mt-0.5">Your personal space</p>
           </div>
         </div>
       </motion.div>

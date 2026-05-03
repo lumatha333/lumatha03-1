@@ -1018,23 +1018,45 @@ export function EnhancedPostCard({
               </div>
             </div>
             {!isOwner && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFollow();
-                }}
-                className="ml-2 px-3 py-1 text-[11px] font-bold rounded-full transition-all active:scale-95 shadow-sm shrink-0"
-                style={{
-                  background: isFollowing 
-                    ? 'rgba(148, 163, 184, 0.1)' 
-                    : 'linear-gradient(135deg, #F58529, #DD2A7B, #8134AF)',
-                  color: isFollowing ? 'var(--text-2)' : '#ffffff',
-                  border: isFollowing ? '1px solid rgba(148, 163, 184, 0.2)' : 'none',
-                }}
-                aria-label={isFollowing ? 'Following' : 'Follow'}
-              >
-                {isFollowing ? 'Following' : 'Follow'}
-              </button>
+              <div className="flex items-center gap-1.5 ml-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFollow();
+                  }}
+                  className="shrink-0 text-white transition-all active:scale-95 font-medium"
+                  style={{
+                    background: isFollowing ? 'transparent' : 'linear-gradient(135deg, #7C3AED, #6366F1)',
+                    border: isFollowing ? '1px solid #374151' : 'none',
+                    borderRadius: 100,
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontFamily: "'Inter', sans-serif",
+                    color: isFollowing ? '#94A3B8' : 'white',
+                  }}
+                  aria-label={isFollowing ? 'Following' : 'Follow'}
+                >
+                  {isFollowing ? 'Following' : 'Follow'}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/chat/${post.user_id}`);
+                  }}
+                  className="shrink-0 text-white transition-all active:scale-95 font-medium"
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 100,
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontFamily: "'Inter', sans-serif",
+                    color: 'white',
+                  }}
+                >
+                  Message
+                </button>
+              </div>
             )}
           </div>
 

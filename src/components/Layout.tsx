@@ -433,34 +433,19 @@ function LayoutContent({ children }: LayoutProps) {
     ticking.current = true;
     window.requestAnimationFrame(() => {
       const st = feedCenterRef.current?.scrollTop || 0;
-      const lastY = lastScrollY.current;
       
       // On mobile active chat: always hide the main header
       if (isInActiveChat) {
         setHeaderVisible(false);
-        lastScrollY.current = st <= 0 ? 0 : st;
-        ticking.current = false;
-        return;
-      }
-      
-      // Only apply scroll hide on feed page, not on other sections
-      const isFeed = location.pathname === '/';
-      if (isFeed) {
-        // Hide when scrolling down, show when scrolling up
-        if (st > lastY && st > 50) {
-          setHeaderVisible(false);
-        } else if (st < lastY || st <= 50) {
-          setHeaderVisible(true);
-        }
       } else {
-        // Always visible in non-chat sections
+        // Header always visible per user request
         setHeaderVisible(true);
       }
       
       lastScrollY.current = st <= 0 ? 0 : st;
       ticking.current = false;
     });
-  }, [location.pathname, isMobile, isInActiveChat]);
+  }, [isInActiveChat]);
 
   useEffect(() => {
     if (isInActiveChat || pageHasOwnHeader) {

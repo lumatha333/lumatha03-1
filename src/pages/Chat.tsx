@@ -199,7 +199,7 @@ export default function Chat() {
     if (!isMobile || !isAndroid) return false;
     const cpu = typeof navigator !== 'undefined' && 'hardwareConcurrency' in navigator ? navigator.hardwareConcurrency : 8;
     const mem = typeof navigator !== 'undefined' && 'deviceMemory' in navigator ? Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4) : 4;
-    return isAndroid && (cpu <= 8 || mem <= 4);
+    return isAndroid && (cpu < 4 || mem < 4);
   }, [isMobile, isAndroid]);
   
   // Track route performance for Chat page
@@ -681,11 +681,15 @@ export default function Chat() {
       return;
     }
 
-    // Always scroll to bottom for new messages
     if (newMessagesAdded) {
-      requestAnimationFrame(() => {
-        scrollToBottom();
-      });
+      const lastMessage = messages[messages.length - 1];
+      const isMyMessage = lastMessage?.sender_id === user?.id;
+      
+      if (isNearBottomRef.current || isMyMessage) {
+        requestAnimationFrame(() => {
+          scrollToBottom();
+        });
+      }
     }
   }, [messages]);
 
@@ -1913,60 +1917,13 @@ export default function Chat() {
             >
               <VideoIcon className="w-4 h-4 text-white" />
             </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors active:scale-90"
-                  title="Chat options"
-                >
-                  <MoreVertical className="w-4 h-4 text-white" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-[#111827] border-white/10 text-white rounded-xl shadow-2xl p-1.5">
-                <DropdownMenuItem onClick={() => setShowSettings(true)} className="rounded-lg py-2.5 focus:bg-white/5 focus:text-white cursor-pointer">
-                  <Eye className="w-4 h-4 mr-3 text-slate-400" />
-                  <span>View Details</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate(`/profile/${currentChatUser}`)} className="rounded-lg py-2.5 focus:bg-white/5 focus:text-white cursor-pointer">
-                  <Users className="w-4 h-4 mr-3 text-slate-400" />
-                  <span>View Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openMediaPage('pics')} className="rounded-lg py-2.5 focus:bg-white/5 focus:text-white cursor-pointer">
-                  <Image className="w-4 h-4 mr-3 text-slate-400" />
-                  <span>Media, Links & Docs</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-white/5 my-1" />
-                <DropdownMenuItem 
-                  onClick={() => currentChatUser && toggleInSet('mutedChats', currentChatUser, mutedChats, setMutedChats)}
-                  className="rounded-lg py-2.5 focus:bg-white/5 focus:text-white cursor-pointer"
-                >
-                  {mutedChats.has(currentChatUser || '') ? <Bell className="w-4 h-4 mr-3 text-slate-400" /> : <BellOff className="w-4 h-4 mr-3 text-slate-400" />}
-                  <span>{mutedChats.has(currentChatUser || '') ? 'Unmute' : 'Mute'}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => currentChatUser && toggleInSet('archivedChats', currentChatUser, archivedChats, setArchivedChats)}
-                  className="rounded-lg py-2.5 focus:bg-white/5 focus:text-white cursor-pointer"
-                >
-                  <Archive className="w-4 h-4 mr-3 text-slate-400" />
-                  <span>Archive Chat</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-white/5 my-1" />
-                <DropdownMenuItem 
-                  onClick={() => unsendAllForCurrentChat()}
-                  className="rounded-lg py-2.5 focus:bg-white/5 focus:text-white cursor-pointer"
-                >
-                  <X className="w-4 h-4 mr-3 text-slate-400" />
-                  <span>Clear History</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => currentChatUser && deleteEntireChat(currentChatUser)}
-                  className="rounded-lg py-2.5 focus:bg-red-500/10 focus:text-red-400 text-red-400 cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4 mr-3" />
-                  <span>Delete Chat</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors active:scale-90"
+              title="Chat options"
+            >
+              <MoreVertical className="w-4 h-4 text-white" />
+            </button>
           </div>
         </div>
 
@@ -2022,6 +1979,7 @@ export default function Chat() {
                 viewedOnceMessages={viewedOnceMessages}
                 allChatMedia={allChatMedia}
                 messagesEndRef={messagesEndRef}
+                scrollContainerRef={scrollContainerRef}
                 hasMore={hasMoreMessages}
                 loadingMore={loadingMore}
                 bubbleGradient={currentTheme.gradient}

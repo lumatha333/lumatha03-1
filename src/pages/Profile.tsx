@@ -352,19 +352,42 @@ export default function Profile() {
               
               <div className="flex items-center gap-2">
                 {!isOwnProfile && currentUser && !hasBlockedMe && !isBlocked && (
-                  <button
-                    onClick={handleFollow}
-                    className={cn(
-                      "px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 border shadow-lg",
-                      isFollowing ? "bg-slate-800 text-white border-white/20" : "bg-orange-500 text-white border-white"
-                    )}
-                  >
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </button>
+                  <>
+                    <button
+                      onClick={handleFollow}
+                      className="shrink-0 text-white transition-all active:scale-95 font-bold"
+                      style={{
+                        background: isFollowing ? 'transparent' : 'linear-gradient(135deg, #7C3AED, #6366F1)',
+                        border: isFollowing ? '1px solid #374151' : 'none',
+                        borderRadius: 100,
+                        padding: '8px 20px',
+                        fontSize: 13,
+                        fontFamily: "'Inter', sans-serif",
+                        color: isFollowing ? '#94A3B8' : 'white',
+                      }}
+                    >
+                      {isFollowing ? 'Following' : 'Follow'}
+                    </button>
+                    <button
+                      onClick={() => navigate(`/chat/${userId}`)}
+                      className="shrink-0 text-white transition-all active:scale-95 font-bold"
+                      style={{
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 100,
+                        padding: '8px 20px',
+                        fontSize: 13,
+                        fontFamily: "'Inter', sans-serif",
+                        color: 'white',
+                      }}
+                    >
+                      Message
+                    </button>
+                  </>
                 )}
                 {isOwnProfile && (
-                  <button onClick={() => navigate('/settings')} className="p-2 rounded-full bg-slate-800 border border-white/10 text-white active:scale-95 transition-all">
-                    <Settings className="w-4 h-4" />
+                  <button onClick={() => navigate('/settings')} className="p-2.5 rounded-full bg-slate-800 border border-white/10 text-white active:scale-95 transition-all">
+                    <Settings className="w-5 h-5" />
                   </button>
                 )}
               </div>
@@ -392,21 +415,6 @@ export default function Profile() {
         <p className="px-5 mt-3 text-[14px] text-slate-200 leading-relaxed font-medium" style={{ fontFamily: "'Inter'" }}>
           {profile.bio}
         </p>
-      )}
-
-      {/* Profile actions for others */}
-      {!isOwnProfile && !isBlocked && !hasBlockedMe && (
-        <div className="flex gap-2 px-5 mt-4">
-          <button 
-            onClick={() => navigate(`/chat/${userId}`)}
-            className="flex-1 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold active:scale-95 transition-all shadow-lg shadow-blue-900/20"
-          >
-            Message
-          </button>
-          <button className="px-4 py-2 rounded-xl bg-slate-800 border border-white/10 text-white text-sm active:scale-95 transition-all">
-            <Share2 className="w-4 h-4" />
-          </button>
-        </div>
       )}
 
       {/* Tabs */}

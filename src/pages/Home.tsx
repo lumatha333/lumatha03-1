@@ -132,7 +132,7 @@ export default function Home() {
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string>('');
-  const [showTopElements, setShowTopElements] = useState(true);
+  
   const lastScrollY = useRef(0);
 
   const widgetData = usePremiumWidgets();
@@ -141,10 +141,11 @@ export default function Home() {
     // Clean sweep - all quick actions removed for minimal feed experience
   ], [widgetData]);
 
+  // Load posts on mount and when scope changes
   useEffect(() => {
     localStorage.setItem('lumatha_feed_scope', feedScope);
     if (user) fetchPosts();
-  }, [feedScope]);
+  }, [feedScope, user]);
 
   useEffect(() => {
     const onScopeChange = (event: Event) => {
@@ -160,23 +161,6 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem('lumatha_mobile_feed_chip', subFilter);
   }, [subFilter]);
-
-  // Scroll handler - hide/show stories and chips
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
-        // Scrolling down - hide
-        setShowTopElements(false);
-      } else {
-        // Scrolling up - show
-        setShowTopElements(true);
-      }
-      lastScrollY.current = currentScrollY;
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   useEffect(() => {
     localStorage.setItem('lumatha_feed_category', feedCategory);
@@ -295,11 +279,11 @@ export default function Home() {
 
   return (
     <div className="pb-20 overflow-x-hidden">
-      <div className={cn("w-full pt-1 md:max-w-[640px] md:mx-auto transition-all duration-300", showTopElements ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0")}>
+      <div className="w-full pt-1 md:max-w-[640px] md:mx-auto">
         <StoriesBar />
       </div>
 
-      <div className={cn("md:hidden px-0 py-1 mb-2 transition-all duration-300", showTopElements ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0")}>
+      <div className="md:hidden px-0 py-1 mb-2">
         <div className="mobile-feed-chips flex items-center gap-2 overflow-x-auto no-scrollbar">
           {mobileFeedChips.map((chip) => {
             const active = subFilter === chip.id;
