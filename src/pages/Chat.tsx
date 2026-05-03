@@ -205,6 +205,8 @@ export default function Chat() {
   // Track route performance for Chat page
   useRouteLoadTrace('Chat', 250);
   
+  const [currentChatProfile, setCurrentChatProfile] = useState<{ name: string; avatar_url: string | null } | null>(null);
+
   // Core state
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -619,10 +621,26 @@ export default function Chat() {
     }
   };
 
-  // Open chat: fetch messages + auto-clear notifications from this user
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setCurrentChatProfile(null);
+      return;
+    }
     const trace = beginPerfTrace('chat.openConversation', { userId });
+    
+    // Sync profile info for the header and settings
+    const existing = conversations.find(c => c.user_id === userId);
+    if (existing) {
+      setCurrentChatProfile({ name: existing.user_name, avatar_url: existing.user_avatar });
+    } else {
+      // Fetch profile if not in conversations list (e.g. from direct profile link)
+      supabase.from('profiles').select('name, avatar_url').eq('id', userId).single().then(({ data }) => {
+        if (data) {
+          setCurrentChatProfile({ name: data.name || 'User', avatar_url: data.avatar_url });
+        }
+      });
+    }
+
     // Open the chat shell immediately for near-instant transition.
     setCurrentChatUser(userId);
     // Reset scroll tracking state when switching chats
@@ -641,7 +659,7 @@ export default function Chat() {
         .eq('is_read', false)
         .then(() => {});
     }
-  }, [userId, fetchMessages, user]);
+  }, [userId, fetchMessages, user, conversations]);
 
   useEffect(() => {
     if (userId) return;
@@ -1397,7 +1415,9 @@ export default function Chat() {
 
   // Derived
   const selectedConversation = conversations.find(c => c.user_id === currentChatUser);
-  const displayName = currentChatUser && chatNicknames[currentChatUser] ? chatNicknames[currentChatUser] : selectedConversation?.user_name;
+  const displayName = currentChatUser && chatNicknames[currentChatUser] 
+    ? chatNicknames[currentChatUser] 
+    : (currentChatProfile?.name || selectedConversation?.user_name || 'User');
   const pinnedMsgs = messages.filter(m => pinnedMessages.has(m.id));
 
   // Track marketplace chats: chats initiated from marketplace (contain listing inquiry)
@@ -1889,7 +1909,7 @@ export default function Chat() {
                 className="flex items-center gap-2 px-2 py-1 rounded-xl transition-all active:scale-95 hover:bg-white/5 overflow-hidden group"
               >
                 <Avatar className="w-7 h-7 md:w-8 md:h-8 group-hover:ring-1 group-hover:ring-blue-500/50 transition-all">
-                  <AvatarImage src={selectedConversation?.user_avatar || undefined} />
+                  <AvatarImage src={currentChatProfile?.avatar_url || selectedConversation?.user_avatar || undefined} />
                   <AvatarFallback style={{ background: 'rgba(124,58,237,0.15)', color: '#A78BFA', fontSize: 10, fontWeight: 700 }}>
                     {displayName?.charAt(0)?.toUpperCase()}
                   </AvatarFallback>
@@ -2329,33 +2349,32 @@ export default function Chat() {
           />
         </Suspense>
 
-        {/* Settings Sheet */}
         <Suspense fallback={null}>
           <LazyChatSettingsSheet
             open={showSettings}
             onOpenChange={setShowSettings}
-            chatUserName={selectedConversation?.user_name || ''}
-            chatUserAvatar={selectedConversation?.user_avatar}
-            chatUserId={currentChatUser}
+            chatUserName={displayName}
+            chatUserAvatar={currentChatProfile?.avatar_url || selectedConversation?.user_avatar || undefined}
+            chatUserId={currentChatUser || ''}
             theme={chatTheme}
             onThemeChange={saveChatTheme}
-            nickname={chatNicknames[currentChatUser] || ''}
+            nickname={currentChatUser ? (chatNicknames[currentChatUser] || '') : ''}
             onNicknameChange={saveNickname}
-            isMuted={mutedChats.has(currentChatUser)}
-            onMuteToggle={() => toggleInSet('mutedChats', currentChatUser, mutedChats, setMutedChats)}
-            isArchived={archivedChats.has(currentChatUser)}
-            onArchiveToggle={() => toggleInSet('archivedChats', currentChatUser, archivedChats, setArchivedChats)}
-            isPrivate={privateChats.has(currentChatUser)}
-            onPrivateToggle={() => toggleInSet('privateChats', currentChatUser, privateChats, setPrivateChats)}
+            isMuted={currentChatUser ? mutedChats.has(currentChatUser) : false}
+            onMuteToggle={() => currentChatUser && toggleInSet('mutedChats', currentChatUser, mutedChats, setMutedChats)}
+            isArchived={currentChatUser ? archivedChats.has(currentChatUser) : false}
+            onArchiveToggle={() => currentChatUser && toggleInSet('archivedChats', currentChatUser, archivedChats, setArchivedChats)}
+            isPrivate={currentChatUser ? privateChats.has(currentChatUser) : false}
+            onPrivateToggle={() => currentChatUser && toggleInSet('privateChats', currentChatUser, privateChats, setPrivateChats)}
             ghostMode={ghostMode}
             onGhostModeChange={saveChatGhostMode}
-            onViewProfile={() => { setShowSettings(false); navigate(`/profile/${currentChatUser}`); }}
+            onViewProfile={() => { setShowSettings(false); currentChatUser && navigate(`/profile/${currentChatUser}`); }}
             onMediaGallery={() => { setShowSettings(false); openMediaPage('pics'); }}
             onUnsendAll={unsendAllForCurrentChat}
             onShowForwardedHistory={openForwardedHistory}
             onBlockUser={blockCurrentChatUser}
             onReportUser={reportCurrentChatUser}
-            onDeleteChat={() => { setShowSettings(false); deleteEntireChat(currentChatUser); }}
+            onDeleteChat={() => { setShowSettings(false); currentChatUser && deleteEntireChat(currentChatUser); }}
             onQuickReaction={sendQuickReaction}
             onOpenPrimaryStickers={() => setShowEmojiStickerPanel(true)}
             interactionFx={chatFxSettings}
