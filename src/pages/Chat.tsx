@@ -7,7 +7,7 @@ import {
   Image, Users, UserSearch, MessageCircle, Star, Video as VideoIcon,
   Palette, Eye, Pin, Forward, Copy,
   Bell, BellOff, CornerUpLeft, Pencil, Lock, Plus, Camera, ArrowLeft,
-  MessageSquare, ShoppingCart, Menu, Heart
+  MessageSquare, ShoppingCart, Menu, Heart, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -3055,6 +3055,7 @@ export default function Chat() {
             </div>
             <div className="py-2 max-h-[58vh] overflow-y-auto">
               {[
+                { icon: <Info className="w-5 h-5" />, label: 'Chat Details', action: () => { if (longPressTarget) openConversationDetails(longPressTarget); }, color: '#7C3AED' },
                 ...(chatTab !== 'hidden' ? [
                   { icon: <Pin className="w-5 h-5" />, label: pinnedChats.has(longPressTarget || '') ? 'Unpin' : 'Pin', action: () => longPressTarget && togglePinChat(longPressTarget), color: '#94A3B8' },
                 ] : []),

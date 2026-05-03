@@ -549,13 +549,13 @@ export function FullScreenMediaViewer({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="w-screen h-screen max-w-none max-h-none p-0 m-0 bg-black border-none rounded-none [&>button]:hidden fixed inset-0 translate-x-0 translate-y-0 top-0 left-0"
+        className="w-screen h-[100dvh] max-w-none max-h-none p-0 m-0 bg-black border-none rounded-none [&>button]:hidden fixed inset-0 z-[100]"
         aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">Media Viewer</DialogTitle>
 
         <div
-          className="fixed inset-0 w-screen h-screen"
+          className="absolute inset-0 w-full h-full flex flex-col overflow-hidden"
           style={{
             background: '#000000',
             opacity: overlayOpacity * openOpacity,
@@ -567,15 +567,9 @@ export function FullScreenMediaViewer({
           }}
         >
           {/* Header/Close */}
-          <div className="absolute top-0 left-0 right-0 z-50 h-[64px] flex items-center px-4" style={{ pointerEvents: 'none' }}>
+          <div className="absolute top-0 left-0 right-0 z-[110] h-16 flex items-center px-4 pointer-events-none">
             <button
-              className="w-10 h-10 rounded-full flex items-center justify-center transition-transform active:scale-90"
-              style={{
-                pointerEvents: 'auto',
-                background: 'rgba(255,255,255,0.15)',
-                backdropFilter: 'blur(10px)',
-                color: '#ffffff',
-              }}
+              className="w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 pointer-events-auto bg-white/15 backdrop-blur-md text-white hover:bg-white/25"
               onClick={() => onOpenChange(false)}
               aria-label="Close"
             >
@@ -587,14 +581,14 @@ export function FullScreenMediaViewer({
           {isDesktop && hasMultiple && (
             <>
               <button
-                className="absolute left-6 top-1/2 -translate-y-1/2 z-50 w-12 h-12 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/40 text-white transition-all disabled:opacity-0"
+                className="absolute left-6 top-1/2 -translate-y-1/2 z-[110] w-12 h-12 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/40 text-white transition-all disabled:opacity-0"
                 onClick={(e) => { e.stopPropagation(); goTo(currentIndex - 1); }}
                 disabled={currentIndex === 0}
               >
                 <ChevronLeft className="w-8 h-8" />
               </button>
               <button
-                className="absolute right-6 top-1/2 -translate-y-1/2 z-50 w-12 h-12 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/40 text-white transition-all disabled:opacity-0"
+                className="absolute right-6 top-1/2 -translate-y-1/2 z-[110] w-12 h-12 rounded-full flex items-center justify-center bg-black/20 hover:bg-black/40 text-white transition-all disabled:opacity-0"
                 onClick={(e) => { e.stopPropagation(); goTo(currentIndex + 1); }}
                 disabled={currentIndex === mediaUrls.length - 1}
               >
@@ -605,10 +599,10 @@ export function FullScreenMediaViewer({
 
           <div
             ref={mediaZoneRef}
-            className="absolute left-0 right-0 top-0 bottom-0 overflow-hidden"
+            className="flex-1 relative w-full h-full flex items-center justify-center overflow-hidden"
             style={{
-              paddingTop: 'calc(env(safe-area-inset-top, 0px) + 52px)',
-              paddingBottom: minimal ? 'calc(env(safe-area-inset-bottom, 0px) + 10px)' : 'calc(env(safe-area-inset-bottom, 0px) + 44px)',
+              paddingTop: 'env(safe-area-inset-top, 0px)',
+              paddingBottom: minimal ? 'env(safe-area-inset-bottom, 0px)' : 'calc(env(safe-area-inset-bottom, 0px) + 44px)',
             }}
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
@@ -635,9 +629,9 @@ export function FullScreenMediaViewer({
                 const itemIsVideo = itemType.includes('video');
 
                 return (
-                  <div key={i} className="flex-shrink-0 w-full h-full flex items-center justify-center">
+                  <div key={i} className="flex-shrink-0 w-full h-full flex items-center justify-center p-2">
                     <div
-                      className="relative h-full w-full flex items-center justify-center"
+                      className="relative w-full h-full flex items-center justify-center"
                       style={{
                         maxWidth: mediaFrameWidth,
                         maxHeight: mediaFrameMaxHeight,
@@ -658,18 +652,12 @@ export function FullScreenMediaViewer({
                           controls={false}
                           muted={i === currentIndex ? shouldVideoBeMuted(playerIdRef.current) : true}
                           preload={Math.abs(i - currentIndex) <= 1 ? 'auto' : 'none'}
-                          onTimeUpdate={() => {
-                            if (i === currentIndex) syncVideoState(videoRef.current);
-                          }}
-                          onProgress={() => {
-                            if (i === currentIndex) syncVideoState(videoRef.current);
-                          }}
                         />
                       ) : (
                         <img
                           src={url}
                           alt={title || 'Media'}
-                          className="max-w-full max-h-full object-contain"
+                          className="max-w-full max-h-full object-contain shadow-2xl"
                           loading={Math.abs(i - currentIndex) <= 1 ? 'eager' : 'lazy'}
                           draggable={false}
                           style={{

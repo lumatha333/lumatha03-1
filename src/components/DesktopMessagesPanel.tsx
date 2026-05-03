@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { MessageCircle, Search, Plus, Archive, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -58,13 +58,19 @@ export function DesktopMessagesPanel() {
 
   const activeConversations = conversations.filter(conv => {
     const userName = typeof conv.user_name === 'string' ? conv.user_name : '';
-    const matchesSearch = !searchQuery || userName.toLowerCase().includes(searchQuery.toLowerCase());
+    const lastMsg = typeof conv.last_message === 'string' ? conv.last_message : '';
+    const matchesSearch = !searchQuery || 
+      userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lastMsg.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch && !archivedIds.has(conv.user_id);
   });
 
   const archivedConversations = conversations.filter(conv => {
     const userName = typeof conv.user_name === 'string' ? conv.user_name : '';
-    const matchesSearch = !searchQuery || userName.toLowerCase().includes(searchQuery.toLowerCase());
+    const lastMsg = typeof conv.last_message === 'string' ? conv.last_message : '';
+    const matchesSearch = !searchQuery || 
+      userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lastMsg.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch && archivedIds.has(conv.user_id);
   });
 
@@ -82,36 +88,44 @@ export function DesktopMessagesPanel() {
   };
 
   const renderConvRow = (conv: any) => (
-    <button
-      key={conv.user_id}
-      onClick={() => navigate(`/chat/${conv.user_id}`)}
-      className="flex items-center gap-2 w-full p-2 rounded-lg hover:bg-muted/50 text-left"
-    >
-      <div className="relative">
-        <Avatar className="w-9 h-9">
-          <AvatarImage src={conv.user_avatar || undefined} />
-          <AvatarFallback className="text-[10px] bg-primary/20">
-            {conv.user_name?.[0]?.toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        {conv.unread_count > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-primary-foreground text-[8px] rounded-full flex items-center justify-center font-bold">
-            {conv.unread_count}
-          </span>
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <p className={`text-[11px] truncate ${conv.unread_count > 0 ? 'font-bold text-foreground' : 'font-medium text-muted-foreground'}`}>{conv.user_name}</p>
-          <span className={`text-[9px] shrink-0 ${conv.unread_count > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
-            {formatConversationTime(conv.last_message_time)}
-          </span>
+    <div key={conv.user_id} className="relative group">
+      <button
+        onClick={() => navigate(`/chat/${conv.user_id}`)}
+        className="flex items-center gap-2 w-full p-2 rounded-lg hover:bg-muted/50 text-left transition-all"
+      >
+        <div className="relative">
+          <Avatar className="w-9 h-9">
+            <AvatarImage src={conv.user_avatar || undefined} />
+            <AvatarFallback className="text-[10px] bg-primary/20">
+              {conv.user_name?.[0]?.toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          {conv.unread_count > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-primary-foreground text-[8px] rounded-full flex items-center justify-center font-bold">
+              {conv.unread_count}
+            </span>
+          )}
         </div>
-        <p className={`text-[10px] truncate ${conv.unread_count > 0 ? 'text-foreground/70 font-medium' : 'text-muted-foreground'}`}>
-          {conv.last_message}
-        </p>
-      </div>
-    </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between">
+            <p className={`text-[11px] truncate ${conv.unread_count > 0 ? 'font-bold text-foreground' : 'font-medium text-muted-foreground'}`}>{conv.user_name}</p>
+            <span className={`text-[9px] shrink-0 ${conv.unread_count > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+              {formatConversationTime(conv.last_message_time)}
+            </span>
+          </div>
+          <p className={`text-[10px] truncate ${conv.unread_count > 0 ? 'text-foreground/70 font-medium' : 'text-muted-foreground'}`}>
+            {conv.last_message}
+          </p>
+        </div>
+      </button>
+      <button 
+        onClick={(e) => { e.stopPropagation(); navigate(`/chat/${conv.user_id}?settings=true`); }}
+        className="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
+        title="Chat Details"
+      >
+        <Info className="w-3 h-3" />
+      </button>
+    </div>
   );
 
   return (
