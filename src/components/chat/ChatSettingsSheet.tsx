@@ -613,17 +613,16 @@ export function ChatSettingsSheet({
           color: var(--text);
         }
 
-        @media (prefers-color-scheme: dark) {
-          .chat-settings-shell {
-            --bg: #000000;
-            --card: #1c1c1e;
-            --text: #ffffff;
-            --text-muted: #8e8e93;
-            --separator: rgba(255, 255, 255, 0.08);
-            --icon-bg: rgba(255, 255, 255, 0.08);
-            --accent: #7c6af7;
-            --danger: #e24b4a;
-          }
+        .dark .chat-settings-shell,
+        [data-theme='dark'] .chat-settings-shell {
+          --bg: #000000;
+          --card: #1c1c1e;
+          --text: #ffffff;
+          --text-muted: #8e8e93;
+          --separator: rgba(255, 255, 255, 0.08);
+          --icon-bg: rgba(255, 255, 255, 0.08);
+          --accent: #7c6af7;
+          --danger: #e24b4a;
         }
 
         .chat-settings-shell .app-root {
@@ -636,6 +635,7 @@ export function ChatSettingsSheet({
           display: flex;
           flex-direction: column;
           background: var(--bg);
+          z-index: 100;
         }
 
         .chat-settings-shell .nav-bar {
