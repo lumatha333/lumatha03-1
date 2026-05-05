@@ -201,6 +201,7 @@ export function CommentsDialog({ postId, postTitle, type = 'post', open, onOpenC
             <div className="bg-muted/40 rounded-2xl px-3 py-2 inline-block max-w-full">
               <button className="font-bold text-xs hover:underline text-left text-white" onClick={() => { onOpenChange(false); navigate(`/profile/${comment.user_id}`); }}>
                 {displayName}
+                {comment.profiles?.username && <span className="ml-1 text-[10px] text-slate-500 font-normal">@{comment.profiles.username}</span>}
               </button>
               <p className="text-sm mt-0.5 break-words text-slate-300 font-medium">{comment.content}</p>
             </div>

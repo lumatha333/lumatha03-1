@@ -243,7 +243,7 @@ export default function Chat() {
   const [callState, setCallState] = useState<{ open: boolean; isVideo: boolean }>({ open: false, isVideo: false });
   const [longPressTarget, setLongPressTarget] = useState<string | null>(null);
   const [longPressMenuPos, setLongPressMenuPos] = useState<{ left: number; top: number; width?: number } | null>(null);
-  const [chatMediaViewer, setChatMediaViewer] = useState<{ open: boolean; index: number }>({ open: false, index: 0 });
+  const [chatMediaViewer, setChatMediaViewer] = useState<{ open: boolean; index: number; overrideUrls?: string[]; overrideTypes?: string[] }>({ open: false, index: 0 });
   const [pinnedChats, setPinnedChats] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('pinnedChats') || '[]')); } catch { return new Set(); }
   });
@@ -1563,8 +1563,14 @@ export default function Chat() {
 
   const openChatMediaViewer = useCallback((targetUrl: string) => {
     const idx = allChatMedia.findIndex(m => m.url === targetUrl);
-    setChatMediaViewer({ open: true, index: idx >= 0 ? idx : 0 });
-  }, [allChatMedia]);
+    if (idx >= 0) {
+      setChatMediaViewer({ open: true, index: idx, overrideUrls: undefined, overrideTypes: undefined });
+    } else {
+      const msg = messages.find(m => m.media_url === targetUrl || (m.media_url && m.media_url.includes(targetUrl)));
+      const type = msg?.media_type?.includes('video') ? 'video' : 'image';
+      setChatMediaViewer({ open: true, index: 0, overrideUrls: [targetUrl], overrideTypes: [type] });
+    }
+  }, [allChatMedia, messages]);
 
   const detailMediaData = useMemo(() => {
     const pics: Array<{ id: string; url: string }> = [];
@@ -1889,23 +1895,22 @@ export default function Chat() {
         {/* Header — Responsive Mobile/Desktop */}
         <div className="h-16 flex items-center gap-1 md:gap-3 shrink-0 px-2 md:px-4 bg-[#0B0D1F] border-b border-white/5">
           {isMobile ? (
-            <button 
-              onClick={() => window.dispatchEvent(new CustomEvent('lumatha_mobile_sidebar_toggle'))} 
+            <button
+              onClick={handleBackToChats}
               className="w-10 h-10 flex items-center justify-center rounded-xl transition-transform active:scale-90 hover:bg-white/5"
             >
-              <Menu className="w-6 h-6 text-blue-500" strokeWidth={2} />
+              <ArrowLeft className="w-6 h-6 text-white" />
             </button>
           ) : (
             <button onClick={handleBackToChats} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full shrink-0 hover:bg-white/5 transition-colors active:scale-95 touch-target-44">
               <ArrowLeft className="h-[18px] w-[18px] text-white" />
             </button>
-          )}
-          
+          )}          
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <div className="flex items-center gap-3">
               <p className="text-base font-black tracking-wide text-blue-600 leading-none">LUMATHA</p>
               <button 
-                onClick={() => setShowSettings(true)}
+                onClick={() => navigate(`/profile/${currentChatUser}`)}
                 className="flex items-center gap-2 px-2 py-1 rounded-xl transition-all active:scale-95 hover:bg-white/5 overflow-hidden group"
               >
                 <Avatar className="w-7 h-7 md:w-8 md:h-8 group-hover:ring-1 group-hover:ring-blue-500/50 transition-all">
@@ -1916,7 +1921,7 @@ export default function Chat() {
                 </Avatar>
                 <div className="flex flex-col items-start min-w-0">
                   <h3 className="text-[13px] md:text-sm font-bold text-white truncate" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{displayName}</h3>
-                  <span className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">Chat Info</span>
+                  <span className="text-[9px] uppercase tracking-widest text-blue-500 font-bold">View Profile</span>
                 </div>
               </button>
             </div>
@@ -1924,16 +1929,16 @@ export default function Chat() {
           
           <div className="shrink-0 flex items-center gap-1">
             <button
-              onClick={() => setCallState({ open: true, isVideo: false })}
+              onClick={() => openMediaPage('shared')}
               className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors active:scale-90"
-              title="Voice call"
+              title="Shared items"
             >
               <Mic className="w-4 h-4 text-white" />
             </button>
             <button
-              onClick={() => setCallState({ open: true, isVideo: true })}
+              onClick={() => openMediaPage('videos')}
               className="w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors active:scale-90"
-              title="Video call"
+              title="Media Gallery"
             >
               <VideoIcon className="w-4 h-4 text-white" />
             </button>
@@ -2342,8 +2347,8 @@ export default function Chat() {
           <LazyFullScreenMediaViewer
             open={chatMediaViewer.open}
             onOpenChange={(open) => setChatMediaViewer(prev => ({ ...prev, open }))}
-            mediaUrls={allChatMedia.map(m => m.url)}
-            mediaTypes={allChatMedia.map(m => m.type)}
+            mediaUrls={chatMediaViewer.overrideUrls || allChatMedia.map(m => m.url)}
+            mediaTypes={chatMediaViewer.overrideTypes || allChatMedia.map(m => m.type)}
             initialIndex={chatMediaViewer.index}
             minimal
           />

@@ -195,7 +195,7 @@ export default function Home() {
 
       if (contentFilter === 'videos') query = query.or('file_type.ilike.%video%,media_types.cs.{video}');
 
-      query = query.order('created_at', { ascending: false }).limit(50);
+      query = query.order('created_at', { ascending: false }).limit(100);
       let { data: postsData } = await query;
       let processedPosts = postsData || [];
 
@@ -214,6 +214,11 @@ export default function Home() {
           if (activeSubFilter === 'nepal') return String(post.country).toLowerCase().includes('nepal');
           return true;
         });
+      }
+
+      // Shuffle if subFilter is 'trending' or similar to provide "random" experience
+      if (subFilter === 'trending' || subFilter === 'fun') {
+        processedPosts = [...processedPosts].sort(() => Math.random() - 0.5);
       }
 
       setPosts(processedPosts);

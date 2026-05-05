@@ -553,6 +553,7 @@ export function FullScreenMediaViewer({
         aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">Media Viewer</DialogTitle>
+        <DialogDescription className="sr-only">Media viewer fullscreen mode</DialogDescription>
 
         <div
           className="absolute inset-0 w-full h-full flex flex-col overflow-hidden"
@@ -709,10 +710,10 @@ export function FullScreenMediaViewer({
                                   max={videoDuration || 0}
                                   step={0.05}
                                   value={isSeeking ? seekValue : videoCurrentTime}
-                                  onSeekStart={onSeekStart}
+                                  onPointerDown={onSeekStart}
                                   onChange={onSeekChange}
-                                  onSeekEnd={onSeekEnd}
-                                  onSeekCancel={onSeekEnd}
+                                  onPointerUp={onSeekEnd}
+                                  onPointerCancel={onSeekEnd}
                                   onClick={(event) => event.stopPropagation()}
                                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                   aria-label="Seek video"

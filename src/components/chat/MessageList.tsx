@@ -25,7 +25,6 @@ interface MessageItemProps {
   displayName: string;
   userId: string;
   viewedOnceMessages: Set<string>;
-  allChatMedia: { url: string; type: 'image' | 'video' }[];
   messageMap: Map<string, Message & { reply_to_id?: string }>; // O(1) reply lookup
   bubbleGradient: string; // theme-aware own-bubble gradient
   onReact: (msgId: string, emoji: string) => void;
@@ -50,7 +49,6 @@ const MessageItem = memo(function MessageItem({
   displayName,
   userId,
   viewedOnceMessages,
-  allChatMedia,
   messageMap,
   bubbleGradient,
   onReact,
@@ -309,11 +307,6 @@ const MessageItem = memo(function MessageItem({
                 )}
               </div>
             )}
-            {false && (
-              <div className="cursor-pointer" onClick={() => onOpenMedia(msg.media_url!)}>
-                <ChatVideoPlayer src={msg.media_url} />
-              </div>
-            )}
             {msg.media_url && msg.media_type === 'audio' && (
               <div className="p-2">
                 <audio src={msg.media_url} controls className="w-full max-w-[260px]" />
@@ -425,7 +418,6 @@ interface MessageRowProps {
   getDateLabel: (dateStr: string) => string;
   displayName: string;
   viewedOnceMessages: Set<string>;
-  allChatMedia: { url: string; type: 'image' | 'video' }[];
   messageMap: Map<string, Message & { reply_to_id?: string }>;
   bubbleGradient: string;
   onReact: (msgId: string, emoji: string) => void;
@@ -451,7 +443,6 @@ const MessageRow = memo(function MessageRow({
   getDateLabel,
   displayName,
   viewedOnceMessages,
-  allChatMedia,
   messageMap,
   bubbleGradient,
   onReact,
@@ -484,7 +475,6 @@ const MessageRow = memo(function MessageRow({
   }, [index, setSize]);
 
   const isOwn = msg.sender_id === userId;
-  const isSensitive = msg.content?.includes('[SENSITIVE]');
   const reactions = messageReactions[msg.id] || {};
   const userReactionSet = userReactions[msg.id] || new Set<string>();
   const isPinned = pinnedMessages.has(msg.id);
@@ -507,7 +497,6 @@ const MessageRow = memo(function MessageRow({
           displayName={displayName}
           userId={userId}
           viewedOnceMessages={viewedOnceMessages}
-          allChatMedia={allChatMedia}
           messageMap={messageMap}
           bubbleGradient={bubbleGradient}
           onReact={onReact}
@@ -533,7 +522,6 @@ interface MessageListProps {
   userReactions: Record<string, Set<string>>;
   pinnedMessages: Set<string>;
   viewedOnceMessages: Set<string>;
-  allChatMedia: { url: string; type: 'image' | 'video' }[];
   messagesEndRef: RefObject<HTMLDivElement>;
   scrollContainerRef?: RefObject<HTMLDivElement>;
   hasMore?: boolean;
@@ -560,7 +548,6 @@ export const MessageList = memo(function MessageList({
   userReactions,
   pinnedMessages,
   viewedOnceMessages,
-  allChatMedia,
   messagesEndRef,
   hasMore = false,
   loadingMore = false,
@@ -591,8 +578,6 @@ export const MessageList = memo(function MessageList({
   // We keep a simple manual window fallback but rely on react-window for virtualization
   const [renderStartIndex, setRenderStartIndex] = useState(() => Math.max(0, messages.length - INITIAL_WINDOW_SIZE));
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
-  const swipeThresholdPx = simpleMode ? LOW_END_SWIPE_THRESHOLD_PX : DEFAULT_SWIPE_THRESHOLD_PX;
-  const horizontalIntentRatio = simpleMode ? LOW_END_HORIZONTAL_INTENT_RATIO : DEFAULT_HORIZONTAL_INTENT_RATIO;
   
   useEffect(() => {
     setRenderStartIndex((prev) => {
@@ -663,7 +648,6 @@ export const MessageList = memo(function MessageList({
       getDateLabel={getDateLabel}
       displayName={displayName}
       viewedOnceMessages={viewedOnceMessages}
-      allChatMedia={allChatMedia}
       messageMap={messageMap}
       bubbleGradient={bubbleGradient}
       onReact={onReact}
@@ -714,8 +698,6 @@ export const MessageList = memo(function MessageList({
         <div className="w-full">
           {visibleMessages.map((msg, index) => {
             const isOwn = msg.sender_id === userId;
-          const isSensitive = msg.content?.includes('[SENSITIVE]');
-          const cleanContent = msg.content?.replace('[SENSITIVE] ', '').replace('[SENSITIVE]', '');
             const reactions = messageReactions[msg.id] || {};
             const userReactionSet = userReactions[msg.id] || new Set<string>();
             const isPinned = pinnedMessages.has(msg.id);
@@ -736,7 +718,6 @@ export const MessageList = memo(function MessageList({
                 displayName={displayName}
                 userId={userId}
                 viewedOnceMessages={viewedOnceMessages}
-                allChatMedia={allChatMedia}
                 messageMap={messageMap}
                 bubbleGradient={bubbleGradient}
                 onReact={onReact}

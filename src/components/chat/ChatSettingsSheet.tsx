@@ -703,9 +703,11 @@ export function ChatSettingsSheet({
 
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="chat-settings-shell w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 p-0 bg-transparent !gap-0 [&>button]:hidden"
+          className="chat-settings-shell fixed inset-0 z-[100] w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 p-0 bg-transparent !gap-0 [&>button]:hidden"
           style={{ top: 0, left: 0, transform: 'none' }}
+          aria-describedby={undefined}
         >
+          <DialogTitle className="sr-only">Chat Settings</DialogTitle>
           <div
             className="app-root"
             style={{

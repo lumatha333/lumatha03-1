@@ -12,7 +12,7 @@ import { FriendTick } from '@/components/lumatha/FriendTick';
 import { 
   ArrowLeft, UserPlus, UserMinus, Settings, User, Image, FileText, 
   MapPin, Calendar, Globe, Star, Trophy, Eye, MessageCircle, UserCheck, 
-  Clock, Users, UserCircle2, X, Shield, Ban, Flag, Lock, Play, Share2, Camera, Pencil, Trash2, BookOpen, Download, ExternalLink, MoreVertical, Menu
+  Clock, Users, UserCircle2, X, Shield, Ban, Flag, Lock, Play, Share2, Camera, Pencil, Trash2, BookOpen, Download, ExternalLink, MoreVertical, Menu, Info
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
@@ -415,6 +415,38 @@ export default function Profile() {
         <p className="px-5 mt-3 text-[14px] text-slate-200 leading-relaxed font-medium" style={{ fontFamily: "'Inter'" }}>
           {profile.bio}
         </p>
+      )}
+
+      {/* Extra Profile Details */}
+      {(profile.section_order as any)?.extra_data && (
+        <div className="px-5 mt-4 space-y-3">
+          {Object.entries((profile.section_order as any).extra_data).map(([key, value]) => {
+            if (!value || key === 'profile_visibility') return null;
+            // Check visibility if it's not our own profile
+            if (!isOwnProfile) {
+              const visibility = (profile as any).profile_visibility || {};
+              if (visibility[key] === false) return null;
+            }
+
+            const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            const icon = key.includes('school') ? <BookOpen className="w-4 h-4" /> :
+                         key.includes('hobby') ? <Star className="w-4 h-4" /> :
+                         key.includes('occupation') ? <UserCircle2 className="w-4 h-4" /> :
+                         key.includes('phone') ? <ExternalLink className="w-4 h-4" /> :
+                         key.includes('email') ? <Globe className="w-4 h-4" /> :
+                         <Info className="w-4 h-4" />;
+
+            return (
+              <div key={key} className="flex items-start gap-3 p-3 rounded-2xl bg-white/5 border border-white/5">
+                <div className="mt-0.5 text-blue-500">{icon}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-0.5">{label}</p>
+                  <p className="text-[13px] text-white font-medium">{String(value)}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Tabs */}
